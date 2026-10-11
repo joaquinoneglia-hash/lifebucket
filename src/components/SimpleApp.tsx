@@ -18,6 +18,7 @@ import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
 import { SleepPill } from "./SleepMeter";
+import { UserMenu } from "./UserMenu";
 import { TasksPanel } from "./TasksPanel";
 import { SecondaryButton, Sheet } from "./ui";
 
@@ -270,6 +271,7 @@ export function SimpleApp() {
           >
             {mute ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
           </button>
+          <UserMenu />
         </div>
       </header>
 
