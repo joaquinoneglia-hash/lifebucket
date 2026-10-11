@@ -8,7 +8,7 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - Cada cuenta nueva queda en la tabla `usuarios` y cada entrada en `ingresos` (fecha, con qué entró, navegador). Se mira desde el panel de Supabase (vista `ingresos_detalle`). El SQL está en `supabase/migrations/`.
 - Sin Supabase configurado: en desarrollo la app abre igual; en producción todo redirige a /login.
 - Los datos de la semana siguen en el navegador por ahora; pasarlos a la nube por usuario es el paso siguiente.
-- Publicación en Vercel, conectada a `main` en GitHub.
+- Publicación en Vercel, conectada a `main` en GitHub: https://lifebucket-kappa.vercel.app. Se apagó la "Vercel Authentication" para que el sitio sea público (lo protege el login propio).
 
 ## 2026-10-11 · El proyecto pasa a llamarse LifeBucket
 
