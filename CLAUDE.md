@@ -31,7 +31,7 @@ Chequeos antes de dar algo por terminado: `npx tsc --noEmit` y `npm run lint`.
 
 Cuentas: login obligatorio con Supabase Auth (Google o email y contraseña). `src/middleware.ts` cierra todo sin sesión (en desarrollo sin Supabase configurado abre igual); pantalla en `src/app/login/`, vuelta de Google en `src/app/auth/callback/`, clientes en `src/lib/supabase/`. Cada ingreso queda en las tablas `usuarios` e `ingresos` (SQL en `supabase/migrations/`). Publicada en Vercel desde `main`.
 
-Claves (solo en `.env.local` y en Vercel, nunca en el repo): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`. Sin clave, las rutas de IA responden 503 con un mensaje claro. Para probar la UI sin clave, interceptar `/api/assistant` en Playwright.
+Claves (solo en `.env.local` y en Vercel, nunca en el repo): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`. Sin clave, las rutas de IA responden 503 con un mensaje claro. Para probar la UI sin clave, interceptar `/api/assistant` en Playwright.
 
 ## Estructura
 
