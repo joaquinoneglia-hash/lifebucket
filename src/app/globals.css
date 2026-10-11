@@ -292,6 +292,35 @@ body::before {
   animation: fade-up 260ms var(--ease-out) both;
 }
 
+/* Bienvenida: cada línea entra desenfocada y sube un poco; la barra de la semana se llena por partes. */
+@keyframes welcome-rise {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+    filter: blur(8px);
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.animate-welcome-rise {
+  animation: welcome-rise 900ms var(--ease-out) both;
+}
+@keyframes welcome-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.animate-welcome-fill {
+  transform-origin: left center;
+  animation: welcome-fill 700ms var(--ease-out) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   body::before,
   .bucket-wave,

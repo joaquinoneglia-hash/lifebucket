@@ -2,6 +2,15 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-11 · Bienvenida, guía y ajustes para el celular
+
+- Bienvenida una vez por cuenta (nombre de Google, intro sonora sintetizada) y guía de 10 consejos que resalta cada parte; se puede volver a ver desde el menú de la cuenta.
+- En pantallas táctiles la grilla imita a la web: tocar crea (1 h) o abre; mantener apretado y arrastrar marca un horario, mueve o estira. Sin eso el dedo scrollea la página.
+- El sueño lleva una lunita para que se entienda que ese horario es dormir.
+- Momentos: tachito siempre visible y la tarjeta se edita al tocarla.
+- Orden por defecto: Semana, Momentos, Objetivos, Resultados.
+- En el celular: LIFEBUCKET centrado arriba y los % de cada parte en una grilla que se toca para ver el detalle.
+
 ## 2026-10-11 · Login obligatorio y registro de ingresos
 
 - Para usar la app hay que entrar con Google o con email y contraseña. Se usa Supabase Auth (ya estaba previsto como siguiente paso).

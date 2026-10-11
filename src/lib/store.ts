@@ -271,6 +271,7 @@ interface PlannerState {
   toggleTask: (id: string) => void;
   addMoment: (m: Omit<Moment, "id">) => void;
   removeMoment: (id: string) => void;
+  updateMoment: (id: string, patch: Partial<Omit<Moment, "id">>) => void;
   removeTask: (id: string) => void;
   /** Pasa un objetivo a otro mes (si tenía fecha, conserva el día si existe en ese mes). */
   moveTask: (id: string, month: string) => void;
@@ -394,6 +395,7 @@ export const usePlanner = create<PlannerState>()(
       addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: newId(), done: false }] })),
       addMoment: (m) => set((s) => ({ moments: [...s.moments, { ...m, id: newId() }] })),
       removeMoment: (id) => set((s) => ({ moments: s.moments.filter((m) => m.id !== id) })),
+      updateMoment: (id, patch) => set((s) => ({ moments: s.moments.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
       toggleTask: (id) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })),
       removeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
       moveTask: (id, month) =>

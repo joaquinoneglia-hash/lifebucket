@@ -1,6 +1,7 @@
 "use client";
 
-import { Check, ChevronDown, ChevronLeft, ChevronRight, GripVertical, PanelRightClose, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, PanelRightClose, Plus, X } from "lucide-react";
+import { useMediaQuery } from "@/lib/hooks";
 import { useState, type DragEvent } from "react";
 import { fromKey, toKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
@@ -132,7 +133,7 @@ export function TasksPanel({
               onClick={onCollapse}
               className="pressable ml-1 grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
             >
-              <PanelRightClose aria-hidden className="size-4" />
+              <CollapseIcon />
             </button>
           )}
         </div>
@@ -313,4 +314,10 @@ function KindPicker({ value, onChange }: { value: TaskKind; onChange: (k: TaskKi
       )}
     </div>
   );
+}
+
+/** Comprimir: en compu se pliega hacia el costado; en el celular, hacia arriba (como Semana). */
+function CollapseIcon() {
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  return desktop ? <PanelRightClose aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />;
 }

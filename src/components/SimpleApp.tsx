@@ -18,7 +18,10 @@ import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
 import { SleepPill } from "./SleepMeter";
-import { UserMenu } from "./UserMenu";
+import { TOUR_EVENT, UserMenu } from "./UserMenu";
+import { MAIN_TOUR, Tour } from "./Tour";
+import { Welcome } from "./Welcome";
+import { firstName, useUser } from "@/lib/supabase/use-user";
 import { TasksPanel } from "./TasksPanel";
 import { SecondaryButton, Sheet } from "./ui";
 
@@ -29,9 +32,10 @@ const WEEK_MINUTES = (RANGE[1] - RANGE[0]) * 7;
 const DAY_NAME: Record<number, string> = { 1: "lunes", 2: "martes", 3: "miércoles", 4: "jueves", 5: "viernes", 6: "sábado", 0: "domingo" };
 
 type Section = "semana" | "momentos" | "tablero" | "objetivos";
-const DEFAULT_ORDER: Section[] = ["semana", "momentos", "tablero", "objetivos"];
+const DEFAULT_ORDER: Section[] = ["semana", "momentos", "objetivos", "tablero"];
 const OPEN_KEY = "lb:open";
-const ORDER_KEY = "lb:sections";
+// v2: Objetivos pasó a ir antes que Resultados (se arranca de nuevo con ese orden).
+const ORDER_KEY = "lb:sections:v2";
 
 /** Un cambio de un bloque que está en varios días: se pregunta si va solo para ese día o para todos. */
 type Change = { block: RoutineBlock; day: number; patch: Partial<Omit<RoutineBlock, "id" | "days">>; toDay?: number; verb: "mover" | "cambiar" };
@@ -132,7 +136,29 @@ export function SimpleApp() {
   const [askChange, setAskChange] = useState<Change | null>(null);
   const [sleepOpen, setSleepOpen] = useState(false);
 
+  // Primera vez de cada cuenta: bienvenida y después (si quiere) la guía. La guía se puede volver a ver desde la cuenta.
+  const user = useUser();
+  const [intro, setIntro] = useState<"none" | "welcome" | "tour">("none");
+  const seenKey = user ? `lb:welcomed:${user.id}` : null;
+  useEffect(() => {
+    if (!seenKey) return;
+    try {
+      if (!localStorage.getItem(seenKey)) setIntro("welcome");
+    } catch {}
+  }, [seenKey]);
+  useEffect(() => {
+    const start = () => setIntro("tour");
+    window.addEventListener(TOUR_EVENT, start);
+    return () => window.removeEventListener(TOUR_EVENT, start);
+  }, []);
+  const markSeen = () => {
+    try {
+      if (seenKey) localStorage.setItem(seenKey, new Date().toISOString());
+    } catch {}
+  };
+
   const desktop = useMediaQuery("(min-width: 1024px)");
+  const wide = useMediaQuery("(min-width: 768px)");
   const vh = useViewportHeight();
   // Sin scroll: la grilla usa todo el alto que queda debajo del encabezado.
   const gridHeight = Math.max(380, vh - (desktop ? 150 : 230));
@@ -180,6 +206,7 @@ export function SimpleApp() {
           <span className="hidden text-[11.5px] text-ink-faint 2xl:inline">Arrastrá dentro de un bloque para meter otro · ⠿ para mover</span>
           <button
             type="button"
+            data-tour="sueno-btn"
             onClick={() => setSleepOpen(true)}
             className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
@@ -206,6 +233,7 @@ export function SimpleApp() {
     momentos: open.momentos ? (
       <section
         key="momentos"
+        data-tour="momentos"
         aria-label="Momentos del mes"
         {...dragProps("momentos").dropProps}
         className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-[360px]" : "h-[70dvh]", dragging === "momentos" && "opacity-40")}
@@ -213,7 +241,7 @@ export function SimpleApp() {
         <MomentsPanel className="h-full" onCollapse={() => toggle("momentos")} onHeaderDragStart={dragProps("momentos").onHeaderDragStart} />
       </section>
     ) : (
-      <Collapsed key="momentos" title="Momentos" icon={PartyPopper} onOpen={() => toggle("momentos")} desktop={desktop} />
+      <Collapsed key="momentos" tour="momentos" title="Momentos" icon={PartyPopper} onOpen={() => toggle("momentos")} desktop={desktop} />
     ),
     tablero: (
       <Panel
@@ -236,6 +264,7 @@ export function SimpleApp() {
     objetivos: open.objetivos ? (
       <section
         key="objetivos"
+        data-tour="objetivos"
         aria-label="Objetivos del año"
         {...dragProps("objetivos").dropProps}
         className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-80" : "h-[70dvh]", dragging === "objetivos" && "opacity-40")}
@@ -243,37 +272,65 @@ export function SimpleApp() {
         <TasksPanel className="h-full" onCollapse={() => toggle("objetivos")} onHeaderDragStart={dragProps("objetivos").onHeaderDragStart} />
       </section>
     ) : (
-      <Collapsed key="objetivos" title="Objetivos" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
+      <Collapsed key="objetivos" tour="objetivos" title="Objetivos" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
     ),
   };
 
+  const muteButton = (
+    <button
+      type="button"
+      onClick={() => {
+        setMuted(!mute);
+        setMute(!mute);
+        if (mute) play("pop");
+      }}
+      aria-pressed={!mute}
+      aria-label={mute ? "Activar sonidos" : "Silenciar sonidos"}
+      title={mute ? "Activar sonidos" : "Silenciar sonidos"}
+      className="pressable grid size-10 place-items-center rounded-md text-ink-muted hover:bg-surface/70 hover:text-ink"
+    >
+      {mute ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
+    </button>
+  );
+
   return (
     <div className={cn("flex flex-col", desktop ? "h-dvh overflow-hidden" : "min-h-dvh")}>
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 pb-3 sm:px-6">
-        <div className="flex items-center gap-2.5">
-          <BrandMark size={30} />
-          <h1 className="type-display">Tu semana</h1>
-        </div>
-        <Shares routine={routine} />
-        <div className="flex items-center justify-end gap-2">
-          <SleepPill />
-          <button
-            type="button"
-            onClick={() => {
-              setMuted(!mute);
-              setMute(!mute);
-              if (mute) play("pop");
-            }}
-            aria-pressed={!mute}
-            aria-label={mute ? "Activar sonidos" : "Silenciar sonidos"}
-            title={mute ? "Activar sonidos" : "Silenciar sonidos"}
-            className="pressable grid size-10 place-items-center rounded-md text-ink-muted hover:bg-surface/70 hover:text-ink"
-          >
-            {mute ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
-          </button>
-          <UserMenu />
-        </div>
-      </header>
+      {wide ? (
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 pb-3 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <BrandMark size={30} />
+            <h1 className="type-display">Tu semana</h1>
+          </div>
+          <Shares routine={routine} />
+          <div className="flex items-center justify-end gap-2">
+            <div data-tour="sueno">
+              <SleepPill />
+            </div>
+            <div data-tour="cuenta" className="flex items-center gap-2">
+              {muteButton}
+              <UserMenu />
+            </div>
+          </div>
+        </header>
+      ) : (
+        // En el celular: LIFEBUCKET al centro, el sueño a la izquierda, la cuenta a la derecha y los % abajo.
+        <header className="flex shrink-0 flex-col gap-2.5 px-4 pt-3 pb-2">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+            <div data-tour="sueno" className="justify-self-start">
+              <SleepPill compact />
+            </div>
+            <h1 className="flex items-center gap-1.5">
+              <BrandMark size={22} />
+              <span className="text-[14px] font-semibold tracking-[0.16em]">LIFEBUCKET</span>
+            </h1>
+            <div data-tour="cuenta" className="flex items-center gap-0.5 justify-self-end">
+              {muteButton}
+              <UserMenu />
+            </div>
+          </div>
+          <Shares routine={routine} mobile />
+        </header>
+      )}
 
       <main className={cn("flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6", desktop ? "flex-row" : "flex-col")}>{order.map((s) => sections[s])}</main>
 
@@ -340,7 +397,18 @@ export function SimpleApp() {
 
       {sleepOpen && <SleepDialog isMobile={!desktop} onClose={() => setSleepOpen(false)} />}
 
-      {newWeek && (
+      {intro === "welcome" && (
+        <Welcome
+          name={firstName(user)}
+          onDone={(tour) => {
+            markSeen();
+            setIntro(tour ? "tour" : "none");
+          }}
+        />
+      )}
+      {intro === "tour" && <Tour steps={MAIN_TOUR} onClose={() => setIntro("none")} />}
+
+      {newWeek && intro === "none" && (
         <NewWeek
           week={monday}
           last={history.filter((h) => h.date < monday).at(-1)}
@@ -487,14 +555,16 @@ function Panel({
   dropProps: { onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void; onDragEnd: () => void };
   children: React.ReactNode;
 }) {
-  if (!open) return <Collapsed title={title} icon={icon} onOpen={onToggle} desktop={desktop} />;
+  if (!open) return <Collapsed tour={id} title={title} icon={icon} onOpen={onToggle} desktop={desktop} />;
   return (
     <section
+      data-tour={id}
       aria-labelledby={`panel-${id}`}
       {...dropProps}
       className={cn("card flex min-w-0 flex-col overflow-hidden transition-opacity", desktop && (grow ? "flex-1" : cn("shrink-0", width)), dimmed && "opacity-40")}
     >
       <header
+        data-tour={`${id}-header`}
         draggable
         onDragStart={onHeaderDragStart}
         title="Arrastrá para reordenar"
@@ -526,10 +596,11 @@ function Panel({
 }
 
 /** Sección comprimida: una pestañita con su nombre para volver a abrirla. */
-function Collapsed({ title, icon: Icon, onOpen, desktop }: { title: string; icon: LucideIcon; onOpen: () => void; desktop: boolean }) {
+function Collapsed({ tour, title, icon: Icon, onOpen, desktop }: { tour: string; title: string; icon: LucideIcon; onOpen: () => void; desktop: boolean }) {
   return (
     <button
       type="button"
+      data-tour={tour}
       onClick={onOpen}
       aria-label={`Abrir ${title.toLowerCase()}`}
       className={cn("card pressable flex shrink-0 items-center gap-3 text-ink-muted hover:text-ink", desktop ? "w-11 flex-col py-4" : "h-11 px-4")}
@@ -556,8 +627,9 @@ const BOND_LABEL: Record<string, string> = { amor: "Amor", familia: "Familia", a
  * Libre. Vínculos no está en el calendario: sus momentos del mes se pasan a horas por semana y se
  * descuentan de Libre (pasan en tu tiempo libre).
  */
-function Shares({ routine }: { routine: RoutineBlock[] }) {
+function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean }) {
   const moments = usePlanner((s) => s.moments);
+  const [picked, setPicked] = useState<QuadrantId | null>(null);
   const inQuadrant = (q: QuadrantId) => routine.filter((b) => b.quadrant === q);
   const total = (list: RoutineBlock[]) => list.reduce((acc, b) => acc + b.minutes * b.days.length, 0);
   const busy = (["trabajo", "cuerpo", "mente", "alma"] as QuadrantId[]).map((q) => ({ id: q, value: total(inQuadrant(q)) }));
@@ -592,64 +664,104 @@ function Shares({ routine }: { routine: RoutineBlock[] }) {
     return list.sort((a, b) => b[1] - a[1]);
   };
 
+  /** Qué significa la parte y de qué está hecho su %. */
+  const detail = (it: (typeof items)[number]) => {
+    const parts = breakdown(it.id, it.value);
+    return (
+      <>
+      <p className="flex items-baseline justify-between text-[12px]">
+        <span className="font-semibold">{label[it.id]}</span>
+        <span className="text-ink-muted">
+          {(Math.round((it.value / 60) * 10) / 10).toLocaleString("es-AR")} h · {pct(it.value)}% de la semana
+        </span>
+      </p>
+      <p className="mt-1 mb-2.5 text-[11.5px] leading-snug text-ink-muted">{MEANING[it.id]}</p>
+      {parts.length ? (
+        <ul className="flex flex-col gap-1.5">
+          {parts.map(([name, m]) => (
+            <li key={name} className="flex flex-col gap-0.5">
+              <span className="flex justify-between gap-2 text-[12px]">
+                <span className="truncate">{name}</span>
+                <span className="shrink-0 font-semibold">{pct(m)}%</span>
+              </span>
+              <span className="h-1 overflow-hidden rounded-full bg-surface-sunken">
+                <span className="block h-full rounded-full bg-[var(--q)]" style={{ width: `${it.value ? (m / it.value) * 100 : 0}%` }} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[12px] text-ink-faint">
+          {it.id === "vinculos" ? "Todavía no cargaste momentos este mes." : `Todavía no hay bloques de ${label[it.id].toLowerCase()}.`}
+        </p>
+      )}
+      {it.id === "vinculos" && (
+        <p className="mt-2 border-t border-line pt-2 text-[10.5px] leading-snug text-ink-faint">
+          Cada cita suma ~{BOND_HOURS.amor} h, cada salida con la familia ~{BOND_HOURS.familia} h y con amigos ~
+          {String(BOND_HOURS.amigos).replace(".", ",")} h. El total del mes se reparte en sus semanas.
+        </p>
+      )}
+      </>
+    );
+  };
+
+  if (mobile) {
+    const open = items.find((it) => it.id === picked);
+    return (
+      <div data-tour="shares" className="flex flex-col gap-2">
+        <ul aria-label="Tu semana en porcentajes" className="grid grid-cols-3 gap-1.5">
+          {items.map((it) => (
+            <li key={it.id} style={partStyle(it.id)}>
+              <button
+                type="button"
+                aria-expanded={picked === it.id}
+                onClick={() => setPicked(picked === it.id ? null : it.id)}
+                className={cn(
+                  "flex w-full items-center gap-1 rounded-full bg-surface/80 px-2 py-1.5 text-[11.5px] tabular-nums shadow-[var(--shadow-card)] transition-shadow",
+                  picked === it.id && "ring-2 ring-[var(--q)]",
+                )}
+              >
+                <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[var(--q)]" />
+                <span className="min-w-0 flex-1 truncate text-left text-ink-muted">{label[it.id]}</span>
+                <span className="font-semibold">{pct(it.value)}%</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {open && (
+          <div style={partStyle(open.id)} className="animate-fade-up rounded-xl bg-surface p-3 shadow-[var(--shadow-card)]">
+            {detail(open)}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <ul aria-label="Tu semana en porcentajes" className="hidden items-center gap-4 rounded-full bg-surface/80 px-4 py-2 shadow-[var(--shadow-card)] md:flex">
-      {items.map((it) => {
-        const parts = breakdown(it.id, it.value);
-        return (
-          <li
-            key={it.id}
-            tabIndex={0}
-            style={partStyle(it.id)}
-            className={cn(
-              "group relative flex cursor-default items-center gap-1.5 rounded-full text-[13px] tabular-nums outline-offset-4",
-              it.id === "libre" && "border-l border-line pl-4",
-            )}
+    <ul data-tour="shares" aria-label="Tu semana en porcentajes" className="flex items-center gap-4 rounded-full bg-surface/80 px-4 py-2 shadow-[var(--shadow-card)]">
+      {items.map((it) => (
+        <li
+          key={it.id}
+          tabIndex={0}
+          style={partStyle(it.id)}
+          className={cn(
+            "group relative flex cursor-default items-center gap-1.5 rounded-full text-[13px] tabular-nums outline-offset-4",
+            it.id === "libre" && "border-l border-line pl-4",
+          )}
+        >
+          <span aria-hidden className="size-2 rounded-full bg-[var(--q)]" />
+          <span className="text-ink-muted">{label[it.id]}</span>
+          <span className="font-semibold">{pct(it.value)}%</span>
+          {/* Al pasar el mouse: qué significa y de qué está hecho ese %. */}
+          <div
+            role="tooltip"
+            className="pointer-events-none absolute top-full left-1/2 z-40 mt-3 hidden w-64 -translate-x-1/2 rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] group-hover:block group-focus:block"
           >
-            <span aria-hidden className={cn("size-2 rounded-full", "bg-[var(--q)]")} />
-            <span className="text-ink-muted">{label[it.id]}</span>
-            <span className="font-semibold">{pct(it.value)}%</span>
-            {/* Al pasar el mouse: qué significa y de qué está hecho ese %. */}
-            <div
-              role="tooltip"
-              className="pointer-events-none absolute top-full left-1/2 z-40 mt-3 hidden w-64 -translate-x-1/2 rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] group-hover:block group-focus:block"
-            >
-              <p className="flex items-baseline justify-between text-[12px]">
-                <span className="font-semibold">{label[it.id]}</span>
-                <span className="text-ink-muted">
-                  {(Math.round((it.value / 60) * 10) / 10).toLocaleString("es-AR")} h · {pct(it.value)}% de la semana
-                </span>
-              </p>
-              <p className="mt-1 mb-2.5 text-[11.5px] leading-snug text-ink-muted">{MEANING[it.id]}</p>
-              {parts.length ? (
-                <ul className="flex flex-col gap-1.5">
-                  {parts.map(([name, m]) => (
-                    <li key={name} className="flex flex-col gap-0.5">
-                      <span className="flex justify-between gap-2 text-[12px]">
-                        <span className="truncate">{name}</span>
-                        <span className="shrink-0 font-semibold">{pct(m)}%</span>
-                      </span>
-                      <span className="h-1 overflow-hidden rounded-full bg-surface-sunken">
-                        <span className="block h-full rounded-full bg-[var(--q)]" style={{ width: `${it.value ? (m / it.value) * 100 : 0}%` }} />
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-[12px] text-ink-faint">
-                  {it.id === "vinculos" ? "Todavía no cargaste momentos este mes." : `Todavía no hay bloques de ${label[it.id].toLowerCase()}.`}
-                </p>
-              )}
-              {it.id === "vinculos" && (
-                <p className="mt-2 border-t border-line pt-2 text-[10.5px] leading-snug text-ink-faint">
-                  Cada cita suma ~{BOND_HOURS.amor} h, cada salida con la familia ~{BOND_HOURS.familia} h y con amigos ~
-                  {String(BOND_HOURS.amigos).replace(".", ",")} h. El total del mes se reparte en sus semanas.
-                </p>
-              )}
-            </div>
-          </li>
-        );
-      })}
+            {detail(it)}
+          </div>
+        </li>
+      ))}
     </ul>
   );
 }
+

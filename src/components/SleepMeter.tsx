@@ -29,7 +29,7 @@ function SleepBar({ perNight, thick }: { perNight: number; thick?: boolean }) {
 }
 
 /** Versión chica para el encabezado: horas por noche y la barrita; al pasar el mouse, el detalle. */
-export function SleepPill() {
+export function SleepPill({ compact }: { compact?: boolean }) {
   const sleep = usePlanner((s) => s.sleep);
   const st = sleepStats(sleep);
   return (
@@ -37,11 +37,13 @@ export function SleepPill() {
       <Moon aria-hidden className="size-4 text-[var(--color-sleep)]" />
       <span className="text-[13px] tabular-nums">
         <span className="font-semibold">{hoursLabel(st.perNight)}</span>
-        <span className="text-ink-muted"> /noche</span>
+        {!compact && <span className="text-ink-muted"> /noche</span>}
       </span>
-      <span className="w-14">
-        <SleepBar perNight={st.perNight} />
-      </span>
+      {!compact && (
+        <span className="w-14">
+          <SleepBar perNight={st.perNight} />
+        </span>
+      )}
       <div role="tooltip" className="pointer-events-none absolute top-full right-0 z-40 mt-3 hidden w-60 rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] group-hover:block group-focus:block">
         <SleepSummary st={st} />
       </div>

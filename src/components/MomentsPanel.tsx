@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronDown, ChevronLeft, ChevronRight, GripVertical, Heart, Home, PanelRightClose, PartyPopper, Plus, Users, X, type LucideIcon } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, Heart, Home, PanelRightClose, PartyPopper, Plus, Trash2, Users, type LucideIcon } from "lucide-react";
+import { useMediaQuery } from "@/lib/hooks";
 import { useState, type CSSProperties, type DragEvent } from "react";
 import { BOND_HOURS, hoursOf } from "@/lib/bonds";
 import { cn } from "@/lib/format";
@@ -43,6 +44,7 @@ export function MomentsPanel({
   const thisMonth = monthKey(new Date());
   const [month, setMonth] = useState(thisMonth);
   const inMonth = moments.filter((m) => m.month === month);
+  const desktop = useMediaQuery("(min-width: 1024px)");
 
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
@@ -78,7 +80,7 @@ export function MomentsPanel({
               onClick={onCollapse}
               className="pressable ml-1 grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
             >
-              <PanelRightClose aria-hidden className="size-4" />
+              {desktop ? <PanelRightClose aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
             </button>
           )}
         </div>
@@ -110,7 +112,6 @@ function Group({
   placeholder: string;
 }) {
   const addMoment = usePlanner((s) => s.addMoment);
-  const removeMoment = usePlanner((s) => s.removeMoment);
   const [open, setOpen] = useState(true);
   const [text, setText] = useState("");
   const [menu, setMenu] = useState(false);
@@ -221,40 +222,146 @@ function Group({
 
           <ul className="flex flex-col gap-1.5">
             {list.length === 0 && <li className="text-[11.5px] text-ink-faint">Nada este mes todavía.</li>}
-            {[...list].reverse().map((m) => {
-              const st = MOMENT_STYLE[m.kind];
-              return (
-                <li
-                  key={m.id}
-                  style={{ "--k": st.color, "--k-soft": st.soft } as CSSProperties}
-                  className="group animate-fade-up relative flex items-center gap-2 rounded-xl bg-[var(--k-soft)] py-1.5 pr-7 pl-2"
-                >
-                  <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[var(--k)] text-white">
-                    <st.icon aria-hidden className="size-3" />
-                  </span>
-                  <span className="min-w-0 flex-1 leading-tight">
-                    <span className="line-clamp-2 block text-[12.5px] font-semibold break-words">{m.text}</span>
-                    <span className="block text-[10.5px] font-medium text-[var(--k)]">{st.label}</span>
-                  </span>
-                  <span className="shrink-0 text-[11px] font-semibold text-ink-muted tabular-nums">{hoursText(hoursOf(m))}</span>
-                  <button
-                    type="button"
-                    aria-label={`Sacar ${m.text}`}
-                    onClick={() => {
-                      play("delete");
-                      removeMoment(m.id);
-                    }}
-                    className="absolute top-1.5 right-1.5 grid size-5 place-items-center rounded-full text-ink-faint opacity-0 group-hover:opacity-100 hover:bg-surface hover:text-ink focus-visible:opacity-100"
-                  >
-                    <X aria-hidden className="size-3" />
-                  </button>
-                </li>
-              );
-            })}
+            {[...list].reverse().map((m) => (
+              <MomentCard key={m.id} moment={m} kinds={kinds} />
+            ))}
           </ul>
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * Una tarjeta de momento: el tachito siempre a la vista; al tocarla se abre para cambiar el texto,
+ * las horas y (en Vínculos) con quién.
+ */
+function MomentCard({ moment: m, kinds }: { moment: Moment; kinds: MomentKind[] }) {
+  const removeMoment = usePlanner((s) => s.removeMoment);
+  const updateMoment = usePlanner((s) => s.updateMoment);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(m.text);
+  const [hours, setHours] = useState(hoursOf(m));
+  const [kind, setKind] = useState<MomentKind>(m.kind);
+  const st = MOMENT_STYLE[editing ? kind : m.kind];
+  const style = { "--k": st.color, "--k-soft": st.soft } as CSSProperties;
+
+  const remove = () => {
+    play("delete");
+    removeMoment(m.id);
+  };
+  const open = () => {
+    setText(m.text);
+    setHours(hoursOf(m));
+    setKind(m.kind);
+    setEditing(true);
+  };
+  const save = () => {
+    updateMoment(m.id, { text: text.trim() || MOMENT_STYLE[kind].label, hours, kind });
+    play("pop");
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <li style={style} className="animate-fade-up rounded-xl bg-[var(--k-soft)] p-2.5">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            save();
+          }}
+          className="flex flex-col gap-2.5"
+        >
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label="Qué fue"
+            autoFocus
+            className="h-9 rounded-lg border border-line bg-surface px-3 text-[13px] focus:border-ink focus:outline-none"
+          />
+          <div role="radiogroup" aria-label="Horas" className="flex gap-1">
+            {HOURS.map((h) => (
+              <button
+                key={h}
+                type="button"
+                role="radio"
+                aria-checked={hours === h}
+                aria-label={`${h} horas`}
+                onClick={() => setHours(h)}
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11px] font-semibold tabular-nums transition-colors",
+                  hours === h ? "bg-ink text-surface" : "bg-surface text-ink-muted hover:text-ink",
+                )}
+              >
+                <ClockFace hours={h} />
+                {h === 6 ? "6+" : h} h
+              </button>
+            ))}
+          </div>
+          {kinds.length > 1 && (
+            <div role="radiogroup" aria-label="Con quién" className="flex gap-1">
+              {kinds.map((k) => {
+                const ks = MOMENT_STYLE[k];
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={kind === k}
+                    onClick={() => setKind(k)}
+                    style={{ "--k": ks.color } as CSSProperties}
+                    className={cn(
+                      "flex flex-1 items-center justify-center gap-1 rounded-lg py-1.5 text-[12px] font-semibold transition-colors",
+                      kind === k ? "bg-[var(--k)] text-white" : "bg-surface text-[var(--k)]",
+                    )}
+                  >
+                    <ks.icon aria-hidden className="size-3.5" />
+                    {ks.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <button type="button" onClick={remove} aria-label={`Borrar ${m.text}`} className="pressable grid size-9 place-items-center rounded-lg text-ink-muted hover:bg-surface hover:text-danger">
+              <Trash2 aria-hidden className="size-4" />
+            </button>
+            <span className="flex-1" />
+            <button type="button" onClick={() => setEditing(false)} className="pressable h-9 rounded-lg px-3 text-[12.5px] font-medium text-ink-muted hover:bg-surface hover:text-ink">
+              Cancelar
+            </button>
+            <button type="submit" className="pressable inline-flex h-9 items-center gap-1 rounded-lg bg-ink px-3.5 text-[12.5px] font-semibold text-surface hover:bg-ink/90">
+              <Check aria-hidden className="size-3.5" />
+              Guardar
+            </button>
+          </div>
+        </form>
+      </li>
+    );
+  }
+
+  return (
+    <li style={style} className="animate-fade-up flex items-center gap-1 rounded-xl bg-[var(--k-soft)] py-1 pr-1 pl-2">
+      <button type="button" onClick={open} aria-label={`Editar ${m.text}`} className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left">
+        <span className="grid size-6 shrink-0 place-items-center rounded-full bg-[var(--k)] text-white">
+          <st.icon aria-hidden className="size-3" />
+        </span>
+        <span className="min-w-0 flex-1 leading-tight">
+          <span className="line-clamp-2 block text-[12.5px] font-semibold break-words">{m.text}</span>
+          <span className="block text-[10.5px] font-medium text-[var(--k)]">{st.label}</span>
+        </span>
+        <span className="shrink-0 text-[11px] font-semibold text-ink-muted tabular-nums">{hoursText(hoursOf(m))}</span>
+      </button>
+      <button
+        type="button"
+        aria-label={`Borrar ${m.text}`}
+        title="Borrar"
+        onClick={remove}
+        className="pressable grid size-8 shrink-0 place-items-center rounded-full text-ink-faint hover:bg-surface hover:text-danger"
+      >
+        <Trash2 aria-hidden className="size-3.5" />
+      </button>
+    </li>
   );
 }
 

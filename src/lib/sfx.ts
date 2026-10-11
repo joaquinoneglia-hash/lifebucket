@@ -83,3 +83,85 @@ export function play(name: Sfx) {
       break;
   }
 }
+
+/**
+ * La intro de la bienvenida (~4 s): un acorde que se abre despacio (Fa mayor con novena, filtro que
+ * se va abriendo), un bajo suave y unas notas de cristal arriba con eco. Devuelve false si el navegador
+ * todavía no deja sonar (hace falta un toque del usuario): en ese caso conviene llamarla en el primer clic.
+ */
+export async function playIntro(): Promise<boolean> {
+  if (isMuted()) return true;
+  const a = audio();
+  if (!a) return false;
+  try {
+    await a.resume();
+  } catch {}
+  if (a.state !== "running") return false;
+
+  const t0 = a.currentTime + 0.05;
+  const master = a.createGain();
+  master.gain.value = 0.9;
+  master.connect(a.destination);
+
+  // Eco: le da aire, como una sala.
+  const delay = a.createDelay(1);
+  delay.delayTime.value = 0.29;
+  const feedback = a.createGain();
+  feedback.gain.value = 0.38;
+  const damp = a.createBiquadFilter();
+  damp.type = "lowpass";
+  damp.frequency.value = 2600;
+  const wet = a.createGain();
+  wet.gain.value = 0.32;
+  delay.connect(damp).connect(feedback).connect(delay);
+  damp.connect(wet).connect(master);
+
+  // El acorde: arranca oscuro y se abre.
+  const filter = a.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.Q.value = 0.7;
+  filter.frequency.setValueAtTime(320, t0);
+  filter.frequency.exponentialRampToValueAtTime(3400, t0 + 1.4);
+  filter.connect(master);
+  filter.connect(delay);
+
+  const pad = (freq: number, gain: number) => {
+    for (const [type, cents] of [
+      ["sine", -7],
+      ["triangle", 7],
+    ] as const) {
+      const osc = a.createOscillator();
+      const g = a.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      osc.detune.value = cents;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.linearRampToValueAtTime(gain, t0 + 0.9);
+      g.gain.setValueAtTime(gain, t0 + 1.8);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 4.2);
+      osc.connect(g).connect(filter);
+      osc.start(t0);
+      osc.stop(t0 + 4.3);
+    }
+  };
+  pad(87.31, 0.05); // Fa grave
+  for (const f of [174.61, 261.63, 329.63, 392.0, 440.0]) pad(f, 0.022); // Fa, Do, Mi, Sol, La
+
+  // Notas de cristal que suben (Do–Mi–Sol–Do) cuando el acorde ya se abrió.
+  [1046.5, 1318.51, 1567.98, 2093.0].forEach((freq, i) => {
+    const t = t0 + 0.95 + i * 0.14;
+    const osc = a.createOscillator();
+    const g = a.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.045, t + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
+    osc.connect(g);
+    g.connect(master);
+    g.connect(delay);
+    osc.start(t);
+    osc.stop(t + 1.2);
+  });
+  return true;
+}
