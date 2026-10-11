@@ -1,0 +1,211 @@
+"use client";
+
+import { Trash2 } from "lucide-react";
+import { useState } from "react";
+import { SUGGESTED_ACTIVITIES } from "@/lib/activities";
+import { cn, formatMinutes } from "@/lib/format";
+import { useMediaQuery } from "@/lib/hooks";
+import { QUADRANTS, quadrantStyle, type QuadrantId } from "@/lib/quadrants";
+import { WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
+import { newId } from "@/lib/store";
+import { formatTime } from "@/lib/time";
+import { QuadrantIcon } from "../QuadrantIcon";
+import { GhostButton, PrimaryButton, Select, Sheet } from "../ui";
+
+const DAY_LETTER: Record<number, { short: string; name: string }> = {
+  1: { short: "L", name: "lunes" },
+  2: { short: "M", name: "martes" },
+  3: { short: "M", name: "miércoles" },
+  4: { short: "J", name: "jueves" },
+  5: { short: "V", name: "viernes" },
+  6: { short: "S", name: "sábado" },
+  0: { short: "D", name: "domingo" },
+};
+/** De 05:00 a 24:00, de a media hora. */
+const TIMES = Array.from({ length: 39 }, (_, i) => 5 * 60 + i * 30);
+/** Libre no se agenda: es lo que sobra. */
+const PICKABLE = QUADRANTS.filter((q) => q.id !== "libre");
+
+/** Sumar o cambiar un bloque de tu semana tipo: qué es, qué días, a qué hora y cuánto dura. */
+export function BlockEditor({
+  block,
+  day,
+  start,
+  onSave,
+  onDelete,
+  onClose,
+  quadrants,
+  minutes: initialMinutes,
+}: {
+  /** Duración inicial al crear (p. ej. la franja que arrastraste). */
+  minutes?: number;
+  /** Qué categorías se pueden elegir (por defecto, todas menos Libre). */
+  quadrants?: QuadrantId[];
+  block?: RoutineBlock;
+  day: number;
+  start: number;
+  onSave: (b: RoutineBlock) => void;
+  onDelete?: () => void;
+  onClose: () => void;
+}) {
+  const isMobile = !useMediaQuery("(min-width: 640px)");
+  const pickable = quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id)) : PICKABLE;
+  const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? pickable[0]?.id ?? "cuerpo");
+  const [name, setName] = useState(block?.name ?? "");
+  const [days, setDays] = useState<number[]>(block?.days ?? [day]);
+  const [from, setFrom] = useState(block?.start ?? start);
+  const [minutes, setMinutes] = useState(block?.minutes ?? initialMinutes ?? 60);
+  const valid = name.trim() && days.length;
+
+  return (
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="routine-block-title" width="max-w-[440px]">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!valid) return;
+          onSave({ id: block?.id ?? newId(), quadrant, name: name.trim(), days, start: from, minutes });
+        }}
+        className="flex flex-col gap-4 p-5 sm:p-6"
+      >
+        <h2 id="routine-block-title" className="type-headline">
+          {block ? "Cambiar bloque" : "Sumar a tu semana"}
+        </h2>
+
+        <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-wrap gap-1.5">
+          {pickable.map((q) => (
+            <button
+              key={q.id}
+              type="button"
+              role="radio"
+              aria-checked={quadrant === q.id}
+              onClick={() => setQuadrant(q.id)}
+              style={quadrantStyle(q.id)}
+              className={cn(
+                "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium",
+                quadrant === q.id ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line hover:bg-surface-sunken",
+              )}
+            >
+              <span className="grid size-6 place-items-center rounded-full bg-[var(--q-soft)] text-[var(--q)]">
+                <QuadrantIcon id={q.id} className="size-3" />
+              </span>
+              {q.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="routine-name" className="text-[12px] text-ink-muted">
+            ¿Qué es?
+          </label>
+          <input
+            id="routine-name"
+            data-autofocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={quadrant === "trabajo" ? "Empleo, emprendimiento…" : "Gimnasio, leer, cena con amigos…"}
+            autoComplete="off"
+            className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] focus:border-ink focus:outline-none"
+          />
+          <div className="flex flex-wrap gap-1">
+            {(quadrant === "trabajo" ? ["Empleo", "Emprendimiento", "Freelance"] : SUGGESTED_ACTIVITIES[quadrant].slice(0, 5))
+              .filter((n) => n !== name)
+              .map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setName(n)}
+                  className="pressable h-7 rounded-full bg-surface-sunken px-2.5 text-[12px] text-ink-muted hover:text-ink"
+                >
+                  {n}
+                </button>
+              ))}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="flex items-center justify-between text-[12px] text-ink-muted">
+            ¿Qué días?
+            <span className="flex gap-1">
+              {[
+                { label: "L a V", days: [1, 2, 3, 4, 5] },
+                { label: "Finde", days: [6, 0] },
+                { label: "Todos los días", days: [1, 2, 3, 4, 5, 6, 0] },
+              ].map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => setDays(p.days)}
+                  className="pressable h-6 rounded-full bg-surface-sunken px-2 text-[11px] font-medium text-ink-muted hover:text-ink"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </span>
+          </span>
+          <div role="group" aria-label="Días" className="grid grid-cols-7 gap-1">
+            {WEEK_ORDER.map((d) => {
+              const on = days.includes(d);
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={DAY_LETTER[d].name}
+                  onClick={() => setDays(on ? days.filter((x) => x !== d) : [...days, d])}
+                  className={cn(
+                    "pressable h-9 rounded-md text-[13px] font-semibold",
+                    on ? "bg-ink text-surface" : "bg-surface-sunken text-ink-muted hover:text-ink",
+                  )}
+                >
+                  {DAY_LETTER[d].short}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] text-ink-muted">Desde</span>
+            <Select
+              label="Desde"
+              value={String(from)}
+              onChange={(v) => {
+                const f = Number(v);
+                setFrom(f);
+                setMinutes((m) => Math.min(Math.max(30, m), 24 * 60 - f));
+              }}
+              options={TIMES.slice(0, -1).map((m) => ({ value: String(m), label: formatTime(m) }))}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[12px] text-ink-muted">Hasta · {formatMinutes(minutes)}</span>
+            <Select
+              label="Hasta"
+              value={String(from + minutes)}
+              onChange={(v) => setMinutes(Number(v) - from)}
+              options={TIMES.filter((m) => m > from).map((m) => ({ value: String(m), label: formatTime(m) }))}
+            />
+          </label>
+        </div>
+
+        <footer className="flex items-center justify-between gap-2 pt-1">
+          {onDelete ? (
+            <GhostButton danger onClick={onDelete}>
+              <Trash2 aria-hidden className="size-4" />
+              Sacar
+            </GhostButton>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <GhostButton onClick={onClose}>Cancelar</GhostButton>
+            <PrimaryButton type="submit" disabled={!valid}>
+              {block ? "Guardar" : "Sumar"}
+            </PrimaryButton>
+          </div>
+        </footer>
+      </form>
+    </Sheet>
+  );
+}

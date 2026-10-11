@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "elevenlabs": {
+      "type": "stdio",
+      "command": "C:\\Users\\joaqu\\AppData\\Roaming\\Python\\Python314\\Scripts\\uvx.exe",
+      "args": ["elevenlabs-mcp"],
+      "env": {
+        "ELEVENLABS_API_KEY": "${ELEVENLABS_API_KEY}"
+      }
+    }
+  }
+}
