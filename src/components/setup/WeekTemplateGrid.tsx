@@ -2,6 +2,7 @@
 
 import { GripVertical, Moon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import { cn, formatMinutes } from "@/lib/format";
 import { quadrantStyle } from "@/lib/quadrants";
 import { partStyle } from "@/lib/mode";
@@ -31,9 +32,12 @@ export function WeekTemplateGrid({
   onOpen,
   onDelete,
   onMove,
+  onTrash,
   showSleep,
   fit,
 }: {
+  /** Soltar un bloque en el tacho de abajo (aparece mientras lo arrastrás). Quien usa la grilla pregunta qué borrar. */
+  onTrash?: (block: RoutineBlock, day: number) => void;
   /** Que entre sí o sí en `height` (pantallas bajas): las filas pueden achicarse más de lo normal. */
   fit?: boolean;
   /** Rango fijo (minutos desde la medianoche); sin él, sale de tu sueño. Con rango fijo no se dibuja el sueño. */
@@ -69,7 +73,13 @@ export function WeekTemplateGrid({
   // `inside`: la selección empezó adentro de un bloque (si no se estira, es un clic: se abre ese bloque).
   const [sel, setSel] = useState<{ day: number; a: number; b: number; inside?: { block: RoutineBlock; y: number }; moved?: boolean } | null>(null);
   // Mover o estirar un bloque: dónde quedaría mientras arrastrás.
-  type Drag = { block: RoutineBlock; fromDay: number; mode: "move" | "top" | "bottom"; x: number; y: number; colW: number; day: number; start: number; minutes: number; moved: boolean };
+  type Drag = { block: RoutineBlock; fromDay: number; mode: "move" | "top" | "bottom"; x: number; y: number; colW: number; day: number; start: number; minutes: number; moved: boolean; overTrash?: boolean };
+  const trashRef = useRef<HTMLDivElement>(null);
+  /** ¿El dedo o el mouse está sobre el tacho? (con un margen, para que sea fácil acertarle) */
+  const onTrashZone = (x: number, y: number) => {
+    const r = trashRef.current?.getBoundingClientRect();
+    return !!r && x >= r.left - 16 && x <= r.right + 16 && y >= r.top - 20 && y <= r.bottom + 12;
+  };
   const [drag, setDrag] = useState<Drag | null>(null);
   const justDragged = useRef(false);
   // En pantallas táctiles el dedo dentro del calendario hace lo mismo que el mouse (crear, mover, estirar):
@@ -189,7 +199,7 @@ export function WeekTemplateGrid({
                 </div>
               )}
 
-              {drag?.moved && drag.day === d && (
+              {drag?.moved && !drag.overTrash && drag.day === d && (
                 <div
                   aria-hidden
                   style={{ ...quadrantStyle(drag.block.quadrant), top: top(drag.start) + 1, height: (drag.minutes / 30) * row - 2 }}
@@ -255,11 +265,21 @@ export function WeekTemplateGrid({
                         const colW = e.currentTarget.parentElement!.getBoundingClientRect().width;
                         setDrag({ block: b, fromDay: d, mode: handle && handle !== "move" ? handle : "move", x: e.clientX, y: e.clientY, colW, day: d, start: b.start, minutes: b.minutes, moved: false });
                       }}
-                      onPointerMove={(e) => drag && drag.block.id === b.id && drag.fromDay === d && setDrag(dragTo(drag, e.clientX, e.clientY))}
+                      onPointerMove={(e) => {
+                        if (!drag || drag.block.id !== b.id || drag.fromDay !== d) return;
+                        const next = dragTo(drag, e.clientX, e.clientY);
+                        setDrag({ ...next, overTrash: next.moved && drag.mode === "move" && onTrashZone(e.clientX, e.clientY) });
+                      }}
                       onPointerUp={() => {
                         if (!drag || drag.block.id !== b.id || drag.fromDay !== d) return;
                         const done = drag;
                         setDrag(null);
+                        // Soltado en el tacho: que elija qué eliminar.
+                        if (done.overTrash && onTrash) {
+                          justDragged.current = true;
+                          onTrash(b, d);
+                          return;
+                        }
                         // Un clic sin arrastrar abre el bloque para editarlo.
                         if (!done.moved) {
                           if (onOpen) onOpen(b, d);
@@ -344,6 +364,25 @@ export function WeekTemplateGrid({
           );
         })}
       </div>
+
+      {onTrash &&
+        drag?.moved &&
+        drag.mode === "move" &&
+        createPortal(
+          <div className="pointer-events-none fixed inset-x-0 bottom-3 z-[60] flex justify-center px-4" aria-live="polite">
+            <div
+              ref={trashRef}
+              className={cn(
+                "animate-sheet-in flex h-14 items-center gap-2.5 rounded-full px-6 text-[14px] font-medium shadow-[var(--shadow-popover)] transition-[background-color,color,transform] duration-150",
+                drag.overTrash ? "scale-105 bg-danger text-white" : "bg-surface text-ink-muted",
+              )}
+            >
+              <Trash2 aria-hidden className={cn("size-5 transition-transform duration-150", drag.overTrash && "-rotate-12")} />
+              {drag.overTrash ? "Soltá para eliminar" : "Arrastrá acá para eliminar"}
+            </div>
+          </div>,
+          document.body,
+        )}
 
       {editing && onChange && (
         <BlockEditor

@@ -3,6 +3,7 @@
 import { BarChart3, CalendarDays, ChevronUp, GripVertical, ListChecks, PartyPopper, Moon, PanelLeftOpen, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { cn } from "@/lib/format";
+import { formatTime } from "@/lib/time";
 import { useMediaQuery, useViewportHeight } from "@/lib/hooks";
 import { BOND_HOURS, bondBreakdown, bondWeekMinutes, funWeekMinutes } from "@/lib/bonds";
 import { partStyle, SIMPLE_QUADRANTS } from "@/lib/mode";
@@ -31,6 +32,15 @@ const RANGE: [number, number] = [5 * 60, 24 * 60];
 const WEEK_MINUTES = (RANGE[1] - RANGE[0]) * 7;
 
 const DAY_NAME: Record<number, string> = { 1: "lunes", 2: "martes", 3: "miércoles", 4: "jueves", 5: "viernes", 6: "sábado", 0: "domingo" };
+/** "de lunes a viernes", "todos los días" o "lunes, miércoles y viernes". */
+function daysText(days: number[]) {
+  const sorted = WEEK_ORDER.filter((d) => days.includes(d));
+  if (sorted.length === 7) return "todos los días";
+  if (sorted.length === 5 && sorted.every((d) => d >= 1 && d <= 5)) return "de lunes a viernes";
+  if (sorted.length === 2 && sorted.includes(6) && sorted.includes(0)) return "el fin de semana";
+  const names = sorted.map((d) => DAY_NAME[d]);
+  return `los ${names.slice(0, -1).join(", ")} y ${names.at(-1)}`;
+}
 
 type Section = "semana" | "momentos" | "tablero" | "objetivos";
 const DEFAULT_ORDER: Section[] = ["semana", "momentos", "objetivos", "tablero"];
@@ -326,6 +336,7 @@ export function SimpleApp() {
           onCreateAt={(day, start, minutes) => setEditing({ day, start, minutes })}
           onOpen={(block, day) => setEditing({ block, day, start: block.start })}
           onDelete={(block, day) => (block.days.length > 1 ? setAskDelete({ block, day }) : remove(block, day, true))}
+          onTrash={(block, day) => setAskDelete({ block, day })}
           onMove={(block, day, next) => change({ block, day, toDay: next.day, patch: { start: next.start, minutes: next.minutes }, verb: next.minutes !== block.minutes ? "cambiar" : "mover" })}
         />
       </Panel>
@@ -338,7 +349,7 @@ export function SimpleApp() {
         data-over={touchOver === "momentos" || undefined}
         aria-label="Momentos del mes"
         {...dragProps("momentos").dropProps}
-        className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-[360px]" : "h-[70dvh]", dragging === "momentos" && "opacity-40")}
+        className={cn("flex shrink-0 flex-col transition-opacity", desktop ? "w-[360px]" : "h-[70dvh]", dragging === "momentos" && "opacity-40")}
       >
         <MomentsPanel className="h-full" onCollapse={() => toggle("momentos")} onHeaderDragStart={dragProps("momentos").onHeaderDragStart} />
       </section>
@@ -408,6 +419,7 @@ export function SimpleApp() {
               onCreateAt={(day, start, minutes) => setEditing({ day, start, minutes })}
               onOpen={(block, day) => setEditing({ block, day, start: block.start })}
               onDelete={(block, day) => (block.days.length > 1 ? setAskDelete({ block, day }) : remove(block, day, true))}
+              onTrash={(block, day) => setAskDelete({ block, day })}
               onMove={(block, day, next) => change({ block, day, toDay: next.day, patch: { start: next.start, minutes: next.minutes }, verb: next.minutes !== block.minutes ? "cambiar" : "mover" })}
             />
           )}
@@ -415,7 +427,7 @@ export function SimpleApp() {
       </Panel>
     ),
     momentos: (
-      <section data-tour="momentos" aria-label="Momentos del mes" className="card flex h-full min-h-0 flex-col overflow-hidden">
+      <section data-tour="momentos" aria-label="Momentos del mes" className="flex h-full min-h-0 flex-col">
         <MomentsPanel className="h-full" />
       </section>
     ),
@@ -572,10 +584,14 @@ export function SimpleApp() {
 
       {askDelete && (
         <Ask
-          title={`Borrar ${askDelete.block.name}`}
-          text="Este bloque está en varios días. ¿Qué querés borrar?"
-          one={`Solo el ${DAY_NAME[askDelete.day]}`}
-          all="Todos los días"
+          title={`Eliminar ${askDelete.block.name}`}
+          text={
+            askDelete.block.days.length > 1
+              ? `Se repite ${daysText(askDelete.block.days)}. ¿Eliminás solo el del ${DAY_NAME[askDelete.day]} o todos?`
+              : `Se saca de tu semana (${DAY_NAME[askDelete.day]}, ${formatTime(askDelete.block.start)} a ${formatTime(askDelete.block.start + askDelete.block.minutes)}).`
+          }
+          one={askDelete.block.days.length > 1 ? `Solo este evento (${DAY_NAME[askDelete.day]})` : undefined}
+          all={askDelete.block.days.length > 1 ? "Eliminar todos los eventos" : "Eliminar evento"}
           danger
           onOne={() => remove(askDelete.block, askDelete.day, false)}
           onAll={() => remove(askDelete.block, askDelete.day, true)}
@@ -587,9 +603,9 @@ export function SimpleApp() {
       {askChange && (
         <Ask
           title={`${askChange.verb === "mover" ? "Mover" : "Cambiar"} ${askChange.block.name}`}
-          text="Este bloque está en varios días. ¿A cuáles aplicás el cambio?"
-          one={`Solo el ${DAY_NAME[askChange.day]}`}
-          all="Todos los días"
+          text={`Se repite ${daysText(askChange.block.days)}. ¿Lo ${askChange.verb === "mover" ? "movés" : "cambiás"} solo el del ${DAY_NAME[askChange.day]} o todos?`}
+          one={`Solo este evento (${DAY_NAME[askChange.day]})`}
+          all="Todos los eventos"
           onOne={() => apply(askChange, false)}
           onAll={() => apply(askChange, true)}
           onCancel={() => setAskChange(null)}
@@ -689,7 +705,8 @@ function Ask({
 }: {
   title: string;
   text: string;
-  one: string;
+  /** Sin `one`: es una confirmación simple. */
+  one?: string;
   all: string;
   danger?: boolean;
   onOne: () => void;
@@ -707,7 +724,7 @@ function Ask({
           <p className="type-body mt-1 text-ink-muted">{text}</p>
         </div>
         <div className="flex flex-col gap-2">
-          <SecondaryButton onClick={onOne}>{one}</SecondaryButton>
+          {one && <SecondaryButton onClick={onOne}>{one}</SecondaryButton>}
           <button
             type="button"
             onClick={onAll}

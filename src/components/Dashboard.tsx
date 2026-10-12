@@ -18,7 +18,6 @@ const DAYS: { dow: number; short: string; name: string }[] = [
   { dow: 6, short: "S", name: "Sábado" },
   { dow: 0, short: "D", name: "Domingo" },
 ];
-const MONTHS = ["E", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
 /** Lo que va en el calendario día por día (Vínculos no: son momentos del mes; Libre tampoco, aplastaría al resto). */
 const DAILY: Part[] = ["trabajo", "cuerpo", "mente", "alma"];
 
@@ -132,28 +131,26 @@ export function Dashboard() {
       </Card>
 
       <Card title={`Objetivos ${year}`}>
-        <div className="grid grid-cols-3 gap-2">
-          <Mini label="Propuestos" value={yearTasks.length} />
-          <Mini label="Cumplidos" value={done} tone="ok" />
-          <Mini label="No cumplidos" value={late} tone={late ? "bad" : undefined} />
-        </div>
-        {pending > 0 && <p className="text-[11.5px] text-ink-muted">{pending} todavía en camino.</p>}
-        <div className="mt-2 flex h-14 items-end gap-1">
-          {MONTHS.map((m, i) => {
-            const month = `${year}-${String(i + 1).padStart(2, "0")}`;
-            const list = yearTasks.filter((t) => t.month === month);
-            const max = Math.max(1, ...MONTHS.map((_, k) => yearTasks.filter((t) => t.month === `${year}-${String(k + 1).padStart(2, "0")}`).length));
-            const ok = list.filter((t) => t.done).length;
-            return (
-              <div key={month} className="flex h-full flex-1 flex-col items-center justify-end gap-0.5" title={`${list.length} objetivos, ${ok} hechos`}>
-                <div className="flex w-full flex-col-reverse overflow-hidden rounded-t-[3px] bg-line" style={{ height: `${(list.length / max) * 100}%` }}>
-                  <span className="w-full bg-success" style={{ height: `${list.length ? (ok / list.length) * 100 : 0}%` }} />
-                </div>
-                <span className={cn("text-[10px]", month === today.slice(0, 7) ? "font-semibold text-ink" : "text-ink-muted")}>{m}</span>
-              </div>
-            );
-          })}
-        </div>
+        {yearTasks.length ? (
+          <>
+            <p className="text-[13px] text-ink-muted">
+              <span className="text-[22px] leading-none font-semibold text-ink tabular-nums">{done}</span> de {yearTasks.length} propuestos cumplidos
+            </p>
+            {/* Una sola barra: cumplidos, no cumplidos (vencidos) y los que todavía están en camino. */}
+            <div className="flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-surface-sunken" aria-hidden>
+              {done > 0 && <span className="h-full rounded-full bg-success" style={{ width: `${(done / yearTasks.length) * 100}%` }} />}
+              {late > 0 && <span className="h-full rounded-full bg-danger/80" style={{ width: `${(late / yearTasks.length) * 100}%` }} />}
+              {pending > 0 && <span className="h-full rounded-full bg-ink-faint/45" style={{ width: `${(pending / yearTasks.length) * 100}%` }} />}
+            </div>
+            <ul className="grid grid-cols-3 gap-2">
+              <Legend color="var(--color-success)" label="Cumplidos" value={done} />
+              <Legend color="var(--color-danger)" label="No cumplidos" value={late} />
+              <Legend color="color-mix(in oklab, var(--color-ink-faint) 60%, transparent)" label="En camino" value={pending} />
+            </ul>
+          </>
+        ) : (
+          <Empty>Cuando cargues objetivos, acá ves cuántos cumpliste de los que te propusiste.</Empty>
+        )}
       </Card>
 
       <Card title="Objetivos por tipo">
@@ -348,15 +345,6 @@ function WeekTable({ weeks }: { weeks: { week: string; shares: Partial<Record<st
   );
 }
 
-function Mini({ label, value, tone }: { label: string; value: number; tone?: "ok" | "bad" }) {
-  return (
-    <div className="rounded-lg bg-surface-sunken/70 px-2.5 py-2">
-      <p className="text-[10.5px] text-ink-muted">{label}</p>
-      <p className={cn("text-[18px] leading-tight font-semibold tabular-nums", tone === "ok" && "text-success", tone === "bad" && "text-danger")}>{value}</p>
-    </div>
-  );
-}
-
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2">
@@ -368,4 +356,17 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-[12px] text-ink-muted">{children}</p>;
+}
+
+/** Un número con su color y su nombre (debajo de la barra de objetivos). */
+function Legend({ color, label, value }: { color: string; label: string; value: number }) {
+  return (
+    <li className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-surface-sunken/60 px-2 py-1.5">
+      <span className="flex items-center gap-1 text-[10.5px] whitespace-nowrap text-ink-muted">
+        <span aria-hidden className="size-2 rounded-full" style={{ background: color }} />
+        {label}
+      </span>
+      <span className="text-[16px] font-semibold tabular-nums">{value}</span>
+    </li>
+  );
 }

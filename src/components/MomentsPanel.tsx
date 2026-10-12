@@ -1,6 +1,8 @@
 "use client";
 
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, Heart, Home, PanelRightClose, PartyPopper, Plus, Trash2, Users, type LucideIcon } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronUp, GripVertical, Heart, Home, PanelRightClose, PartyPopper, Plus, Trash2, Users, X, type LucideIcon } from "lucide-react";
+import { normalize } from "@/lib/activities";
+import { guessQuadrant } from "@/lib/categorize";
 import { useMediaQuery } from "@/lib/hooks";
 import { useState, type CSSProperties, type DragEvent } from "react";
 import { BOND_HOURS, hoursOf } from "@/lib/bonds";
@@ -27,9 +29,22 @@ const monthName = (month: string) => MONTHS[Number(month.slice(5, 7)) - 1];
 const HOURS = [1, 2, 3, 4, 5, 6];
 const hoursText = (h: number) => `${String(h).replace(".", ",")} h`;
 
+/** Todos los tipos: los tres de Vínculos y Disfrute. */
+const KINDS: MomentKind[] = ["amor", "familia", "amigos", "disfrute"];
+
+/** El tipo que sugiere lo que escribiste (un plan que no es con nadie en especial, va a Disfrute). */
+function kindFor(text: string): MomentKind | null {
+  const t = normalize(text);
+  if (!t) return null;
+  if (/(novi|pareja|cita|aniversario|amor|esposa|esposo|marido|mujer)/.test(t)) return "amor";
+  if (/(famili|mama|papa|vieja|viejo|herman|abuel|tio|tia|prim|hij|sobrin|suegr)/.test(t)) return "familia";
+  if (/(amig|pibes|chicas|chicos|juntada|asado|futbol con|after)/.test(t)) return "amigos";
+  return guessQuadrant(text) === "alma" ? "disfrute" : null;
+}
+
 /**
- * Momentos del mes: lo que no es rutina y no va en el calendario. Vínculos arriba y Disfrute abajo,
- * cada grupo se comprime. Al sumar, un submenú pregunta con quién (en Vínculos) y cuánto duró.
+ * Momentos del mes: lo que no es rutina y no va en el calendario. Arriba, todos los del mes juntos
+ * (Vínculos y Disfrute, cada uno con su color); abajo, aparte, la barra para agregar uno.
  */
 export function MomentsPanel({
   className,
@@ -45,194 +60,214 @@ export function MomentsPanel({
   const [month, setMonth] = useState(thisMonth);
   const inMonth = moments.filter((m) => m.month === month);
   const desktop = useMediaQuery("(min-width: 1024px)");
+  const bonds = inMonth.filter((m) => m.kind !== "disfrute");
+  const fun = inMonth.filter((m) => m.kind === "disfrute");
+  const total = (list: Moment[]) => list.reduce((acc, m) => acc + hoursOf(m), 0);
 
   return (
-    <div className={cn("flex min-h-0 flex-col", className)}>
-      <header
-        data-section-header
-        draggable={!!onHeaderDragStart}
-        onDragStart={onHeaderDragStart}
-        className={cn(
-          "flex items-center justify-between gap-2 border-b border-line px-4 py-2.5 select-none [-webkit-touch-callout:none]",
-          onHeaderDragStart && "cursor-grab active:cursor-grabbing",
-        )}
-      >
-        <div className="flex items-center gap-1.5">
-          {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
-          <div>
-            <h2 className="type-title">Momentos</h2>
-            <p className="text-[11.5px] text-ink-muted tabular-nums">
-              {inMonth.length ? `${inMonth.length} en ${monthName(month)} · ${hoursText(inMonth.reduce((acc, m) => acc + hoursOf(m), 0))}` : "Lo que no es rutina"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <button type="button" aria-label="Mes anterior" onClick={() => setMonth((m) => shift(m, -1))} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
-            <ChevronLeft aria-hidden className="size-4" />
-          </button>
-          <span className="w-[70px] text-center text-[12px] font-semibold">
-            {month === thisMonth ? "Este mes" : monthName(month).replace(/^./, (c) => c.toUpperCase())}
-          </span>
-          <button type="button" aria-label="Mes siguiente" onClick={() => setMonth((m) => shift(m, 1))} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
-            <ChevronRight aria-hidden className="size-4" />
-          </button>
-          {onCollapse && (
-            <button
-              type="button"
-              aria-label="Comprimir momentos"
-              title="Comprimir"
-              onClick={onCollapse}
-              className="pressable ml-1 grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
-            >
-              {desktop ? <PanelRightClose aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
-            </button>
+    <div className={cn("flex min-h-0 flex-col gap-2", className)}>
+      <div className="card flex min-h-0 flex-1 flex-col overflow-hidden">
+        <header
+          data-section-header
+          draggable={!!onHeaderDragStart}
+          onDragStart={onHeaderDragStart}
+          className={cn(
+            "flex items-center justify-between gap-2 border-b border-line px-4 py-2.5 select-none [-webkit-touch-callout:none]",
+            onHeaderDragStart && "cursor-grab active:cursor-grabbing",
           )}
-        </div>
-      </header>
+        >
+          <div className="flex items-center gap-1.5">
+            {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
+            <h2 className="type-title">Momentos</h2>
+          </div>
+          <div className="flex items-center">
+            <button type="button" aria-label="Mes anterior" onClick={() => setMonth((m) => shift(m, -1))} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <ChevronLeft aria-hidden className="size-4" />
+            </button>
+            <span className="w-[76px] text-center text-[12px] font-semibold">
+              {month === thisMonth ? "Este mes" : monthName(month).replace(/^./, (c) => c.toUpperCase())}
+            </span>
+            <button type="button" aria-label="Mes siguiente" onClick={() => setMonth((m) => shift(m, 1))} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <ChevronRight aria-hidden className="size-4" />
+            </button>
+            {onCollapse && (
+              <button
+                type="button"
+                aria-label="Comprimir momentos"
+                title="Comprimir"
+                onClick={onCollapse}
+                className="pressable ml-1 grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
+              >
+                {desktop ? <PanelRightClose aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
+              </button>
+            )}
+          </div>
+        </header>
 
-      {/* Uno arriba del otro; si se llena, scroll. */}
-      <div className="flex min-h-0 flex-1 flex-col divide-y divide-line overflow-y-auto">
-        <Group title="Vínculos" accent="var(--color-vinculos)" kinds={["amor", "familia", "amigos"]} month={month} list={inMonth.filter((m) => m.kind !== "disfrute")} placeholder="Cena, cita, visita…" />
-        <Group title="Disfrute" accent="var(--color-alma)" kinds={["disfrute"]} month={month} list={inMonth.filter((m) => m.kind === "disfrute")} placeholder="Bailar, un bar, un recital…" />
+        {/* Cuánto suma cada parte este mes. */}
+        <div className="grid grid-cols-2 gap-2 px-3 pt-3">
+          <Summary label="Vínculos" color="var(--color-vinculos)" hours={total(bonds)} count={bonds.length} />
+          <Summary label="Disfrute" color="var(--color-alma)" hours={total(fun)} count={fun.length} />
+        </div>
+
+        <ul className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto p-3">
+          {inMonth.length === 0 && (
+            <li className="flex flex-1 flex-col items-center justify-center gap-1 py-8 text-center">
+              <span className="text-[13px] font-medium">Nada en {monthName(month)} todavía</span>
+              <span className="max-w-[26ch] text-[12px] text-ink-muted">Una cena, una visita, una salida o un recital: sumalos abajo cuando pasan.</span>
+            </li>
+          )}
+          {[...inMonth].reverse().map((m) => (
+            <MomentCard key={m.id} moment={m} kinds={KINDS} />
+          ))}
+        </ul>
       </div>
+
+      <MomentComposer month={month} />
     </div>
   );
 }
 
-/** Un grupo comprimible: la línea para sumar y sus tarjetas del mes (la más nueva primero). */
-function Group({
-  title,
-  accent,
-  kinds,
-  month,
-  list,
-  placeholder,
-}: {
-  title: string;
-  accent: string;
-  kinds: MomentKind[];
-  month: string;
-  list: Moment[];
-  placeholder: string;
-}) {
+/** El total de una parte en el mes. */
+function Summary({ label, color, hours, count }: { label: string; color: string; hours: number; count: number }) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg bg-surface-sunken/70 px-2.5 py-1.5">
+      <span aria-hidden className="h-6 w-1 rounded-full" style={{ background: color }} />
+      <span className="flex min-w-0 flex-col leading-tight">
+        <span className="text-[11px] text-ink-muted">{label}</span>
+        <span className="text-[13px] font-semibold tabular-nums">
+          {hoursText(hours)} <span className="font-normal text-ink-muted">· {count}</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Agregar un momento, aparte de la lista: escribís qué fue y elegís el tipo (se sugiere solo) y cuánto duró.
+ */
+function MomentComposer({ month }: { month: string }) {
   const addMoment = usePlanner((s) => s.addMoment);
-  const [open, setOpen] = useState(true);
   const [text, setText] = useState("");
-  const [menu, setMenu] = useState(false);
-  const [hours, setHours] = useState(BOND_HOURS[kinds[0]]);
-  const add = (kind: MomentKind) => {
-    addMoment({ kind, month, text: text.trim() || MOMENT_STYLE[kind].label, hours });
-    play("pop");
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<MomentKind | null>(null);
+  const [manual, setManual] = useState(false);
+  const [hours, setHours] = useState<number | null>(null);
+  const reset = () => {
     setText("");
-    setMenu(false);
+    setOpen(false);
+    setKind(null);
+    setManual(false);
+    setHours(null);
   };
-  const total = list.reduce((acc, m) => acc + hoursOf(m), 0);
+  const add = () => {
+    if (!kind) return;
+    addMoment({ kind, month, text: text.trim() || MOMENT_STYLE[kind].label, hours: hours ?? BOND_HOURS[kind] });
+    play("pop");
+    reset();
+  };
 
   return (
-    <section aria-label={title} className="flex flex-col gap-2 px-3 py-2.5">
-      <button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex items-center gap-2 text-left">
-        <ChevronDown aria-hidden className={cn("size-4 text-ink-muted transition-transform duration-200", !open && "-rotate-90")} />
-        <span className="flex-1 text-[13px] font-semibold">{title}</span>
-        <span className="text-[11.5px] text-ink-muted tabular-nums">{total ? hoursText(total) : ""}</span>
-        <span className="min-w-6 text-right text-[18px] leading-none font-semibold tabular-nums" style={{ color: accent }}>
-          {list.length}
-        </span>
-      </button>
-
+    <div className="card flex shrink-0 flex-col gap-3 p-3">
       {open && (
-        <>
-          {/* La línea para sumar: escribís (o no) y el "+" abre el submenú. */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setMenu(true);
-            }}
-            className="relative flex gap-1"
-          >
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder={placeholder}
-              aria-label={`Nuevo momento de ${title.toLowerCase()}`}
-              className="h-8 min-w-0 flex-1 rounded-full border border-line bg-surface px-3 text-[12.5px] focus:border-ink focus:outline-none"
-            />
+        <div className="animate-fade-up flex flex-col gap-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11.5px] font-medium text-ink-muted">¿Qué fue?{kind && !manual ? " · sugerido" : ""}</span>
+            <div role="radiogroup" aria-label="Tipo de momento" className="grid grid-cols-4 gap-1">
+              {KINDS.map((k) => {
+                const st = MOMENT_STYLE[k];
+                const on = kind === k;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => {
+                      setKind(k);
+                      setManual(true);
+                    }}
+                    style={{ "--k": st.color, "--k-soft": st.soft } as CSSProperties}
+                    className={cn(
+                      "pressable flex flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11.5px] font-semibold transition-colors",
+                      on ? "bg-[var(--k)] text-white" : "bg-[var(--k-soft)] text-[var(--k)]",
+                    )}
+                  >
+                    <st.icon aria-hidden className="size-4" />
+                    {st.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11.5px] font-medium text-ink-muted">¿Cuánto duró?</span>
+            <div role="radiogroup" aria-label="Horas" className="flex gap-1">
+              {HOURS.map((h) => {
+                const on = (hours ?? (kind ? BOND_HOURS[kind] : 0)) === h;
+                return (
+                  <button
+                    key={h}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    aria-label={`${h} horas`}
+                    onClick={() => setHours(h)}
+                    className={cn(
+                      "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11px] font-semibold tabular-nums transition-colors",
+                      on ? "bg-ink text-surface" : "bg-surface-sunken text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    <ClockFace hours={h} />
+                    {h === 6 ? "6+" : h} h
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (open && kind) add();
+          else setOpen(true);
+        }}
+        className="flex items-center gap-1.5"
+      >
+        <input
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (!manual) setKind(kindFor(e.target.value));
+          }}
+          onFocus={() => setOpen(true)}
+          placeholder="Agregar un momento…"
+          aria-label="Agregar momento"
+          enterKeyHint="done"
+          className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface px-4 text-[13px] focus:border-ink focus:outline-none"
+        />
+        {open ? (
+          <>
+            <button type="button" onClick={reset} aria-label="Cancelar" className="pressable grid size-10 shrink-0 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <X aria-hidden className="size-4" />
+            </button>
             <button
               type="submit"
-              aria-label={`Sumar a ${title.toLowerCase()}`}
-              aria-expanded={menu}
-              className="pressable grid size-8 shrink-0 place-items-center rounded-full bg-ink text-surface shadow-sm hover:bg-ink/90"
+              disabled={!kind}
+              className="pressable h-10 shrink-0 rounded-full bg-ink px-4 text-[13px] font-semibold text-surface hover:bg-ink/90 disabled:opacity-30"
             >
-              <Plus aria-hidden className={cn("size-4 transition-transform duration-200", menu && "rotate-45")} />
+              Agregar
             </button>
-
-            {menu && (
-              <div className="animate-fade-up absolute top-full right-0 left-0 z-20 mt-1.5 flex flex-col gap-2.5 rounded-xl bg-surface p-3 shadow-[var(--shadow-popover)]">
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[11px] font-medium text-ink-muted">¿Cuánto duró?</span>
-                  <div role="radiogroup" aria-label="Horas" className="flex gap-1">
-                    {HOURS.map((h) => (
-                      <button
-                        key={h}
-                        type="button"
-                        role="radio"
-                        aria-checked={hours === h}
-                        aria-label={`${h} horas`}
-                        onClick={() => setHours(h)}
-                        className={cn(
-                          "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-[11px] font-semibold tabular-nums transition-colors",
-                          hours === h ? "bg-ink text-surface" : "bg-surface-sunken text-ink-muted hover:text-ink",
-                        )}
-                      >
-                        <ClockFace hours={h} />
-                        {h === 6 ? "6+" : h} h
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {kinds.length > 1 ? (
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-[11px] font-medium text-ink-muted">¿Con quién?</span>
-                    <div className="flex gap-1">
-                      {kinds.map((k) => {
-                        const st = MOMENT_STYLE[k];
-                        return (
-                          <button
-                            key={k}
-                            type="button"
-                            onClick={() => add(k)}
-                            style={{ "--k": st.color, "--k-soft": st.soft } as CSSProperties}
-                            className="pressable flex flex-1 items-center justify-center gap-1 rounded-lg bg-[var(--k-soft)] py-2 text-[12px] font-semibold text-[var(--k)] hover:bg-[var(--k)] hover:text-white"
-                          >
-                            <st.icon aria-hidden className="size-3.5" />
-                            {st.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => add(kinds[0])}
-                    style={{ background: accent }}
-                    className="pressable h-8 rounded-lg text-[12.5px] font-semibold text-white"
-                  >
-                    Sumar
-                  </button>
-                )}
-              </div>
-            )}
-          </form>
-
-          <ul className="flex flex-col gap-1.5">
-            {list.length === 0 && <li className="text-[11.5px] text-ink-faint">Nada este mes todavía.</li>}
-            {[...list].reverse().map((m) => (
-              <MomentCard key={m.id} moment={m} kinds={kinds} />
-            ))}
-          </ul>
-        </>
-      )}
-    </section>
+          </>
+        ) : (
+          <button type="submit" aria-label="Agregar momento" className="pressable grid size-10 shrink-0 place-items-center rounded-full bg-ink text-surface shadow-sm hover:bg-ink/90">
+            <Plus aria-hidden className="size-4" />
+          </button>
+        )}
+      </form>
+    </div>
   );
 }
 
@@ -303,7 +338,7 @@ function MomentCard({ moment: m, kinds }: { moment: Moment; kinds: MomentKind[] 
             ))}
           </div>
           {kinds.length > 1 && (
-            <div role="radiogroup" aria-label="Con quién" className="flex gap-1">
+            <div role="radiogroup" aria-label="Tipo" className="flex gap-1">
               {kinds.map((k) => {
                 const ks = MOMENT_STYLE[k];
                 return (

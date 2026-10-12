@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, PanelRightClose, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, GripVertical, PanelRightClose, Plus, Trash2, X } from "lucide-react";
 import { guessQuadrant } from "@/lib/categorize";
 import { GhostButton, PrimaryButton, Segmented, Select, Sheet } from "./ui";
 import { useMediaQuery } from "@/lib/hooks";
@@ -28,9 +28,9 @@ export const kindColor = (k?: TaskKind) => (!k || k === "otro" ? "var(--color-in
 export const isLate = (t: YearTask, today: string) => !t.done && (t.date ? t.date < today : t.month < today.slice(0, 7));
 
 /**
- * Objetivos del año, mes por mes ("hacer un viaje", "cambiar el auto"). Van por mes y, si querés,
- * con una fecha puntual; sin horario. Se marcan como hechos, se arrastran a otro mes, y los meses
- * que ya pasaron se agrupan para no ocupar lugar.
+ * Objetivos, año por año ("hacer un viaje", "cambiar el auto"). Cada año se comprime; adentro van mes por
+ * mes y, si querés, con una fecha puntual. Se marcan como hechos, se pasan a otro mes, y los meses que ya
+ * pasaron se agrupan para no ocupar lugar.
  */
 export function TasksPanel({
   className,
@@ -43,25 +43,93 @@ export function TasksPanel({
   onHeaderDragStart?: (e: DragEvent) => void;
 }) {
   const tasks = usePlanner((s) => s.tasks);
-  const moveTask = usePlanner((s) => s.moveTask);
-  const [over, setOver] = useState<string | null>(null);
   const now = new Date();
   const today = toKey(now);
-  const [year, setYear] = useState(now.getFullYear());
+  const current = now.getFullYear();
+  // El año actual y el que viene siempre; los demás, si tienen objetivos.
+  const years = [...new Set([current, current + 1, ...tasks.map((t) => Number(t.month.slice(0, 4)))])].sort((a, b) => a - b);
+  const [openYears, setOpenYears] = useState<number[]>([current]);
+  const toggleYear = (y: number) => setOpenYears((l) => (l.includes(y) ? l.filter((x) => x !== y) : [...l, y]));
+  const yearTasks = tasks.filter((t) => t.month.startsWith(`${current}-`));
+  const done = yearTasks.filter((t) => t.done).length;
+
+  return (
+    <div className={cn("flex min-h-0 flex-col", className)}>
+      <header
+        data-section-header
+        draggable={!!onHeaderDragStart}
+        onDragStart={onHeaderDragStart}
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-line px-4 py-2.5 select-none [-webkit-touch-callout:none]",
+          onHeaderDragStart && "cursor-grab active:cursor-grabbing",
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
+          <div>
+            <h2 className="type-title">Objetivos</h2>
+            <p className="text-[11.5px] text-ink-muted tabular-nums">
+              {yearTasks.length ? `${done} de ${yearTasks.length} hechos en ${current}` : "Lo que querés lograr"}
+            </p>
+          </div>
+        </div>
+        {onCollapse && (
+          <button
+            type="button"
+            aria-label="Comprimir objetivos"
+            title="Comprimir"
+            onClick={onCollapse}
+            className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
+          >
+            <CollapseIcon />
+          </button>
+        )}
+      </header>
+
+      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {years.map((y) => {
+          const list = tasks.filter((t) => t.month.startsWith(`${y}-`));
+          const isOpen = openYears.includes(y);
+          const gone = y < current;
+          return (
+            <li key={y} className="border-b border-line last:border-b-0">
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => toggleYear(y)}
+                className="flex h-11 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-surface-sunken/60"
+              >
+                <ChevronDown aria-hidden className={cn("size-4 text-ink-muted transition-transform duration-200", !isOpen && "-rotate-90")} />
+                <span className={cn("flex-1 text-[15px] font-semibold tabular-nums", gone && "text-ink-muted")}>
+                  {y}
+                  {y === current && <span className="ml-1.5 text-[11px] font-medium text-ink-muted">· este año</span>}
+                </span>
+                <Tally ok={list.filter((t) => t.done).length} notOk={list.filter((t) => !t.done).length} late={gone} />
+              </button>
+              {isOpen && <YearMonths year={y} tasks={list} today={today} />}
+            </li>
+          );
+        })}
+      </ol>
+    </div>
+  );
+}
+
+/** Los meses de un año: los que ya pasaron, juntos y cerrados; el mes actual, abierto. */
+function YearMonths({ year, tasks, today }: { year: number; tasks: YearTask[]; today: string }) {
+  const moveTask = usePlanner((s) => s.moveTask);
   const thisMonth = today.slice(0, 7);
+  const [over, setOver] = useState<string | null>(null);
   const [open, setOpen] = useState<string[]>([thisMonth]);
   const [showPast, setShowPast] = useState(false);
   const toggle = (m: string) => setOpen((l) => (l.includes(m) ? l.filter((x) => x !== m) : [...l, m]));
-  const yearTasks = tasks.filter((t) => t.month.startsWith(`${year}-`));
-  const done = yearTasks.filter((t) => t.done).length;
-
   const months = MONTHS.map((name, i) => ({ name, month: `${year}-${pad(i + 1)}` }));
   const past = months.filter((m) => m.month < thisMonth);
   const rest = months.filter((m) => m.month >= thisMonth);
-  const pastTasks = yearTasks.filter((t) => t.month < thisMonth);
+  const pastTasks = tasks.filter((t) => t.month < thisMonth);
 
   const monthRow = ({ name, month }: { name: string; month: string }) => {
-    const list = yearTasks.filter((t) => t.month === month).sort((a, b) => (a.date ?? "z").localeCompare(b.date ?? "z"));
+    const list = tasks.filter((t) => t.month === month).sort((a, b) => (a.date ?? "z").localeCompare(b.date ?? "z"));
     const isOpen = open.includes(month);
     const ok = list.filter((t) => t.done).length;
     const notOk = list.length - ok;
@@ -105,68 +173,27 @@ export function TasksPanel({
   };
 
   return (
-    <div className={cn("flex min-h-0 flex-col", className)}>
-      <header
-        data-section-header
-        draggable={!!onHeaderDragStart}
-        onDragStart={onHeaderDragStart}
-        className={cn(
-          "flex items-center justify-between gap-2 border-b border-line px-4 py-2.5 select-none [-webkit-touch-callout:none]",
-          onHeaderDragStart && "cursor-grab active:cursor-grabbing",
-        )}
-      >
-        <div className="flex items-center gap-1.5">
-          {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
-          <div>
-            <h2 className="type-title">Objetivos {year}</h2>
-            <p className="text-[11.5px] text-ink-muted tabular-nums">
-              {yearTasks.length ? `${done} de ${yearTasks.length} hechos` : "Lo que querés lograr este año"}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center">
-          <button type="button" aria-label="Año anterior" onClick={() => setYear((y) => y - 1)} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
-            <ChevronLeft aria-hidden className="size-4" />
+    <ol className="pb-2 pl-3">
+      {/* Los meses que ya pasaron, juntos y cerrados (se pueden volver a abrir). En años pasados, son todos. */}
+      {past.length > 0 && rest.length > 0 && (
+        <li className="border-b border-line/60">
+          <button
+            type="button"
+            aria-expanded={showPast}
+            onClick={() => setShowPast((v) => !v)}
+            className="flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-ink-muted hover:bg-surface-sunken/60"
+          >
+            <ChevronDown aria-hidden className={cn("size-4 transition-transform duration-200", !showPast && "-rotate-90")} />
+            <span className="flex-1 text-[12.5px] font-semibold">
+              Meses anteriores <span className="font-normal">({MONTHS[0]} a {past[past.length - 1].name})</span>
+            </span>
+            <Tally ok={pastTasks.filter((t) => t.done).length} notOk={pastTasks.filter((t) => !t.done).length} late />
           </button>
-          <button type="button" aria-label="Año siguiente" onClick={() => setYear((y) => y + 1)} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
-            <ChevronRight aria-hidden className="size-4" />
-          </button>
-          {onCollapse && (
-            <button
-              type="button"
-              aria-label="Comprimir objetivos"
-              title="Comprimir"
-              onClick={onCollapse}
-              className="pressable ml-1 grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
-            >
-              <CollapseIcon />
-            </button>
-          )}
-        </div>
-      </header>
-
-      <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {/* Los meses que ya pasaron, juntos y cerrados (se pueden volver a abrir). */}
-        {past.length > 0 && (
-          <li className="border-b border-line/60">
-            <button
-              type="button"
-              aria-expanded={showPast}
-              onClick={() => setShowPast((v) => !v)}
-              className="flex h-10 w-full items-center gap-2 rounded-md px-2 text-left text-ink-muted hover:bg-surface-sunken/60"
-            >
-              <ChevronDown aria-hidden className={cn("size-4 transition-transform duration-200", !showPast && "-rotate-90")} />
-              <span className="flex-1 text-[12.5px] font-semibold">
-                Meses anteriores <span className="font-normal">({MONTHS[0]} a {past[past.length - 1].name})</span>
-              </span>
-              <Tally ok={pastTasks.filter((t) => t.done).length} notOk={pastTasks.filter((t) => !t.done).length} late />
-            </button>
-            {showPast && <ol className="pl-3">{past.map(monthRow)}</ol>}
-          </li>
-        )}
-        {rest.map(monthRow)}
-      </ol>
-    </div>
+          {showPast && <ol className="pl-3">{past.map(monthRow)}</ol>}
+        </li>
+      )}
+      {(rest.length > 0 ? rest : past).map(monthRow)}
+    </ol>
   );
 }
 
@@ -271,68 +298,58 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
         );
       })}
 
-      {phone ? (
-        <button
-          type="button"
-          onClick={() => setSheet({})}
-          className="pressable mt-1 flex h-9 items-center gap-1.5 rounded-md px-1.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
-        >
-          <Plus aria-hidden className="size-4" />
-          Agregar objetivo
-        </button>
-      ) : (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            add();
-          }}
-          className="flex flex-col gap-1.5 pt-1"
-        >
-          <div className="flex items-center gap-1.5">
-            <input
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                if (!manualKind) setKind(kindFor(e.target.value));
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+        className="flex flex-col gap-1.5 pt-1"
+      >
+        <div className="flex items-center gap-1.5">
+          <input
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (!manualKind) setKind(kindFor(e.target.value));
+            }}
+            placeholder="Nuevo objetivo…"
+            aria-label="Nuevo objetivo"
+            enterKeyHint="done"
+            className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[13px] placeholder:text-ink-faint focus:border-ink focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!title.trim()}
+            aria-label="Agregar objetivo"
+            title="Agregar (Enter)"
+            className="pressable grid size-8 shrink-0 place-items-center rounded-md bg-ink text-surface hover:bg-ink/90 disabled:opacity-30"
+          >
+            <Plus aria-hidden className="size-4" />
+          </button>
+        </div>
+        {title.trim() && (
+          <div className="animate-fade-up flex items-center gap-1.5">
+            <KindPicker
+              value={kind}
+              onChange={(k) => {
+                setKind(k);
+                setManualKind(true);
               }}
-              placeholder="Nuevo objetivo…"
-              aria-label="Nuevo objetivo"
-              className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[13px] placeholder:text-ink-faint focus:border-ink focus:outline-none"
             />
-            <button
-              type="submit"
-              disabled={!title.trim()}
-              aria-label="Agregar objetivo"
-              title="Agregar (Enter)"
-              className="pressable grid size-8 shrink-0 place-items-center rounded-md bg-ink text-surface hover:bg-ink/90 disabled:opacity-30"
-            >
-              <Plus aria-hidden className="size-4" />
-            </button>
+            <input
+              type="date"
+              value={date}
+              min={`${month}-01`}
+              max={`${month}-${pad(last)}`}
+              onChange={(e) => setDate(e.target.value)}
+              aria-label="Fecha (opcional)"
+              title="Fecha (opcional)"
+              className="h-8 w-[118px] rounded-md border border-line bg-surface px-1.5 text-[12px] text-ink-muted focus:border-ink focus:outline-none [@media(pointer:coarse)]:w-[140px]"
+            />
+            <span className="text-[11px] text-ink-faint">{date ? "" : "Sin fecha"}</span>
           </div>
-          {title.trim() && (
-            <div className="animate-fade-up flex items-center gap-1.5">
-              <KindPicker
-                value={kind}
-                onChange={(k) => {
-                  setKind(k);
-                  setManualKind(true);
-                }}
-              />
-              <input
-                type="date"
-                value={date}
-                min={`${month}-01`}
-                max={`${month}-${pad(last)}`}
-                onChange={(e) => setDate(e.target.value)}
-                aria-label="Fecha (opcional)"
-                title="Fecha (opcional)"
-                className="h-8 w-[118px] rounded-md border border-line bg-surface px-1.5 text-[12px] text-ink-muted focus:border-ink focus:outline-none"
-              />
-              <span className="text-[11px] text-ink-faint">{date ? "" : "Sin fecha"}</span>
-            </div>
-          )}
-        </form>
-      )}
+        )}
+      </form>
 
       {sheet && <TaskSheet month={month} task={sheet.task} isMobile={phone} onClose={() => setSheet(null)} />}
     </div>
