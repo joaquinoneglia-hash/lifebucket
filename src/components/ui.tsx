@@ -31,8 +31,11 @@ export function Sheet({
     // showModal mueve el foco por su cuenta; lo devolvemos al primer control útil. En el celular no se enfoca
     // un campo de texto solo: abriría el teclado y taparía media hoja.
     const first = dialog.querySelector<HTMLElement>("[data-autofocus]");
-    if (first && !(mobileAtOpen.current && first.matches("input, textarea"))) first.focus();
-    else if (mobileAtOpen.current && document.activeElement?.matches("input, textarea")) (document.activeElement as HTMLElement).blur();
+    const isField = (el: Element | null) => !!el?.matches("input, textarea, select");
+    if (first && !(mobileAtOpen.current && isField(first))) first.focus();
+    // En el celular, si el navegador enfocó un campo (un horario, un texto), el foco pasa a la hoja:
+    // si no, se abre solo el reloj o el teclado.
+    else if (mobileAtOpen.current && isField(document.activeElement)) dialog.focus({ preventScroll: true });
   }, []);
 
   return (
@@ -43,7 +46,9 @@ export function Sheet({
         if (e.target === e.currentTarget) onClose();
       }}
       aria-labelledby={labelledBy}
+      tabIndex={-1}
       className={cn(
+        "outline-none",
         "bg-surface p-0 text-ink backdrop:bg-ink/30",
         isMobile
           ? "animate-sheet-in mx-0 mt-auto mb-0 max-h-[92dvh] w-full max-w-none overflow-x-hidden overflow-y-auto rounded-t-2xl shadow-[var(--shadow-sheet)]"

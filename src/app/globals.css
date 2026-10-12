@@ -308,6 +308,42 @@ body::before {
 .animate-welcome-rise {
   animation: welcome-rise 900ms var(--ease-out) both;
 }
+/* El isotipo de la intro: aparece chico y desenfocado, se pasa apenas de tamaño y se acomoda. */
+@keyframes welcome-pop {
+  0% {
+    transform: scale(0.6) translateY(12px);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  60% {
+    transform: scale(1.06) translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+.animate-welcome-pop {
+  animation: welcome-pop 900ms var(--ease-out) both;
+}
+/* Cada letra del logotipo sube y se enfoca, una detrás de otra. */
+@keyframes welcome-letter {
+  from {
+    transform: translateY(0.35em);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+.animate-welcome-letter {
+  animation: welcome-letter 600ms var(--ease-out) both;
+}
 @keyframes welcome-fill {
   from {
     transform: scaleX(0);

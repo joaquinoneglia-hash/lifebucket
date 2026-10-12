@@ -42,7 +42,7 @@ export function Welcome({ name, onDone }: { name?: string; onDone: (tour: boolea
         window.addEventListener("keydown", onFirst, { once: true });
       }
     });
-    const focus = window.setTimeout(() => startRef.current?.focus({ preventScroll: true }), 2600);
+    const focus = window.setTimeout(() => startRef.current?.focus({ preventScroll: true }), 2900);
     return () => {
       cancelled = true;
       window.clearTimeout(focus);
@@ -67,36 +67,34 @@ export function Welcome({ name, onDone }: { name?: string; onDone: (tour: boolea
       className={`fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-[color-mix(in_oklab,var(--color-canvas)_82%,transparent)] px-4 py-10 backdrop-blur-2xl transition-[opacity,transform] duration-200 ${leaving ? "scale-[0.985] opacity-0" : "opacity-100"}`}
     >
       <div className="flex w-full max-w-[560px] flex-col items-center text-center">
-        <div className="animate-welcome-rise" style={at(0)}>
-          <BrandMark size={84} animated />
+        {/* El isotipo aparece y, al lado de la frase, el logotipo letra por letra. */}
+        <div className="animate-welcome-pop" style={at(0)}>
+          <BrandMark size={88} animated />
         </div>
+        <h1 id="welcome-title" aria-label="LifeBucket" className="mt-4 flex text-[40px] leading-none font-semibold tracking-[-0.035em] sm:text-[52px]">
+          {"LifeBucket".split("").map((ch, i) => (
+            <span key={i} aria-hidden className="animate-welcome-letter inline-block" style={at(420 + i * 55)}>
+              {ch}
+            </span>
+          ))}
+        </h1>
 
-        <p className="animate-welcome-rise mt-8 text-[15px] font-medium text-ink-muted" style={at(450)}>
-          Te damos la bienvenida{name ? "," : " a LifeBucket"}
+        <p className="animate-welcome-rise mt-6 text-[15px] font-medium text-ink-muted" style={at(1150)}>
+          {name ? `Te damos la bienvenida, ${name}` : "Te damos la bienvenida"}
         </p>
-        {name && (
-          <h1 id="welcome-title" className="animate-welcome-rise mt-1 text-[44px] leading-[1.05] font-semibold tracking-[-0.035em] sm:text-[60px]" style={at(650)}>
-            {name}
-          </h1>
-        )}
-        {!name && (
-          <h1 id="welcome-title" className="sr-only">
-            Te damos la bienvenida a LifeBucket
-          </h1>
-        )}
 
-        <p className="animate-welcome-rise mt-5 max-w-[30ch] text-[19px] leading-snug text-ink sm:text-[22px]" style={at(1250)}>
-          LifeBucket te va a ayudar a entender cómo estás distribuyendo tus días.
+        <p className="animate-welcome-rise mt-3 max-w-[30ch] text-[20px] leading-snug text-ink sm:text-[23px]" style={at(1500)}>
+          Enterate en qué se te van las horas de tus días… <span className="text-ink-muted">y algunas funciones más!</span>
         </p>
 
         {/* Una semana de ejemplo que se llena de colores. */}
-        <div className="animate-welcome-rise mt-9 w-full max-w-[420px]" style={at(1700)} aria-hidden>
+        <div className="animate-welcome-rise mt-9 w-full max-w-[420px]" style={at(2000)} aria-hidden>
           <div className="flex h-3 w-full gap-[3px] overflow-hidden rounded-full">
             {DEMO.map((p, i) => (
               <span
                 key={p.id}
                 className="animate-welcome-fill h-full first:rounded-l-full last:rounded-r-full"
-                style={{ width: `${p.share}%`, background: colorOf(p.id), ...at(1850 + i * 110) }}
+                style={{ width: `${p.share}%`, background: colorOf(p.id), ...at(2150 + i * 110) }}
               />
             ))}
           </div>
@@ -111,7 +109,7 @@ export function Welcome({ name, onDone }: { name?: string; onDone: (tour: boolea
           <p className="mt-4 text-[13px] leading-snug text-ink-muted">Tu semana es un balde de horas. Cada parte de tu vida lo llena con su color.</p>
         </div>
 
-        <div className="animate-welcome-rise mt-9 flex w-full max-w-[320px] flex-col gap-2" style={at(2500)}>
+        <div className="animate-welcome-rise mt-9 flex w-full max-w-[320px] flex-col gap-2" style={at(2800)}>
           <button
             ref={startRef}
             type="button"
