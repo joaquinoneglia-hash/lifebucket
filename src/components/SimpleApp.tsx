@@ -21,6 +21,7 @@ import { SleepPill } from "./SleepMeter";
 import { TOUR_EVENT, UserMenu } from "./UserMenu";
 import { MAIN_TOUR, Tour } from "./Tour";
 import { Welcome } from "./Welcome";
+import { ScrollLock } from "./ScrollLock";
 import { firstName, useUser } from "@/lib/supabase/use-user";
 import { TasksPanel } from "./TasksPanel";
 import { SecondaryButton, Sheet } from "./ui";
@@ -449,6 +450,7 @@ export function SimpleApp() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
+      <ScrollLock />
       {wide ? (
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 pb-3 sm:px-6">
           <div className="flex items-center gap-2.5">

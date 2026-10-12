@@ -357,3 +357,16 @@ html {
   outline: 2px dashed color-mix(in oklab, var(--color-ink) 35%, transparent);
   outline-offset: 3px;
 }
+
+/* La app fija (la agrega <ScrollLock />): la página no scrollea ni rebota ni se recarga tirando.
+   Lo que scrollea por dentro (listas, hojas) no "arrastra" a la página cuando llega al final. */
+html.lb-locked,
+html.lb-locked body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.lb-locked .overflow-y-auto,
+html.lb-locked dialog {
+  overscroll-behavior: contain;
+}

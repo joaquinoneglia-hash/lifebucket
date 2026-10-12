@@ -8,6 +8,7 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - Al sumar un bloque primero va "¿Qué es?" y la categoría se sugiere sola (palabras conocidas y tus propios bloques, `src/lib/categorize.ts`); si la elegís a mano, se respeta.
 - Objetivos: el tipo se ve en cada uno y se sugiere solo; la fecha es opcional ("Sin fecha"); se ordenan por fecha. En el celular se suman y editan en una hoja con botón "Agregar" (y se pueden pasar a otro mes).
 - "Sueño" pasa a "Configuración del sueño".
+- La app queda fija (`<ScrollLock />`): sin scroll de página, rebote, "tirar para recargar" ni zoom. Solo se desliza el contenido de adentro de una tarjeta u hoja cuando no entra.
 
 ## 2026-10-11 · Bienvenida, guía y ajustes para el celular
 
