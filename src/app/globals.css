@@ -334,3 +334,9 @@ body::before {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Sin "tirar para recargar" ni rebote: en el calendario se arrastra para crear y mover. */
+html,
+body {
+  overscroll-behavior-y: none;
+}

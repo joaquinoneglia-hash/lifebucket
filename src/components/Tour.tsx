@@ -189,14 +189,14 @@ export const MAIN_TOUR: TourStep[] = [
     title: "Tu semana tipo",
     body: "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Arrastrá sobre un espacio vacío para crear un bloque y elegí qué es y en qué días se repite.",
     touchBody:
-      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o mantené apretado y arrastrá para marcar el horario.",
+      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o arrastrá el dedo para marcar el horario. Para scrollear, deslizá sobre la columna de las horas.",
   },
   {
     target: "semana",
     title: "Editar bloques",
     body: "Tocá un bloque para cambiarle el horario, los días o la categoría. Agarralo de ⠿ para moverlo, estiralo desde los bordes y, si arrastrás adentro de un bloque, metés otro en el medio (por ejemplo, el almuerzo dentro del trabajo).",
     touchBody:
-      "Tocá un bloque para cambiarle el horario, los días o la categoría, o para borrarlo. Mantenelo apretado y arrastralo para moverlo; si lo agarrás desde el borde de arriba o de abajo, lo estirás.",
+      "Tocá un bloque para cambiarle el horario, los días o la categoría, o para borrarlo. Arrastralo para moverlo (también a otro día); si lo agarrás desde el borde de arriba o de abajo, lo estirás.",
   },
   {
     target: "sueno-btn",

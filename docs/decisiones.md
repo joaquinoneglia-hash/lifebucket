@@ -5,7 +5,7 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 ## 2026-10-11 · Bienvenida, guía y ajustes para el celular
 
 - Bienvenida una vez por cuenta (nombre de Google, intro sonora sintetizada) y guía de 10 consejos que resalta cada parte; se puede volver a ver desde el menú de la cuenta.
-- En pantallas táctiles la grilla imita a la web: tocar crea (1 h) o abre; mantener apretado y arrastrar marca un horario, mueve o estira. Sin eso el dedo scrollea la página.
+- En pantallas táctiles la grilla imita a la web: tocar crea (1 h) o abre; arrastrar marca un horario, mueve o estira. Dentro del calendario el dedo no scrollea (touch-action: none); se scrollea desde la columna de horas o fuera del calendario. Se apagó "tirar para recargar" (overscroll-behavior: none) porque recargaba la página al arrastrar.
 - El sueño lleva una lunita para que se entienda que ese horario es dormir.
 - Momentos: tachito siempre visible y la tarjeta se edita al tocarla.
 - Orden por defecto: Semana, Momentos, Objetivos, Resultados.

@@ -12,8 +12,7 @@ import { BlockEditor } from "./BlockEditor";
 
 const DAY_SHORT: Record<number, string> = { 1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb", 0: "Dom" };
 const AXIS = 40;
-/** Cuánto hay que mantener apretado (en pantallas táctiles) para arrastrar. */
-const LONG_PRESS = 320;
+
 
 /**
  * Tu semana tipo (sin fechas): siete columnas, lo despierto en ocre suave (es Libre hasta que
@@ -70,48 +69,19 @@ export function WeekTemplateGrid({
   type Drag = { block: RoutineBlock; fromDay: number; mode: "move" | "top" | "bottom"; x: number; y: number; colW: number; day: number; start: number; minutes: number; moved: boolean };
   const [drag, setDrag] = useState<Drag | null>(null);
   const justDragged = useRef(false);
-  // En pantallas táctiles: tocar = crear/abrir; mantener apretado y arrastrar = marcar un rango o mover.
-  // Mientras no se activa, el dedo scrollea la página como siempre.
-  const press = useRef<{ x: number; y: number; timer: number; active: boolean } | null>(null);
+  // En pantallas táctiles el dedo dentro del calendario hace lo mismo que el mouse (crear, mover, estirar):
+  // no scrollea la página. Para scrollear queda la columna de horas y lo de afuera.
   const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    // Con el arrastre activo, el dedo ya no scrollea.
+    // Respaldo para navegadores que no respetan touch-action: el dedo en una columna no mueve la página.
     const stop = (e: TouchEvent) => {
-      if (press.current?.active) e.preventDefault();
+      if ((e.target as HTMLElement).closest("[data-day-col]")) e.preventDefault();
     };
     el.addEventListener("touchmove", stop, { passive: false });
     return () => el.removeEventListener("touchmove", stop);
   }, []);
-  const startPress = (e: React.PointerEvent, activate: () => void) => {
-    const x = e.clientX;
-    const y = e.clientY;
-    const timer = window.setTimeout(() => {
-      if (!press.current) return;
-      press.current.active = true;
-      if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(12);
-      activate();
-    }, LONG_PRESS);
-    press.current = { x, y, timer, active: false };
-  };
-  /** Si el dedo se movió antes de activarse, era un scroll: se suelta. */
-  const pressMoved = (e: React.PointerEvent) => {
-    const p = press.current;
-    if (!p || p.active) return false;
-    if (Math.abs(e.clientX - p.x) > 8 || Math.abs(e.clientY - p.y) > 8) {
-      window.clearTimeout(p.timer);
-      press.current = null;
-      return true;
-    }
-    return false;
-  };
-  const endPress = () => {
-    const p = press.current;
-    if (p) window.clearTimeout(p.timer);
-    press.current = null;
-    return p;
-  };
   const dragTo = (d: Drag, clientX: number, clientY: number): Drag => {
     const dm = Math.round((clientY - d.y) / row) * 30;
     const dd = d.mode === "move" ? Math.round((clientX - d.x) / d.colW) : 0;
@@ -158,33 +128,21 @@ export function WeekTemplateGrid({
           return (
             <div
               key={d}
-              className={cn("relative touch-pan-y border-l border-line select-none", editable && "cursor-pointer")}
+              data-day-col
+              className={cn("relative touch-none border-l border-line select-none", editable && "cursor-pointer")}
               style={{ height: top(to), ...(range ? hourLines(row) : {}) }}
               onPointerDown={(e) => {
                 if (!editable || e.target !== e.currentTarget) return;
+                if (e.pointerType === "mouse" && e.button !== 0) return;
+                capture(e.currentTarget, e.pointerId);
                 const m = slotAt(e.clientY, e.currentTarget, wake, bed);
-                if (e.pointerType !== "mouse") {
-                  startPress(e, () => setSel({ day: d, a: m, b: m }));
-                  return;
-                }
-                if (e.button !== 0) return;
-                e.currentTarget.setPointerCapture(e.pointerId);
                 setSel({ day: d, a: m, b: m });
               }}
               onPointerMove={(e) => {
-                if (pressMoved(e)) return;
                 if (!sel || sel.day !== d) return;
                 setSel({ ...sel, b: slotAt(e.clientY, e.currentTarget, wake, bed), moved: sel.moved || (sel.inside ? Math.abs(e.clientY - sel.inside.y) > 4 : true) });
               }}
-              onPointerUp={(e) => {
-                const p = endPress();
-                // Un toque (sin mantener): un bloque de una hora ahí.
-                if (p && !p.active && e.target === e.currentTarget) {
-                  const start = slotAt(e.clientY, e.currentTarget, wake, bed);
-                  if (onCreateAt) onCreateAt(d, start);
-                  else setEditing({ day: d, start });
-                  return;
-                }
+              onPointerUp={() => {
                 if (!sel || sel.day !== d) return;
                 // Clic adentro de un bloque, sin estirar: se abre ese bloque.
                 if (sel.inside && !sel.moved) {
@@ -202,10 +160,7 @@ export function WeekTemplateGrid({
                 if (onCreateAt) onCreateAt(d, start, len);
                 else setEditing({ day: d, start });
               }}
-              onPointerCancel={() => {
-                endPress();
-                setSel(null);
-              }}
+              onPointerCancel={() => setSel(null)}
             >
               {/* Despierto = Libre hasta que lo llenes. */}
               {!range && <div
@@ -259,7 +214,7 @@ export function WeekTemplateGrid({
                     <div
                       key={b.id}
                       className={cn(
-                        "group/block absolute inset-x-[3px] z-[2] touch-pan-y",
+                        "group/block absolute inset-x-[3px] z-[2] touch-none",
                         onCreateAt && "cursor-crosshair",
                         drag?.moved && drag.block.id === b.id && drag.fromDay === d && "opacity-30",
                       )}
@@ -267,18 +222,14 @@ export function WeekTemplateGrid({
                       onPointerDown={(e) => {
                         if ((e.target as HTMLElement).closest("[data-trash]")) return;
                         if (e.pointerType !== "mouse") {
-                          // Mantener apretado: mover (o estirar, si agarraste el borde de arriba o de abajo).
-                          if (!onMove) return;
+                          // Con el dedo: tocar abre; arrastrar mueve (o estira, si agarraste el borde de arriba o de abajo).
                           const r = e.currentTarget.getBoundingClientRect();
                           const edge = Math.min(14, r.height / 4);
-                          const mode = e.clientY - r.top < edge ? "top" : r.bottom - e.clientY < edge ? "bottom" : "move";
+                          const mode = !onMove ? null : e.clientY - r.top < edge ? "top" : r.bottom - e.clientY < edge ? "bottom" : "move";
+                          capture(e.currentTarget, e.pointerId);
                           const colW = e.currentTarget.parentElement!.getBoundingClientRect().width;
-                          const x = e.clientX;
-                          const y = e.clientY;
-                          startPress(e, () => {
-                            justDragged.current = true;
-                            setDrag({ block: b, fromDay: d, mode, x, y, colW, day: d, start: b.start, minutes: b.minutes, moved: true });
-                          });
+                          if (mode) setDrag({ block: b, fromDay: d, mode, x: e.clientX, y: e.clientY, colW, day: d, start: b.start, minutes: b.minutes, moved: false });
+                          else if (onOpen) onOpen(b, d);
                           return;
                         }
                         if (e.button !== 0) return;
@@ -286,22 +237,18 @@ export function WeekTemplateGrid({
                         // Arrastrar adentro del bloque: marcar una franja para meter otro encima (el de abajo se corta).
                         if (!handle && onCreateAt) {
                           const column = e.currentTarget.parentElement!;
-                          column.setPointerCapture(e.pointerId);
+                          capture(column, e.pointerId);
                           const m = slotAt(e.clientY, column, wake, bed);
                           setSel({ day: d, a: m, b: m, inside: { block: b, y: e.clientY } });
                           return;
                         }
                         if (!onMove) return;
-                        e.currentTarget.setPointerCapture(e.pointerId);
+                        capture(e.currentTarget, e.pointerId);
                         const colW = e.currentTarget.parentElement!.getBoundingClientRect().width;
                         setDrag({ block: b, fromDay: d, mode: handle && handle !== "move" ? handle : "move", x: e.clientX, y: e.clientY, colW, day: d, start: b.start, minutes: b.minutes, moved: false });
                       }}
-                      onPointerMove={(e) => {
-                        if (pressMoved(e)) return;
-                        if (drag && drag.block.id === b.id && drag.fromDay === d) setDrag(dragTo(drag, e.clientX, e.clientY));
-                      }}
+                      onPointerMove={(e) => drag && drag.block.id === b.id && drag.fromDay === d && setDrag(dragTo(drag, e.clientX, e.clientY))}
                       onPointerUp={() => {
-                        endPress();
                         if (!drag || drag.block.id !== b.id || drag.fromDay !== d) return;
                         const done = drag;
                         setDrag(null);
@@ -316,10 +263,7 @@ export function WeekTemplateGrid({
                           onMove?.(b, d, { day: done.day, start: done.start, minutes: done.minutes });
                         }
                       }}
-                      onPointerCancel={() => {
-                        endPress();
-                        setDrag(null);
-                      }}
+                      onPointerCancel={() => setDrag(null)}
                     >
                     {onMove && (
                       <>
@@ -340,8 +284,8 @@ export function WeekTemplateGrid({
                       type="button"
                       disabled={!onChange && !onOpen}
                       onClick={(e) => {
-                        // Con mouse lo resuelve el puntero (abrir o arrastrar); acá queda el teclado y el toque.
-                        if (onMove && e.detail !== 0 && (e.nativeEvent as PointerEvent).pointerType === "mouse") return;
+                        // Con mouse o con el dedo lo resuelve el puntero (abrir o arrastrar); acá queda el teclado.
+                        if (onMove && e.detail !== 0) return;
                         if (justDragged.current) {
                           justDragged.current = false;
                           return;
@@ -415,6 +359,13 @@ export function WeekTemplateGrid({
       )}
     </div>
   );
+}
+
+/** Captura el puntero para seguir el arrastre aunque salga del elemento (si el navegador no puede, se sigue igual). */
+function capture(el: Element, pointerId: number) {
+  try {
+    el.setPointerCapture(pointerId);
+  } catch {}
 }
 
 function slotAtImpl(clientY: number, el: HTMLElement, from: number, row: number, wake: number, bed: number) {
