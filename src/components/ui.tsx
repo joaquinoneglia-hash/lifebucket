@@ -21,13 +21,18 @@ export function Sheet({
   children: ReactNode;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Cómo se abrió (hoja de celular o diálogo): lo que importa es al momento de abrir.
+  const mobileAtOpen = useRef(isMobile);
 
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
     if (!dialog.open) dialog.showModal();
-    // showModal mueve el foco por su cuenta; lo devolvemos al primer control útil.
-    dialog.querySelector<HTMLElement>("[data-autofocus]")?.focus();
+    // showModal mueve el foco por su cuenta; lo devolvemos al primer control útil. En el celular no se enfoca
+    // un campo de texto solo: abriría el teclado y taparía media hoja.
+    const first = dialog.querySelector<HTMLElement>("[data-autofocus]");
+    if (first && !(mobileAtOpen.current && first.matches("input, textarea"))) first.focus();
+    else if (mobileAtOpen.current && document.activeElement?.matches("input, textarea")) (document.activeElement as HTMLElement).blur();
   }, []);
 
   return (
@@ -41,7 +46,7 @@ export function Sheet({
       className={cn(
         "bg-surface p-0 text-ink backdrop:bg-ink/30",
         isMobile
-          ? "animate-sheet-in mx-0 mt-auto mb-0 max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-2xl shadow-[var(--shadow-sheet)]"
+          ? "animate-sheet-in mx-0 mt-auto mb-0 max-h-[92dvh] w-full max-w-none overflow-x-hidden overflow-y-auto rounded-t-2xl shadow-[var(--shadow-sheet)]"
           : side
             ? cn("animate-side-in my-0 mr-0 ml-auto h-dvh max-h-none w-full overflow-hidden shadow-[var(--shadow-popover)]", width)
             : cn("animate-fade-up m-auto max-h-[90dvh] w-full overflow-y-auto rounded-xl shadow-[var(--shadow-popover)]", width),

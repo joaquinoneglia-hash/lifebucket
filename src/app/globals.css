@@ -340,3 +340,15 @@ html,
 body {
   overscroll-behavior-y: none;
 }
+
+/*
+ * En pantallas táctiles los campos van a 16 px como mínimo: con menos, Safari (iPhone) hace zoom al
+ * tocarlos y la pantalla queda cortada. Va fuera de las capas para ganarle a las clases de tamaño.
+ */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}

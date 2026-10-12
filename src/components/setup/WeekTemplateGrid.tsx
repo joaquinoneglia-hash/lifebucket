@@ -75,12 +75,17 @@ export function WeekTemplateGrid({
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
-    // Respaldo para navegadores que no respetan touch-action: el dedo en una columna no mueve la página.
+    // Respaldo para navegadores que no respetan touch-action (Safari de iPhone): el dedo en una columna nunca
+    // arranca un scroll. Tocar y arrastrar siguen andando porque la grilla usa pointer events, no clics.
     const stop = (e: TouchEvent) => {
-      if ((e.target as HTMLElement).closest("[data-day-col]")) e.preventDefault();
+      if (e.cancelable && (e.target as HTMLElement).closest("[data-day-col]")) e.preventDefault();
     };
+    el.addEventListener("touchstart", stop, { passive: false });
     el.addEventListener("touchmove", stop, { passive: false });
-    return () => el.removeEventListener("touchmove", stop);
+    return () => {
+      el.removeEventListener("touchstart", stop);
+      el.removeEventListener("touchmove", stop);
+    };
   }, []);
   const dragTo = (d: Drag, clientX: number, clientY: number): Drag => {
     const dm = Math.round((clientY - d.y) / row) * 30;
