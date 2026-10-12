@@ -1,6 +1,6 @@
 # LifeBucket
 
-Planificador de balance de vida. Tu vida es un balde de horas por semana y la app te muestra con qué lo estás llenando: Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre (el sueño va aparte). Producto y decisiones de fondo en `PRODUCT.md`; sistema visual en `DESIGN.md`.
+Planificador de balance de vida. Tu vida es un balde de horas por semana y la app te muestra con qué lo estás llenando: Sueño, Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre. Producto y decisiones de fondo en `PRODUCT.md`; sistema visual en `DESIGN.md`.
 
 Hoy la app corre en **modo simple** (`SIMPLE_MODE` en `src/lib/mode.ts`): una sola pantalla con la semana tipo (lunes a domingo, 05:00–24:00, sin fechas), Momentos (Vínculos y Disfrute del mes), Resultados y Objetivos del año. El resto (onboarding, planner por fechas, asistentes con IA) sigue en el código pero oculto.
 
