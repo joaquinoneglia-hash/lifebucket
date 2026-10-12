@@ -2,6 +2,13 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-12 · Los datos se guardan en la nube
+
+- Antes todo quedaba solo en el navegador: borrar la caché lo perdía y cada dispositivo tenía lo suyo. Ahora cada cuenta tiene una fila en Supabase (tabla `datos`, con RLS: cada uno ve y modifica solo lo suyo). SQL en `supabase/migrations/20261012_datos_en_la_nube.sql`.
+- `src/lib/cloud-sync.ts`: al entrar se trae lo de la nube; cada cambio se sube solo a los ~1,5 s; sin conexión se sigue usando y se sube al volver. El navegador queda como copia rápida.
+- Primera vez: si la nube está vacía, se suben los datos del navegador. Si los dos tienen datos de antes de la nube, gana la copia con más cosas cargadas. Si el navegador tiene datos de otra cuenta, no se suben.
+- Al salir de la cuenta se sube lo pendiente y se borran los datos de ese navegador (quedan en la nube).
+
 ## 2026-10-12 · La barra de arriba en tres grupos
 
 - En vez de siete porcentajes sueltos, una barra con la semana entera (168 h) que se va llenando: Trabajo (rojo) y Cuerpo, Mente y Alma (tres colores). Lo que queda es el espacio libre (Libre y Sueño, rayado como en el calendario).

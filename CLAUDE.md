@@ -15,7 +15,7 @@ Hoy la app corre en **modo simple** (`SIMPLE_MODE` en `src/lib/mode.ts`): una so
 
 - Next.js 15 (App Router) + React 19 + TypeScript
 - Tailwind CSS v4
-- `zustand` con persistencia en `localStorage` (clave `lifebucket:v1`; migra sola desde la vieja `lifeplan:v1`). Supabase es el paso siguiente.
+- `zustand` con persistencia en `localStorage` (clave `lifebucket:v1`) como copia local, sincronizada con Supabase por cuenta (tabla `datos`, `src/lib/cloud-sync.ts`).
 - `@dnd-kit/core`, `lucide-react`, `zod`
 - IA: `@anthropic-ai/sdk` (Claude) en rutas de servidor; voz con ElevenLabs (`/api/tts`) y respaldo en la voz del navegador.
 

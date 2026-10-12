@@ -26,6 +26,8 @@ import { Welcome } from "./Welcome";
 import { AssistantFab } from "./AssistantFab";
 import { ScrollLock } from "./ScrollLock";
 import { firstName, useUser } from "@/lib/supabase/use-user";
+import { authConfigured } from "@/lib/supabase/config";
+import { startCloudSync } from "@/lib/cloud-sync";
 import { TasksPanel } from "./TasksPanel";
 import { SecondaryButton, Sheet } from "./ui";
 
@@ -240,6 +242,10 @@ export function SimpleApp() {
 
   // Primera vez de cada cuenta: bienvenida y después (si quiere) la guía. La guía se puede volver a ver desde la cuenta.
   const user = useUser();
+  // Los datos de la cuenta en la nube: se traen al entrar y cada cambio se guarda solo.
+  useEffect(() => {
+    if (authConfigured && user && user.id !== "local") void startCloudSync(user.id);
+  }, [user]);
   const [intro, setIntro] = useState<"none" | "welcome" | "tour">("none");
   const seenKey = user ? `lb:welcomed:${user.id}` : null;
   useEffect(() => {

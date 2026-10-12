@@ -1,7 +1,9 @@
 "use client";
 
-import { FlaskConical, LogOut, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { flushCloud, stopCloudSync, useSync } from "@/lib/cloud-sync";
 import Link from "next/link";
+import { cn } from "@/lib/format";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -45,6 +47,9 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
   const initial = (who.name || who.email || "L").trim()[0]?.toUpperCase();
 
   const signOut = async () => {
+    // Primero se sube lo pendiente; después se borran los datos de este navegador (quedan en la nube).
+    await flushCloud();
+    stopCloudSync(true);
     await supabaseBrowser().auth.signOut();
     window.location.replace("/login");
   };
@@ -73,6 +78,7 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
               {who.email && <p className="truncate text-[12px] text-ink-muted">{who.email}</p>}
             </div>
           )}
+          {authConfigured && <SyncLine />}
           <button
             type="button"
             onClick={() => {
@@ -121,5 +127,25 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** Si tus datos están guardados en la nube. */
+function SyncLine() {
+  const status = useSync((s) => s.status);
+  const text: Record<string, string> = {
+    idle: "Conectando con tu cuenta…",
+    loading: "Trayendo tus datos…",
+    saving: "Guardando…",
+    saved: "Guardado en tu cuenta",
+    offline: "Sin conexión: se guarda cuando vuelva",
+    error: "No se pudo guardar. Se reintenta solo.",
+  };
+  const Icon = status === "saving" || status === "loading" ? Loader2 : status === "offline" || status === "error" ? CloudOff : Cloud;
+  return (
+    <p className={cn("mx-2.5 mb-1 flex items-center gap-1.5 border-b border-line pb-2 text-[11.5px]", status === "error" ? "text-danger" : "text-ink-muted")}>
+      <Icon aria-hidden className={cn("size-3.5", (status === "saving" || status === "loading") && "animate-spin")} />
+      {text[status]}
+    </p>
   );
 }
