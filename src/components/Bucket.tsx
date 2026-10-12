@@ -1,137 +1,179 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
-import { useState } from "react";
+import { ArrowRight, Moon } from "lucide-react";
+import { useId, useState } from "react";
+import { fromKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { QUADRANT_BY_ID } from "@/lib/quadrants";
 import { usePlanner } from "@/lib/store";
 import { ACTIVE_PARTS, monthMinutes, partColor, weekMinutes, WEEK_MINUTES, type Part } from "@/lib/week-shares";
-import { Dashboard } from "./Dashboard";
+import { ModuleControls } from "./Modules";
 import { QuadrantIcon } from "./QuadrantIcon";
-import { Segmented, Sheet } from "./ui";
+import { RecapBook } from "./RecapBook";
+import { Segmented } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+const fmtDay = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long" });
 const h = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-AR")} h`;
+const label = (p: Part) => (p === "alma" ? "Hobbies" : p === "sueno" ? "Sueño" : QUADRANT_BY_ID[p as keyof typeof QUADRANT_BY_ID].name);
 
 /**
- * Cómo llenás tu balde: una torta con a qué le dedicás el tiempo (la semana tipo más tus logros), de la
- * semana o del mes. Lo importante (Deporte, Mente y Alma, Hobbies, Habilidades, Vínculos) va con color;
- * la base (Trabajo, Libre y Sueño) queda más tenue.
+ * Tu Balde: un balde que se llena por capas con tu tiempo (tu rutina semanal más lo que anotaste en tu
+ * diario), de la semana o del mes. Abajo la base (Sueño, Trabajo, Libre); arriba, con color, lo que te hace
+ * bien. Al lado, el detalle de mayor a menor y una sugerencia.
  */
 export function BucketCard({ className, showReport = true }: { className?: string; showReport?: boolean }) {
   const routine = usePlanner((s) => s.routine);
   const logros = usePlanner((s) => s.logros);
   const sleep = usePlanner((s) => s.sleep);
-  const [range, setRange] = useState<"semana" | "mes">("semana");
+  const startedAt = usePlanner((s) => s.startedAt);
+  const [range, setRange] = useState<"semana" | "mes">("mes");
   const [report, setReport] = useState(false);
   const desktop = useMediaQuery("(min-width: 1024px)");
 
   const month = new Date().toISOString().slice(0, 7);
-  const { minutes, total } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep), total: WEEK_MINUTES } : monthMinutes(routine, logros, sleep, month);
+  // El mes cuenta desde que empezaste a usar la app hasta hoy (no te suma días que no estabas).
+  const monthly = monthMinutes(routine, logros, sleep, month, startedAt);
+  const { minutes, total } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep), total: WEEK_MINUTES } : monthly;
+  const partial = range === "mes" && monthly.start > `${month}-01`;
   const pct = (m: number) => Math.round((m / total) * 100);
   const mine = ACTIVE_PARTS.reduce((acc, p) => acc + minutes[p], 0);
-  const rest = minutes.libre + minutes.sueno;
+  const byHours = (list: Part[]) => [...list].sort((a, b) => minutes[b] - minutes[a]);
+  const BASE = byHours(["trabajo", "libre", "sueno"]);
+  const MINE = byHours(ACTIVE_PARTS);
+  const missing = MINE.filter((p) => minutes[p] === 0);
+  const tip = missing.length
+    ? `A tu balde le falta ${label(missing[0])}. ¿Le hacés un lugar esta semana?`
+    : pct(mine) >= 20
+      ? "Buen equilibrio: seguí cuidando tu espacio."
+      : "Sumá un rato para vos: aunque sea media hora al día se nota.";
 
-  // La torta: lo tuyo primero (con color), después Trabajo y al final libre y sueño (gris).
-  const slices: { id: Part | "resto"; v: number; color: string }[] = [
-    ...ACTIVE_PARTS.map((p) => ({ id: p, v: minutes[p], color: partColor(p) })),
-    { id: "trabajo" as const, v: minutes.trabajo, color: partColor("trabajo") },
-    { id: "resto" as const, v: rest, color: "color-mix(in oklab, var(--color-ink) 9%, transparent)" },
-  ].filter((s) => s.v > 0);
+  const row = (p: Part) => (
+    <li key={p} className={cn("flex items-center gap-2 text-[12px] leading-[18px] tabular-nums", minutes[p] === 0 && "opacity-45")}>
+      <span className="grid size-[18px] shrink-0 place-items-center rounded-full text-white" style={{ background: partColor(p) }}>
+        {p === "sueno" ? <Moon aria-hidden className="size-3" /> : <QuadrantIcon id={p as never} className="size-3" />}
+      </span>
+      <span className="min-w-0 flex-1 truncate leading-tight">{label(p)}</span>
+      <span className="text-ink-muted">{h(minutes[p])}</span>
+      <span className="w-8 text-right font-semibold">{pct(minutes[p])}%</span>
+    </li>
+  );
 
   return (
-    <section data-tour="bucket" aria-labelledby="bucket-title" className={cn("card flex flex-col gap-3 p-4", className)}>
+    <section data-tour="bucket" aria-labelledby="bucket-title" className={cn("card flex min-h-0 flex-col gap-2.5 overflow-hidden px-4 pt-3 pb-3", className)}>
       <header className="flex items-center justify-between gap-2">
         <h2 id="bucket-title" className="type-title">
-          Cómo llenás tu balde
+          Tu Balde
         </h2>
-        <Segmented
-          label="Período"
-          value={range}
-          onChange={setRange}
-          options={[
-            { id: "semana", label: "Semana" },
-            { id: "mes", label: MONTHS[Number(month.slice(5)) - 1].replace(/^./, (c) => c.toUpperCase()) },
-          ]}
-          className="text-[12px]"
-        />
+        <div className="flex items-center gap-1">
+          <Segmented
+            label="Período"
+            value={range}
+            onChange={setRange}
+            options={[
+              { id: "semana", label: "Semana" },
+              { id: "mes", label: MONTHS[Number(month.slice(5)) - 1].replace(/^./, (c) => c.toUpperCase()) },
+            ]}
+            className="text-[12px]"
+          />
+          <ModuleControls />
+        </div>
       </header>
 
-      <div className="flex items-center gap-4">
-        <Donut slices={slices} total={total} center={h(mine)} sub="para vos" />
-        <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {ACTIVE_PARTS.map((p) => (
-            <li key={p} className={cn("flex items-center gap-2 text-[12.5px] tabular-nums", minutes[p] === 0 && "opacity-45")}>
-              <span className="grid size-5 shrink-0 place-items-center rounded-full text-white" style={{ background: partColor(p) }}>
-                <QuadrantIcon id={p as never} className="size-3" />
-              </span>
-              <span className="min-w-0 flex-1 leading-tight">{p === "alma" ? "Hobbies" : QUADRANT_BY_ID[p as keyof typeof QUADRANT_BY_ID].name}</span>
-              <span className="text-ink-muted">{h(minutes[p])}</span>
-              <span className="w-8 text-right font-semibold">{pct(minutes[p])}%</span>
-            </li>
-          ))}
+      <div className="flex min-h-0 flex-1 items-center gap-4">
+        <Pail minutes={minutes} total={total} order={[...BASE.slice().reverse(), ...MINE.slice().reverse()]} center={h(mine)} pct={pct} />
+        <ul className="flex max-h-full min-w-0 flex-1 flex-col gap-[3px] overflow-y-auto">
+          {/* Lo que es para vos, con su total; abajo, la base (Trabajo, Libre y Sueño), de mayor a menor. */}
+          <GroupTotal label="Tiempo para vos" value={h(mine)} pct={pct(mine)} />
+          {MINE.map(row)}
+          <li aria-hidden className="my-0.5 border-t border-line" />
+          {BASE.map(row)}
         </ul>
       </div>
 
-      <div className="flex gap-3 border-t border-line pt-2.5 text-[12px] text-ink-muted tabular-nums">
-        <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full" style={{ background: partColor("trabajo") }} />
-          Trabajo <b className="text-ink">{pct(minutes.trabajo)}%</b>
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="size-2 rounded-full bg-[color-mix(in_oklab,var(--color-ink)_15%,transparent)]" />
-          Libre y sueño <b className="text-ink">{pct(rest)}%</b>
-        </span>
-      </div>
-
-      {showReport && (
-        <>
-          <button type="button" onClick={() => setReport(true)} className="pressable -mx-1 inline-flex items-center gap-1 self-start rounded-md px-1 text-[12.5px] font-medium text-ink-muted hover:text-ink">
-            Ver reporte completo
+      <div className="flex items-center justify-between gap-2 border-t border-line pt-2.5">
+        <p className="min-w-0 text-[12px] leading-snug text-ink-muted" title={partial ? `Desde que empezaste: ${fmtDay.format(fromKey(monthly.start))}` : undefined}>
+          {tip}
+        </p>
+        {showReport && (
+          <button type="button" onClick={() => setReport(true)} className="pressable -mr-1 inline-flex shrink-0 items-center gap-1 rounded-md px-1 text-[12.5px] font-medium text-ink-muted hover:text-ink">
+            Resumen
             <ArrowRight aria-hidden className="size-3.5" />
           </button>
-          {report && (
-            <Sheet isMobile={!desktop} side onClose={() => setReport(false)} labelledBy="report-title" width="max-w-[460px]">
-              <div className="flex h-full flex-col">
-                <h2 id="report-title" className="type-headline border-b border-line px-5 py-4">
-                  Reporte
-                </h2>
-                <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                  <Dashboard />
-                </div>
-              </div>
-            </Sheet>
-          )}
-        </>
-      )}
+        )}
+      </div>
+
+      {report && <RecapBook range={range} isMobile={!desktop} onClose={() => setReport(false)} />}
     </section>
   );
 }
 
-/** La torta (anillo), con lo tuyo en el centro. */
-function Donut({ slices, total, center, sub }: { slices: { id: string; v: number; color: string }[]; total: number; center: string; sub: string }) {
-  const r = 42;
-  const c = 2 * Math.PI * r;
-  let at = 0;
+/**
+ * El balde: capas de colores apiladas de abajo hacia arriba (`order`), cada una con su parte del tiempo. La
+ * de arriba tiene una ola suave. Al centro, las horas para vos.
+ */
+function Pail({ minutes, total, order, center, pct }: { minutes: Record<Part, number>; total: number; order: Part[]; center: string; pct: (m: number) => number }) {
+  const id = useId().replace(/:/g, "");
+  const TOP = 34;
+  const BOTTOM = 150;
+  // El cuerpo del balde: más ancho arriba, base redondeada.
+  const body = "M14 34 L106 34 L94 144 Q93 150 87 150 L33 150 Q27 150 26 144 Z";
+  let y = BOTTOM;
+  const layers = order
+    .filter((p) => minutes[p] > 0)
+    .map((p) => {
+      const hgt = (minutes[p] / total) * (BOTTOM - TOP);
+      y -= hgt;
+      return { p, y, hgt };
+    });
+  const top = layers[layers.length - 1];
   return (
-    <div className="relative size-32 shrink-0">
-      <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden>
-        <circle cx="50" cy="50" r={r} fill="none" stroke="var(--color-surface-sunken)" strokeWidth="13" />
-        {slices.map((s) => {
-          const len = (s.v / total) * c;
-          const gap = slices.length > 1 ? Math.min(1.2, len / 3) : 0;
-          const el = <circle key={s.id} cx="50" cy="50" r={r} fill="none" stroke={s.color} strokeWidth="13" strokeDasharray={`${Math.max(0, len - gap)} ${c}`} strokeDashoffset={-at} className="transition-[stroke-dasharray,stroke-dashoffset] duration-500" />;
-          at += len;
-          return el;
-        })}
+    <div className="relative w-[108px] shrink-0" role="img" aria-label={`Tu balde: ${center} para vos`}>
+      <svg viewBox="0 0 120 160" className="w-full overflow-visible">
+        <defs>
+          <clipPath id={`pail-${id}`}>
+            <path d={body} />
+          </clipPath>
+          <linearGradient id={`shine-${id}`} x1="0" x2="1">
+            <stop offset="0" stopColor="white" stopOpacity="0.3" />
+            <stop offset="0.35" stopColor="white" stopOpacity="0" />
+            <stop offset="1" stopColor="black" stopOpacity="0.08" />
+          </linearGradient>
+        </defs>
+        {/* La manija. */}
+        <path d="M22 38 C22 2, 98 2, 98 38" fill="none" stroke="var(--color-ink)" strokeOpacity="0.35" strokeWidth="3" strokeLinecap="round" />
+        <g clipPath={`url(#pail-${id})`}>
+          <rect x="0" y="0" width="120" height="160" fill="var(--color-surface-sunken)" />
+          {layers.map((l) => (
+            <rect key={l.p} x="0" y={l.y} width="120" height={l.hgt + 0.5} fill={partColor(l.p)} />
+          ))}
+          {/* El % de cada capa, chiquito, si entra. */}
+          {layers
+            .filter((l) => l.hgt >= 8)
+            .map((l) => (
+              <text key={`t-${l.p}`} x="60" y={l.y + l.hgt / 2 + 2.6} textAnchor="middle" fontSize="7.5" fontWeight="600" fill="white" fillOpacity="0.95" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {pct(minutes[l.p])}%
+              </text>
+            ))}
+          {/* La ola de arriba: se mece suave. */}
+          {top && <path d={`M0 ${top.y + 1.5} q 15 -5 30 0 t 30 0 t 30 0 t 30 0 t 30 0 V ${top.y + 8} H 0 Z`} fill={partColor(top.p)} className="animate-wave" />}
+          <rect x="0" y="0" width="120" height="160" fill={`url(#shine-${id})`} />
+        </g>
+        <path d={body} fill="none" stroke="var(--color-ink)" strokeOpacity="0.55" strokeWidth="2.5" strokeLinejoin="round" />
+        <path d="M10 34 L110 34" stroke="var(--color-ink)" strokeOpacity="0.55" strokeWidth="3" strokeLinecap="round" />
       </svg>
-      <div className="absolute inset-0 grid place-items-center text-center">
-        <span className="flex flex-col leading-tight">
-          <span className="text-[19px] font-semibold tabular-nums">{center}</span>
-          <span className="text-[11px] text-ink-muted">{sub}</span>
-        </span>
-      </div>
     </div>
+  );
+}
+
+/** El total de un grupo (Para vos, Libre y sueño): sus horas y su %. */
+function GroupTotal({ label, value, pct }: { label: string; value: string; pct: number }) {
+  return (
+    <li className="flex items-center gap-2 text-[11.5px] font-semibold tracking-wide text-ink uppercase tabular-nums">
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="font-medium text-ink-muted normal-case">{value}</span>
+      <span className="w-8 text-right">{pct}%</span>
+    </li>
   );
 }

@@ -411,3 +411,42 @@ html.lb-locked .overflow-y-auto,
 html.lb-locked dialog {
   overscroll-behavior: contain;
 }
+
+/* El bloque nuevo se llena antes de abrir el detalle. */
+@keyframes fill-in {
+  from {
+    opacity: 0.3;
+    transform: scaleY(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+.animate-fill-in {
+  transform-origin: top;
+  animation: fill-in 220ms cubic-bezier(0.23, 1, 0.32, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-fill-in {
+    animation: none;
+  }
+}
+
+/* La ola del balde: se mece suave. */
+@keyframes wave {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-30px);
+  }
+}
+.animate-wave {
+  animation: wave 3.2s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-wave {
+    animation: none;
+  }
+}

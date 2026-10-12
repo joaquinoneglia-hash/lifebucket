@@ -1,34 +1,41 @@
 "use client";
 
-import { BarChart3, CalendarDays, Eraser, ListChecks, Trophy, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { BookOpen, CalendarDays, Eraser, ListChecks, Music, Pencil, PieChart, Target, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { addDays, fromKey, toKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { formatTime } from "@/lib/time";
 import { useMediaQuery } from "@/lib/hooks";
 import { partStyle, SIMPLE_QUADRANTS } from "@/lib/mode";
+import type { QuadrantId } from "@/lib/quadrants";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import { carve, WEEK_ORDER } from "@/lib/routine";
-import { ACTIVE_PARTS, partColor, PARTS, thisMonday, weekMinutes, WEEK_MINUTES, weekRangeLabel, weekShares, type Part } from "@/lib/week-shares";
-import { hoursLabel, sleepStats } from "@/lib/sleep-stats";
-import { newId, usePlanner, type RoutineBlock } from "@/lib/store";
+import { PARTS, thisMonday, weekRangeLabel, weekShares } from "@/lib/week-shares";
+import { firstDay, newId, usePlanner, type RoutineBlock } from "@/lib/store";
 import { BrandMark } from "./BrandMark";
 import { BucketCard } from "./Bucket";
-import { Dashboard } from "./Dashboard";
-import { LogrosPanel } from "./Logros";
+import { Book, RecapBook } from "./RecapBook";
+import { DiaryBox, Story } from "./Diary";
 import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
-import { SleepPill } from "./SleepMeter";
+import { RoutineSheet } from "./RoutineSheet";
 import { TOUR_EVENT, UserMenu } from "./UserMenu";
 import { MAIN_TOUR, Tour } from "./Tour";
 import { Welcome } from "./Welcome";
-import { AssistantFab } from "./AssistantFab";
 import { ScrollLock } from "./ScrollLock";
 import { firstName, useUser } from "@/lib/supabase/use-user";
 import { authConfigured } from "@/lib/supabase/config";
-import { startCloudSync } from "@/lib/cloud-sync";
-import { TasksPanel } from "./TasksPanel";
+import { startCloudSync, useSync } from "@/lib/cloud-sync";
+import { Setup } from "./Setup";
+import { Reminder } from "./Reminder";
+import { RoutineHint } from "./RoutineHint";
+import { NudgeCenter, Nudges, type NudgeTarget } from "./Nudges";
+import type { Nudge } from "@/lib/nudges";
+import { CheerToast } from "./Cheer";
+import { DailyGoals } from "./DailyGoals";
+import { isZenPlaying, onZenChange, startZen, stopZen } from "@/lib/zen";
+import { DashboardBoard, ModuleControls } from "./Modules";
+import { YearGoals } from "./YearGoals";
 import { SecondaryButton, Sheet } from "./ui";
 
 /** La semana tipo va de 05:00 a 24:00, sin fechas. */
@@ -49,10 +56,10 @@ type Section = "semana" | "logros" | "tablero" | "objetivos";
 const TAB_KEY = "lb:tab";
 /** Las pestañas del celular, en este orden. */
 const TABS: { id: Section; label: string; icon: LucideIcon }[] = [
-  { id: "semana", label: "Semana", icon: CalendarDays },
-  { id: "logros", label: "Logros", icon: Trophy },
-  { id: "tablero", label: "Reporte", icon: BarChart3 },
-  { id: "objetivos", label: "Metas", icon: ListChecks },
+  { id: "semana", label: "Rutina", icon: CalendarDays },
+  { id: "objetivos", label: "Hoy", icon: ListChecks },
+  { id: "logros", label: "Metas", icon: Target },
+  { id: "tablero", label: "Balde", icon: PieChart },
 ];
 
 /** Un cambio de un bloque que está en varios días: se pregunta si va solo para ese día o para todos. */
@@ -69,8 +76,16 @@ export function SimpleApp() {
   const routine = usePlanner((s) => s.routine);
   const setRoutine = usePlanner((s) => s.setRoutine);
   const logRoutine = usePlanner((s) => s.logRoutine);
+  const [book, setBook] = useState(false);
+  // Desde qué día cuentan las métricas: el primero con algo cargado (o hoy, si recién empezás).
+  const startedAt = usePlanner((s) => s.startedAt);
+  const setStartedAt = usePlanner((s) => s.setStartedAt);
+  useEffect(() => {
+    if (!startedAt) setStartedAt(firstDay(usePlanner.getState()));
+  }, [startedAt, setStartedAt]);
   const logros = usePlanner((s) => s.logros);
   const sleepSettings = usePlanner((s) => s.sleep);
+  const sleepSet = usePlanner((s) => s.sleepSet);
   const weekSeen = usePlanner((s) => s.weekSeen);
   const setWeekSeen = usePlanner((s) => s.setWeekSeen);
   const history = usePlanner((s) => s.routineHistory);
@@ -88,7 +103,6 @@ export function SimpleApp() {
   }, [routine, logros, sleepSettings, weekSeen, monday, logRoutine]);
 
   // Un clic suave en cada botón (los sonidos propios de cada acción van aparte).
-  const [mute, setMute] = useState(isMuted);
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
       if ((e.target as HTMLElement).closest("button, [role=radio], input[type=checkbox], select")) play("click");
@@ -96,11 +110,27 @@ export function SimpleApp() {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, []);
-  const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number } | null>(null);
+  const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number; draft?: { name: string; quadrant: QuadrantId; days: number[] } } | null>(null);
   const [askDelete, setAskDelete] = useState<{ block: RoutineBlock; day: number } | null>(null);
   const [askChange, setAskChange] = useState<Change | null>(null);
   const [sleepOpen, setSleepOpen] = useState(false);
   const [askClear, setAskClear] = useState(false);
+  const [routineOpen, setRoutineOpen] = useState(false);
+  // Editar la rutina: el sueño, el trabajo y cada bloque, en una lista.
+  const editButton = (
+    <button
+      type="button"
+      data-tour="sueno"
+      onClick={() => {
+        play("open");
+        setRoutineOpen(true);
+      }}
+      className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+    >
+      <Pencil aria-hidden className="size-4" />
+      <span className="max-sm:sr-only">Editar rutina</span>
+    </button>
+  );
   const clearButton = (
     <button
       type="button"
@@ -109,7 +139,7 @@ export function SimpleApp() {
       className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-danger disabled:opacity-40"
     >
       <Eraser aria-hidden className="size-4" />
-      Limpiar todo
+      <span className="max-sm:sr-only">Limpiar todo</span>
     </button>
   );
 
@@ -144,6 +174,43 @@ export function SimpleApp() {
 
   const desktop = useMediaQuery("(min-width: 1024px)");
   const wide = useMediaQuery("(min-width: 768px)");
+
+  // El arranque guiado: solo la primera vez (cuando ya se leyeron los datos de este navegador y de la nube).
+  const setupDone = usePlanner((s) => s.setupDone);
+  const sync = useSync((s) => s.status);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const go = () => window.setTimeout(() => setReady(true), 900);
+    if (usePlanner.persist.hasHydrated()) {
+      const t = go();
+      return () => window.clearTimeout(t);
+    }
+    return usePlanner.persist.onFinishHydration(() => void go());
+  }, []);
+  // Atajo: ?intro en la dirección vuelve a mostrar la bienvenida y la configuración.
+  useEffect(() => {
+    if (!ready || !new URLSearchParams(window.location.search).has("intro")) return;
+    usePlanner.getState().setSetupDone(false);
+    window.history.replaceState(null, "", window.location.pathname);
+  }, [ready]);
+  const showSetup = ready && !setupDone && sync !== "loading";
+  const [justSetUp, setJustSetUp] = useState(false);
+  /** Desde el recordatorio: ir a cada parte (en la compu se destaca un momento; en el celular, su pestaña). */
+  const goTo = (where: NudgeTarget, nudge?: Nudge) => {
+    // Si el aviso trae un ejemplo, se abre el editor de la rutina ya cargado (o la configuración del sueño).
+    if (nudge?.sleep) return setSleepOpen(true);
+    if (nudge?.draft) {
+      const d = nudge.draft;
+      return setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days } });
+    }
+    if (phone) {
+      setTab(where === "metas" ? "logros" : where === "semana" ? "semana" : where === "bucket" ? "tablero" : "objetivos");
+      return;
+    }
+    const el = document.querySelector<HTMLElement>(`[data-module="${where}"]`);
+    el?.animate([{ boxShadow: "0 0 0 0 rgba(37,40,54,0.35)" }, { boxShadow: "0 0 0 10px rgba(37,40,54,0)" }], { duration: 900, iterations: 2 });
+    if (where === "diario") window.setTimeout(() => document.querySelector<HTMLElement>("#logro-text")?.focus(), 200);
+  };
   // En el celular (y tablets angostas) cada sección es una pestaña: la Semana entra entera, sin scroll.
   const phone = !desktop;
   const [tab, setTab] = useState<Section>(() => {
@@ -190,7 +257,7 @@ export function SimpleApp() {
       template={routine}
       sleep={usePlanner.getState().sleep}
       range={RANGE}
-      showSleep
+      showSleep={sleepSet}
       height={h}
       fit={fit}
       onChange={save}
@@ -202,32 +269,73 @@ export function SimpleApp() {
     />
   );
   const semanaPanel = (
-    <Panel id="semana" title="Tu semana tipo" subtitle={weekRangeLabel(monday)} actions={clearButton}>
+    <Panel
+      id="semana"
+      title="Tu rutina semanal"
+      hint={RUTINA_HINT}
+      actions={
+        <>
+          {editButton}
+          {clearButton}
+        </>
+      }
+    >
       <FitHeight>{(h) => weekGrid(h, phone)}</FitHeight>
     </Panel>
   );
-  const metasPanel = (
-    <section data-tour="objetivos" aria-label="Metas" className="card flex h-full min-h-0 flex-col overflow-hidden">
-      <TasksPanel className="h-full" />
-    </section>
-  );
+  // En el celular, cada cosa en su pestaña: la rutina; Hoy (no negociables y diario); las metas; el balde y
+  // cómo viene.
+  const [storyMonth, setStoryMonth] = useState(new Date().toISOString().slice(0, 7));
   const phoneSections: Record<Section, React.ReactNode> = {
     semana: semanaPanel,
-    logros: (
+    objetivos: (
       <div data-tour="logros" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
-        <BucketCard showReport={false} />
-        <LogrosPanel className="min-h-[420px] shrink-0" />
+        <DailyGoals className="shrink-0" />
+        <DiaryBox className="shrink-0" />
+        <Story month={storyMonth} setMonth={setStoryMonth} className="card shrink-0 overflow-visible" />
       </div>
     ),
-    objetivos: metasPanel,
+    logros: (
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
+        <YearGoals className="shrink-0" />
+      </div>
+    ),
     tablero: (
-      <Panel id="tablero" title="Reporte" scroll>
-        <Dashboard />
-      </Panel>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
+        <BucketCard showReport={false} className="shrink-0" />
+        <Book className="card h-[80dvh] shrink-0 overflow-hidden" />
+      </div>
     ),
   };
 
-  const muteButton = (
+  // La música: un parlante (tachado si está apagada). Se lee el estado real al tocar.
+  const [zen, setZen] = useState(false);
+  useEffect(() => {
+    setZen(isZenPlaying());
+    return onZenChange(setZen);
+  }, []);
+  const zenButton = (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        if (isZenPlaying()) stopZen();
+        else void startZen();
+      }}
+      aria-pressed={zen}
+      aria-label={zen ? "Apagar la música" : "Prender la música"}
+      title={zen ? "Apagar la música" : "Prender la música"}
+      className={cn("pressable relative grid size-10 place-items-center rounded-md hover:bg-surface/70 hover:text-ink", zen ? "text-ink" : "text-ink-muted")}
+    >
+      <Music aria-hidden className="size-4" />
+      {/* Apagada: la nota, tachada. */}
+      {!zen && <span aria-hidden className="absolute h-[2px] w-5 rotate-45 rounded-full bg-current" />}
+    </button>
+  );
+  // Los sonidos de la app (clics, tildes, efectos): un parlante, tachado si están silenciados.
+  const [mute, setMute] = useState(false);
+  useEffect(() => setMute(isMuted()), []);
+  const soundButton = (
     <button
       type="button"
       onClick={() => {
@@ -236,9 +344,9 @@ export function SimpleApp() {
         if (mute) play("pop");
       }}
       aria-pressed={!mute}
-      aria-label={mute ? "Activar sonidos" : "Silenciar sonidos"}
-      title={mute ? "Activar sonidos" : "Silenciar sonidos"}
-      className="pressable grid size-10 place-items-center rounded-md text-ink-muted hover:bg-surface/70 hover:text-ink"
+      aria-label={mute ? "Activar los sonidos" : "Silenciar los sonidos"}
+      title={mute ? "Activar los sonidos" : "Silenciar los sonidos"}
+      className={cn("pressable grid size-10 place-items-center rounded-md hover:bg-surface/70 hover:text-ink", mute ? "text-ink-muted" : "text-ink")}
     >
       {mute ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
     </button>
@@ -248,38 +356,49 @@ export function SimpleApp() {
     <div className="flex h-dvh flex-col overflow-hidden">
       <ScrollLock />
       {wide ? (
-        <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 pb-3 sm:px-6">
-          <div className="flex items-center gap-2.5">
+        // Arriba: el sueño a la izquierda, LifeBucket al centro y la cuenta a la derecha.
+        <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-4 pb-3 sm:px-6">
+          <div />
+          <h1 className="flex items-center gap-2.5">
             <BrandMark size={30} />
-            <h1 className="type-display">Tu semana</h1>
-          </div>
-          <Shares routine={routine} />
-          <div className="flex items-center justify-end gap-2">
-            <div data-tour="sueno">
-              <SleepPill onClick={() => setSleepOpen(true)} />
-            </div>
-            <div data-tour="cuenta" className="flex items-center gap-2">
-              {muteButton}
+            <span className="text-[17px] font-semibold tracking-[0.18em]">LIFEBUCKET</span>
+          </h1>
+          <div className="flex items-center gap-2 justify-self-end">
+            {/* Cómo viene tu balde: el libro de tu semana (o tu mes). */}
+            <button
+              type="button"
+              data-tour="libro"
+              onClick={() => setBook(true)}
+              className="pressable flex items-center gap-2 rounded-full bg-surface/80 px-3.5 py-2 text-[13px] font-medium whitespace-nowrap shadow-[var(--shadow-card)] hover:bg-surface"
+            >
+              <BookOpen aria-hidden className="size-4 text-ink-muted" />
+              Resumen general
+            </button>
+            <div data-tour="cuenta" className="flex items-center gap-1">
+              <NudgeCenter onGo={goTo} />
+              {zenButton}
+              {soundButton}
               <UserMenu />
             </div>
           </div>
+          {book && <RecapBook range="mes" isMobile={false} onClose={() => setBook(false)} />}
         </header>
       ) : (
         // En el celular: LIFEBUCKET al centro, el sueño a la izquierda, la cuenta a la derecha y los % abajo.
-        <header className="flex shrink-0 flex-col gap-2.5 px-4 pt-3 pb-2">
+        <header className="flex shrink-0 flex-col px-4 pt-3 pb-2">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <div data-tour="sueno" className="justify-self-start">
-              <SleepPill compact onClick={() => setSleepOpen(true)} />
-            </div>
+            <div />
             <h1 className="flex items-center gap-1.5">
               <BrandMark size={22} />
               <span className="text-[14px] font-semibold tracking-[0.16em] max-[359px]:text-[12px] max-[359px]:tracking-[0.08em]">LIFEBUCKET</span>
             </h1>
             <div data-tour="cuenta" className="flex items-center gap-0.5 justify-self-end">
-              <UserMenu withSound />
+              <NudgeCenter onGo={goTo} compact />
+              {zenButton}
+              {soundButton}
+              <UserMenu />
             </div>
           </div>
-          <Shares routine={routine} mobile />
         </header>
       )}
 
@@ -314,17 +433,23 @@ export function SimpleApp() {
           </nav>
         </>
       ) : (
-      <main id="contenido" className="flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6">
-        {/* Izquierda: cómo llenás tu balde y tus logros. */}
-        <aside className="flex w-[340px] shrink-0 flex-col gap-3 xl:w-[360px]">
-          <BucketCard className="shrink-0" />
-          <LogrosPanel className="min-h-0 flex-1" />
-        </aside>
-        {/* Centro: la semana tipo. */}
-        <div className="flex min-w-0 flex-1 flex-col">{semanaPanel}</div>
-        {/* Derecha: tus metas (un organizador personal). */}
-        <div className="flex w-72 shrink-0 flex-col xl:w-80">{metasPanel}</div>
-      </main>
+      // El dashboard de vida: la rutina arriba; abajo, tu balde y tus metas; a la derecha, los no negociables
+      // y tu diario.
+      <DashboardBoard
+        render={(id) =>
+          id === "semana" ? (
+            semanaPanel
+          ) : id === "bucket" ? (
+            <BucketCard />
+          ) : id === "metas" ? (
+            <YearGoals />
+          ) : id === "diarios" ? (
+            <DailyGoals fit />
+          ) : (
+            <DiaryBox />
+          )
+        }
+      />
       )}
 
       {editing && (
@@ -333,6 +458,7 @@ export function SimpleApp() {
           day={editing.day}
           start={editing.start}
           minutes={editing.minutes}
+          draft={editing.draft}
           quadrants={SIMPLE_QUADRANTS}
           onClose={() => setEditing(null)}
           onSave={(b) => {
@@ -410,11 +536,55 @@ export function SimpleApp() {
       )}
 
       {/* En Logros y Metas hay campos para escribir abajo: ahí el asistente no aparece (taparía el botón de sumar). */}
-      {intro === "none" && (!phone || tab === "semana" || tab === "tablero") && <AssistantFab />}
+      {/* El asistente con IA (botón flotante) queda apagado por ahora. */}
+      <CheerToast />
+      {showSetup && (
+        <Setup
+          phone={phone}
+          onTab={(t) => setTab(t)}
+          onSleep={() => setSleepOpen(true)}
+          onAddBlock={(d) => setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days } })}
+          onDone={() => {
+            setJustSetUp(true);
+            markSeen();
+            setIntro("none");
+          }}
+        />
+      )}
+      {setupDone && intro === "none" && <Reminder onGo={goTo} />}
+      <RoutineHint armed={justSetUp} onAdd={() => setEditing({ day: 1, start: 600, minutes: 60 })} />
+      {setupDone && intro === "none" && <Nudges onGo={goTo} />}
 
-      {sleepOpen && <SleepDialog isMobile={!desktop} onClose={() => setSleepOpen(false)} />}
+      {sleepOpen && (
+        <SleepDialog
+          isMobile={!desktop}
+          onClose={() => {
+            setSleepOpen(false);
+            // Verlo y cerrarlo también cuenta como configurado (si te sirve el horario que propone).
+            if (!usePlanner.getState().sleepSet) usePlanner.getState().setSleepSet(true);
+          }}
+        />
+      )}
+      {routineOpen && (
+        <RoutineSheet
+          isMobile={!desktop}
+          onClose={() => setRoutineOpen(false)}
+          onSleep={() => {
+            setRoutineOpen(false);
+            setSleepOpen(true);
+          }}
+          onEdit={(block) => {
+            setRoutineOpen(false);
+            setEditing({ block, day: block.days[0] ?? 1, start: block.start });
+          }}
+          onAdd={() => {
+            setRoutineOpen(false);
+            setEditing({ day: 1, start: 540, minutes: 60 });
+          }}
+        />
+      )}
 
-      {intro === "welcome" && (
+      {intro === "welcome" && setupDone && (
         <Welcome
           name={firstName(user)}
           onDone={(tour) => {
@@ -426,7 +596,7 @@ export function SimpleApp() {
       )}
       {intro === "tour" && <Tour steps={MAIN_TOUR} phone={phone} onClose={() => setIntro("none")} />}
 
-      {newWeek && intro === "none" && (
+      {newWeek && intro === "none" && setupDone && (
         <NewWeek
           week={monday}
           last={history.filter((h) => h.date < monday).at(-1)}
@@ -541,179 +711,41 @@ function Ask({
 }
 
 /** Una sección: una tarjeta con su título, siempre abierta. */
-function Panel({ id, title, subtitle, actions, scroll, children }: { id: string; title: string; subtitle?: string; actions?: React.ReactNode; scroll?: boolean; children: React.ReactNode }) {
+/** Qué es la rutina semanal (al pasar el mouse por el título). */
+const RUTINA_HINT =
+  "Lo que hacés todas las semanas: trabajo, entrenamientos, clases, comidas. Suma a tu balde de forma rutinaria: no es para cambiarlo día a día, sino para ajustarlo mes a mes. Lo que hacés fuera de la rutina lo sumás en «Cosas que hice hoy».";
+
+function Panel({ id, title, subtitle, hint, actions, scroll, children }: { id: string; title: string; subtitle?: string; hint?: string; actions?: React.ReactNode; scroll?: boolean; children: React.ReactNode }) {
   return (
     <section data-tour={id} aria-labelledby={`panel-${id}`} className="card flex h-full min-h-0 flex-col overflow-hidden">
       <header data-tour={`${id}-header`} className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <h2 id={`panel-${id}`} className="type-title">
-            {title}
-          </h2>
+          {hint ? (
+            <span tabIndex={0} className="group/hint relative cursor-help rounded outline-offset-4">
+              <h2 id={`panel-${id}`} className="type-title underline decoration-ink/20 decoration-dotted underline-offset-4">
+                {title}
+              </h2>
+              <span role="tooltip" className="pointer-events-none absolute top-full left-0 z-40 mt-2 hidden w-72 rounded-xl bg-surface p-3.5 text-[12.5px] leading-snug font-normal text-ink-muted shadow-[var(--shadow-popover)] group-hover/hint:block group-focus/hint:block">
+                <b className="mb-1 block text-[13px] font-semibold text-ink">{title}</b>
+                {hint}
+              </span>
+            </span>
+          ) : (
+            <h2 id={`panel-${id}`} className="type-title">
+              {title}
+            </h2>
+          )}
           {subtitle && <span className="hidden truncate text-[12px] text-ink-muted tabular-nums min-[380px]:inline">{subtitle}</span>}
         </span>
-        {actions && <span className="flex shrink-0 items-center gap-1">{actions}</span>}
+        <span className="flex shrink-0 items-center gap-1">
+          {actions}
+          <ModuleControls />
+        </span>
       </header>
       <div className={cn("min-h-0 flex-1 p-3", scroll && "overflow-y-auto p-4")}>{children}</div>
     </section>
   );
 }
-
-/** Qué incluye cada grupo (lo que aparece al tocarlo o pasar el mouse). */
-const MEANING = {
-  trabajo: "Tu empleo y tus proyectos: la base de tu semana.",
-  bien: "Lo que se trabaja y se juega: Deporte, Mente y Alma, Hobbies y disfrute, Habilidades y Vínculos. Suma tu semana tipo y tus logros de esta semana.",
-  espacio: "Lo que queda por llenar: el tiempo sin agendar (comidas, descanso, traslados) y lo que dormís.",
-};
-type GroupId = "trabajo" | "bien" | "espacio";
-
-/**
- * Tu semana entera (168 h) en una barra que se llena: el Trabajo y lo que te hace bien (Deporte, Mente y
- * Alma, Hobbies, Habilidades, Vínculos) la van ocupando y lo que queda es Libre y sueño. Suma la semana tipo
- * y los logros de esta semana. Abajo, los tres grupos con su %; tocando cada uno, el detalle.
- */
-function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean }) {
-  const logros = usePlanner((s) => s.logros);
-  const sleep = usePlanner((s) => s.sleep);
-  const [picked, setPicked] = useState<GroupId | null>(null);
-  const monday = thisMonday();
-  const minutes = weekMinutes(routine, logros, sleep, monday);
-  const weekLogros = logros.filter((l) => l.date >= monday && l.date <= toKey(addDays(fromKey(monday), 6)));
-  const pct = (m: number) => Math.round((m / WEEK_MINUTES) * 100);
-  const h = (min: number) => `${(Math.round((min / 60) * 10) / 10).toLocaleString("es-AR")} h`;
-  const label = (p: Part) => PARTS.find((x) => x.id === p)!.label;
-
-  const groups: { id: GroupId; label: string; short: string; members: Part[] }[] = [
-    { id: "trabajo", label: "Trabajo", short: "Trabajo", members: ["trabajo"] },
-    { id: "bien", label: "Lo que te hace bien", short: "Para vos", members: ACTIVE_PARTS },
-    { id: "espacio", label: "Libre y sueño", short: "Libre y sueño", members: ["libre", "sueno"] },
-  ];
-  const total = (g: (typeof groups)[number]) => g.members.reduce((acc, m) => acc + minutes[m], 0);
-
-  /** De qué está hecha cada parte: los bloques de la semana (por nombre) y los logros de esta semana. */
-  const items = (p: Part): [string, number][] => {
-    if (p === "sueno") return [[`${hoursLabel(sleepStats(sleep).perNight)} por noche`, minutes.sueno]];
-    const by = new Map<string, number>();
-    for (const b of routine) if (b.quadrant === p) by.set(b.name, (by.get(b.name) ?? 0) + b.minutes * b.days.length);
-    for (const l of weekLogros) if (l.category === p) by.set(l.text, (by.get(l.text) ?? 0) + l.minutes);
-    const list = [...by.entries()];
-    if (p === "libre") {
-      const rest = minutes.libre - list.reduce((acc, [, m]) => acc + m, 0);
-      if (rest > 0) list.push(["Sin agendar", rest]);
-    }
-    return list.sort((a, b) => b[1] - a[1]);
-  };
-
-  /** El detalle de un grupo: qué es, y cada parte con sus horas y de qué está hecha. */
-  const detail = (g: (typeof groups)[number]) => (
-    <>
-      <p className="flex items-baseline justify-between gap-2 text-[12.5px]">
-        <span className="font-semibold">{g.label}</span>
-        <span className="shrink-0 text-ink-muted tabular-nums">
-          {h(total(g))} · {pct(total(g))}% de la semana
-        </span>
-      </p>
-      <p className="mt-1 mb-3 text-[11.5px] leading-snug text-ink-muted">{MEANING[g.id]}</p>
-      <ul className="flex flex-col gap-2.5">
-        {g.members.map((m) => {
-          const list = items(m).slice(0, 4);
-          return (
-            <li key={m} className={cn("flex flex-col gap-1", minutes[m] === 0 && "opacity-50")}>
-              <span className="flex items-center gap-1.5 text-[12.5px]">
-                <span aria-hidden className="size-2 rounded-full" style={{ background: partColor(m) }} />
-                <span className="font-medium">{label(m)}</span>
-                <span className="ml-auto shrink-0 text-ink-muted tabular-nums">{h(minutes[m])}</span>
-                <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{pct(minutes[m])}%</span>
-              </span>
-              {list.length > 0 && m !== "sueno" && (
-                <span className="pl-3.5 text-[11px] leading-snug text-ink-muted">{list.map(([n, mm]) => `${n} ${h(mm)}`).join(" · ")}</span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </>
-  );
-
-  /** La barra de la semana: Trabajo y lo que te hace bien la van llenando; lo que queda es libre y sueño. */
-  const bar = (
-    <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" aria-hidden>
-      {(["trabajo", ...ACTIVE_PARTS] as Part[]).map((m) =>
-        minutes[m] > 0 ? <span key={m} className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(minutes[m] / WEEK_MINUTES) * 100}%`, background: partColor(m) }} /> : null,
-      )}
-      <span className="h-full min-w-0 flex-1 transition-[width] duration-500" style={FREE_FILL} />
-    </div>
-  );
-
-  /** Cómo se ve cada grupo en la leyenda (lo que te hace bien, con sus colores). */
-  const swatch = (g: (typeof groups)[number]) =>
-    g.id === "espacio" ? (
-      <span aria-hidden className="h-2 w-3.5 shrink-0 rounded-full" style={FREE_FILL} />
-    ) : g.id === "bien" && mobile ? (
-      <span aria-hidden className="h-2 w-4 shrink-0 rounded-full" style={{ background: `linear-gradient(90deg, ${ACTIVE_PARTS.map((p) => partColor(p)).join(", ")})` }} />
-    ) : (
-      <span aria-hidden className="flex shrink-0 gap-[2px]">
-        {g.members.map((m) => (
-          <span key={m} className="size-2 rounded-full" style={{ background: partColor(m) }} />
-        ))}
-      </span>
-    );
-
-  if (mobile) {
-    const open = groups.find((g) => g.id === picked);
-    return (
-      <div data-tour="shares" className="flex flex-col gap-2 rounded-2xl bg-surface/80 px-3 py-2.5 shadow-[var(--shadow-card)]">
-        {bar}
-        <ul aria-label="Tu semana en tres grupos" className="grid grid-cols-[auto_1fr_auto] items-center gap-1">
-          {groups.map((g) => (
-            <li key={g.id} className={cn(g.id === "bien" && "justify-self-center", g.id === "espacio" && "justify-self-end")}>
-              <button
-                type="button"
-                aria-expanded={picked === g.id}
-                onClick={() => setPicked(picked === g.id ? null : g.id)}
-                className={cn("flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11.5px] whitespace-nowrap tabular-nums", picked === g.id && "bg-surface-sunken")}
-              >
-                {swatch(g)}
-                <span className="text-ink-muted">{g.short}</span>
-                <span className="font-semibold">{pct(total(g))}%</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {open && <div className="animate-fade-up border-t border-line pt-2.5">{detail(open)}</div>}
-      </div>
-    );
-  }
-
-  return (
-    <div data-tour="shares" className="flex w-[min(560px,100%)] flex-col gap-2 rounded-2xl bg-surface/80 px-4 py-2.5 shadow-[var(--shadow-card)]">
-      {bar}
-      <ul aria-label="Tu semana en tres grupos" className="flex items-center justify-between gap-3">
-        {groups.map((g) => (
-          <li key={g.id} tabIndex={0} className="group relative flex cursor-default items-center gap-1.5 rounded-full text-[12.5px] whitespace-nowrap tabular-nums outline-offset-4">
-            {swatch(g)}
-            <span className="text-ink-muted">{g.label}</span>
-            <span className="font-semibold">{pct(total(g))}%</span>
-            {/* Al pasar el mouse: qué es y de qué está hecho. */}
-            <div
-              role="tooltip"
-              className={cn(
-                "pointer-events-none absolute top-full z-40 mt-3 hidden w-80 rounded-xl bg-surface p-3.5 text-left whitespace-normal shadow-[var(--shadow-popover)] group-hover:block group-focus:block",
-                g.id === "trabajo" ? "left-0" : g.id === "espacio" ? "right-0" : "left-1/2 -translate-x-1/2",
-              )}
-            >
-              {detail(g)}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-/** Libre y sueño: gris rayado (como el sueño en el calendario), un solo espacio por llenar. */
-const FREE_FILL: React.CSSProperties = {
-  backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--color-ink) 16%, transparent) 0 3px, color-mix(in oklab, var(--color-ink) 7%, transparent) 3px 6px)",
-};
 
 /** Mide el alto disponible y se lo pasa al contenido (la grilla de la semana se ajusta a la pantalla). */
 function FitHeight({ children }: { children: (height: number) => React.ReactNode }) {

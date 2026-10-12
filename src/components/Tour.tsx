@@ -182,15 +182,8 @@ export function Tour({ steps: all, phone = false, onClose }: { steps: TourStep[]
 /** Los consejos de la pantalla principal, en orden. */
 export const MAIN_TOUR: TourStep[] = [
   {
-    target: "shares",
-    title: "Tu semana, en una barra",
-    body: "La barra es tu semana entera. La llenan el Trabajo (rojo) y lo que te hace bien: Deporte, Mente y Alma, Hobbies, Habilidades y Vínculos. Lo que queda es libre y sueño. Pasá el mouse por cada grupo para ver el detalle.",
-    phoneBody:
-      "La barra es tu semana entera. La llenan el Trabajo (rojo) y lo que te hace bien: Deporte, Mente y Alma, Hobbies, Habilidades y Vínculos. Lo que queda es libre y sueño. Tocá cada grupo para ver el detalle.",
-  },
-  {
     target: "semana",
-    title: "Tu semana tipo: la estructura",
+    title: "Tu rutina semanal",
     body: "Acá va lo que se repite todas las semanas: trabajo, gimnasio, clases, comidas. No es una agenda de reuniones ni de eventos: es la estructura de tu semana. Arrastrá sobre un espacio vacío para crear un bloque.",
     phoneBody:
       "Acá va lo que se repite todas las semanas: trabajo, gimnasio, clases, comidas. No es una agenda de reuniones ni de eventos: es la estructura de tu semana. Tocá un espacio vacío para crear un bloque o arrastrá para marcar el horario.",
@@ -204,16 +197,16 @@ export const MAIN_TOUR: TourStep[] = [
   {
     target: "logros-panel",
     phoneTarget: "logros",
-    title: "Tus logros: el diario",
-    body: "Lo que no se repite va acá: «hoy medité», «cené con amigos», «practiqué inglés». A la noche contá qué hiciste, la categoría se sugiere sola y elegís cuánto duró. Suma a tu semana y a tu mes.",
-    phoneBody: "En esta pestaña está tu diario de logros: lo que no se repite («hoy medité», «cené con amigos»). A la noche contá qué hiciste; la categoría se sugiere sola y suma a tu semana y a tu mes.",
+    title: "Cosas que hice hoy",
+    body: "Al final del día, anotá lo que querés destacar: «me animé a hablar en la reunión», «corrí 2 horas ayer». Si trae una actividad con duración, suma esas horas al balde; si no, queda como nota.",
+    phoneBody: "Abajo del balde está tu diario: al final del día, anotá lo que querés destacar. Si trae una actividad con duración («corrí 2 horas»), suma al balde.",
   },
   {
     target: "bucket",
     phoneTarget: "logros",
     title: "Cómo llenás tu balde",
-    body: "La torta junta tu semana tipo y tus logros: cuánto le dedicás a lo que te hace bien, de la semana o del mes. Abajo tenés el reporte completo.",
-    phoneBody: "Arriba de tus logros está el balde: cuánto le dedicás a lo que te hace bien, de la semana o del mes. El reporte completo está en la pestaña Reporte.",
+    body: "Tu tiempo en una torta: arriba la base (Trabajo, Libre y Sueño) y abajo lo que te hace bien, cada grupo de mayor a menor. Junta tu semana tipo y tu diario. Desde acá abrís «Cómo fue tu semana».",
+    phoneBody: "En esta pestaña está tu balde: cuánto le dedicás a cada cosa, de la semana o del mes. «Cómo fue tu semana» está en la pestaña Resumen.",
   },
   {
     target: "sueno",
@@ -222,16 +215,16 @@ export const MAIN_TOUR: TourStep[] = [
   },
   {
     target: "objetivos",
-    title: "Metas",
-    body: "Tus metas del año, mes por mes: un organizador personal que no cambia tu balance. Escribila y dale Enter o +; la fecha es opcional.",
-    phoneBody: "En esta pestaña están tus metas del año, mes por mes: un organizador personal que no cambia tu balance.",
+    title: "Logros diarios y metas",
+    body: "Arriba, tus logros diarios: tildá cada día lo que cumpliste y mirá tu puntaje y el % del mes. Abajo, tus metas del año: hacé clic en un mes para verlas o sumar una.",
+    phoneBody: "En esta pestaña están tus logros diarios (tildás lo que cumpliste cada día) y tus metas del año, mes por mes.",
   },
   {
     target: "semana-header",
     phoneTarget: "tabs",
-    title: "Todo a la vista",
-    body: "A la izquierda, cómo llenás tu balde y tus logros; en el centro, tu semana tipo; a la derecha, tus metas.",
-    phoneBody: "Con estas pestañas vas de tu Semana a tus Logros, el Reporte y tus Metas. LifeBucket se acuerda de dónde quedaste.",
+    title: "Armalo a tu manera",
+    body: "Cada panel se comprime con ⌃ o se mueve de columna arrastrándolo de ⠿ (o desde ···). Ordenalo como más te sirva: queda guardado.",
+    phoneBody: "Con estas pestañas vas de tu Semana a tu Balde, tus Logros y el Resumen de cómo fue tu semana. LifeBucket se acuerda de dónde quedaste.",
   },
   {
     target: "asistente",

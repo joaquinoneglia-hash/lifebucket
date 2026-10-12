@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { NoZoom } from "@/components/NoZoom";
+import { ZenAutoplay } from "@/components/ZenAutoplay";
 
 const vietnam = Be_Vietnam_Pro({
   variable: "--font-vietnam",
@@ -32,6 +33,7 @@ export default function RootLayout({
   return (
     <html lang="es-AR" className={vietnam.variable}>
       <body>
+        <ZenAutoplay />
         <NoZoom />
         {children}
       </body>

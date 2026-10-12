@@ -1,6 +1,7 @@
 "use client";
 
 import { GripVertical, Moon, Trash2 } from "lucide-react";
+import { play, step } from "@/lib/sfx";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { cn, formatMinutes } from "@/lib/format";
@@ -84,13 +85,37 @@ export function WeekTemplateGrid({
     return !!r && x >= r.left - 16 && x <= r.right + 16 && y >= r.top - 20 && y <= r.bottom + 12;
   };
   const [drag, setDrag] = useState<Drag | null>(null);
+  // Al crear: el bloque nuevo queda marcado un momento (se ve que se llenó) y recién ahí se abre el detalle.
+  const [pending, setPending] = useState<{ day: number; start: number; minutes: number } | null>(null);
+  const create = (day: number, start: number, minutes: number) => {
+    play("pop");
+    setPending({ day, start, minutes });
+    window.setTimeout(() => {
+      setPending(null);
+      if (onCreateAt) onCreateAt(day, start, minutes);
+      else setEditing({ day, start });
+    }, 480);
+  };
+  // La escalerita: un escalón por cada media hora que cambia mientras estirás o movés.
+  const selLen = sel ? Math.abs(sel.b - sel.a) / 30 + 1 : 0;
+  const selKey = sel?.moved ? `${sel.a}-${sel.b}` : "";
+  useEffect(() => {
+    if (selKey) step(selLen);
+  }, [selKey, selLen]);
+  const dragKey = drag?.moved && !drag.overTrash ? `${drag.day}-${drag.start}-${drag.minutes}` : "";
+  const dragLen = drag ? drag.minutes / 30 : 0;
+  useEffect(() => {
+    if (dragKey) step(dragLen);
+  }, [dragKey, dragLen]);
   /** La franja que se está marcando, moviendo o estirando (para marcarla en la columna de las horas). */
   const marked: [number, number] | null =
     drag?.moved && !drag.overTrash
       ? [drag.start, drag.start + drag.minutes]
       : sel && (sel.moved || !sel.inside)
-        ? [Math.min(sel.a, sel.b), Math.max(sel.a, sel.b) + 30]
-        : null;
+        ? [Math.min(sel.a, sel.b), Math.max(sel.a, sel.b) + (sel.moved ? 30 : 60)]
+        : pending
+          ? [pending.start, pending.start + pending.minutes]
+          : null;
   const justDragged = useRef(false);
   // En pantallas táctiles el dedo dentro del calendario hace lo mismo que el mouse (crear, mover, estirar):
   // no scrollea la página. Para scrollear queda la columna de horas y lo de afuera.
@@ -206,9 +231,8 @@ export function WeekTemplateGrid({
                 const minutes = Math.abs(sel.b - sel.a) + 30;
                 setSel(null);
                 // Un clic sin estirar: una hora por defecto.
-                const len = minutes <= 30 ? Math.min(60, bed - start) : minutes;
-                if (onCreateAt) onCreateAt(d, start, len);
-                else setEditing({ day: d, start });
+                const len = minutes <= 30 && !sel.moved ? Math.min(60, bed - start) : minutes;
+                create(d, start, len);
               }}
               onPointerCancel={() => setSel(null)}
             >
@@ -221,13 +245,27 @@ export function WeekTemplateGrid({
               {(!range || showSleep) && <SleepStripe style={{ top: 0, height: top(wake) }} />}
               {(!range || showSleep) && <SleepStripe style={{ top: top(bed), height: top(to) - top(bed) }} />}
 
-              {sel?.day === d && (
+              {sel?.day === d && (sel.moved || !sel.inside) && (() => {
+                // Mientras apretás sin estirar ya se ve la hora que se va a crear.
+                const a = Math.min(sel.a, sel.b);
+                const b = Math.min(bed, Math.max(sel.a, sel.b) + (sel.moved ? 30 : 60));
+                return (
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-[2px] z-[4] flex items-start rounded-[5px] border border-ink/40 bg-surface/90 px-1.5 pt-0.5 text-[10.5px] font-medium tabular-nums"
+                    style={{ top: top(a) + 1, height: ((b - a) / 30) * row - 2 }}
+                  >
+                    {formatTime(a)}–{formatTime(b)}
+                  </div>
+                );
+              })()}
+              {pending?.day === d && (
                 <div
                   aria-hidden
-                  className="pointer-events-none absolute inset-x-[2px] z-[4] flex items-start rounded-[5px] border border-ink/40 bg-surface/90 px-1.5 pt-0.5 text-[10.5px] font-medium tabular-nums"
-                  style={{ top: top(Math.min(sel.a, sel.b)) + 1, height: ((Math.abs(sel.b - sel.a) + 30) / 30) * row - 2 }}
+                  className="animate-fill-in pointer-events-none absolute inset-x-[2px] z-[4] flex items-start rounded-[5px] border-2 border-ink bg-ink/[0.12] px-1.5 pt-0.5 text-[10.5px] font-semibold tabular-nums"
+                  style={{ top: top(pending.start) + 1, height: (pending.minutes / 30) * row - 2 }}
                 >
-                  {formatTime(Math.min(sel.a, sel.b))}–{formatTime(Math.max(sel.a, sel.b) + 30)}
+                  {formatTime(pending.start)}–{formatTime(pending.start + pending.minutes)}
                 </div>
               )}
 
@@ -338,6 +376,8 @@ export function WeekTemplateGrid({
                       <>
                         <span data-handle="top" aria-hidden className="absolute inset-x-0 -top-0.5 z-[3] h-2 cursor-ns-resize" />
                         <span data-handle="bottom" aria-hidden className="absolute inset-x-0 -bottom-0.5 z-[3] h-2 cursor-ns-resize" />
+                        {/* La franja de arriba (el título) también mueve el bloque. */}
+                        <span data-handle="move" aria-hidden title="Arrastrá para mover" className="absolute inset-x-0 top-1.5 z-[3] cursor-grab active:cursor-grabbing" style={{ height: Math.max(0, Math.min(14, h / 2 - 6)) }} />
                         {/* Manija para mover (a otra hora u otro día). */}
                         <span
                           data-handle="move"

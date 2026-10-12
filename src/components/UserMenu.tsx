@@ -1,6 +1,7 @@
 "use client";
 
-import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { usePlanner } from "@/lib/store";
+import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
 import { flushCloud, stopCloudSync, useSync } from "@/lib/cloud-sync";
 import Link from "next/link";
 import { cn } from "@/lib/format";
@@ -46,6 +47,17 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
   if (!who) return null;
   const initial = (who.name || who.email || "L").trim()[0]?.toUpperCase();
 
+  /** Borra todos los datos de la cuenta (vuelve al estado inicial, también en la nube) y cierra la sesión. */
+  const startOver = async () => {
+    const initial = usePlanner.getInitialState();
+    usePlanner.setState(Object.fromEntries(Object.entries(initial).filter(([, v]) => typeof v !== "function")), false);
+    try {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("lb:") && k !== "lb:zen" && k !== "lb:muted") localStorage.removeItem(k);
+      sessionStorage.clear();
+    } catch {}
+    await signOut();
+  };
+
   const signOut = async () => {
     // Primero se sube lo pendiente; después se borran los datos de este navegador (quedan en la nube).
     await flushCloud();
@@ -89,6 +101,23 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
           >
             <Sparkles aria-hidden className="size-4" />
             Ver la guía otra vez
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              // Empezar de cero, como alguien nuevo: se borra todo (acá y en la nube), se cierra la sesión y, al
+              // volver a entrar, arrancan la bienvenida (con su música) y la configuración guiada.
+              const ok = window.confirm(
+                "Volver a empezar de cero\n\nSe borra todo lo que cargaste: tu rutina, tus no negociables, tus metas y tu diario (en este navegador y en la nube). No se puede deshacer.\n\nDespués se cierra tu sesión para que vuelvas a entrar como la primera vez.",
+              );
+              if (!ok) return;
+              void startOver();
+            }}
+            className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+          >
+            <RotateCcw aria-hidden className="size-4" />
+            Empezar de cero (borra todo)
           </button>
           {beta && (
             <Link

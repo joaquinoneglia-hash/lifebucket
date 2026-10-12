@@ -36,10 +36,10 @@ const writeMeta = (m: Meta) => {
 const snapshot = () => Object.fromEntries(Object.entries(usePlanner.getState()).filter(([, v]) => typeof v !== "function"));
 /** ¿Hay algo cargado? (para no subir una app vacía encima de datos de la nube). */
 const hasData = (s: Record<string, unknown>) =>
-  ["routine", "moments", "tasks", "blocks"].some((k) => Array.isArray(s[k]) && (s[k] as unknown[]).length > 0);
+  ["routine", "moments", "tasks", "blocks", "logros", "dailyGoals"].some((k) => Array.isArray(s[k]) && (s[k] as unknown[]).length > 0);
 
 /** Cuánto hay cargado (bloques, momentos y objetivos). */
-const amount = (s: Record<string, unknown>) => ["routine", "moments", "tasks"].reduce((acc, k) => acc + (Array.isArray(s[k]) ? (s[k] as unknown[]).length : 0), 0);
+const amount = (s: Record<string, unknown>) => ["routine", "moments", "tasks", "logros", "dailyGoals"].reduce((acc, k) => acc + (Array.isArray(s[k]) ? (s[k] as unknown[]).length : 0), 0);
 
 let current: { userId: string; stop: () => void; flush: () => Promise<void> } | null = null;
 
@@ -140,7 +140,7 @@ export async function startCloudSync(userId: string) {
   if (!localIsMine) {
     // Los datos de este navegador son de otra cuenta: se arranca de cero (no se suben).
     applying = true;
-    usePlanner.setState({ routine: [], moments: [], tasks: [], routineHistory: [], weekSeen: "" } as Partial<ReturnType<typeof usePlanner.getState>>);
+    usePlanner.setState({ routine: [], moments: [], tasks: [], logros: [], dailyGoals: [], dailyChecks: {}, routineHistory: [], weekSeen: "" } as Partial<ReturnType<typeof usePlanner.getState>>);
     applying = false;
   }
   // No hay nada en la nube (o hay cambios sin subir de este navegador): se sube lo de acá.

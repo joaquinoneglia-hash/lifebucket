@@ -113,3 +113,67 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 
 - Trabajo, Cuerpo, Mente, Disfrute (antes "Alma"), Libre y Vínculos. Vínculos no va en el calendario: se carga con Momentos del mes y se pasa a horas por semana con pesos fijos (amor 3 h, familia 3 h, amigos 2,5 h).
 - Libre es lo no agendado más los bloques marcados como libre (almuerzo, descanso).
+
+## 2026-10-12 · Objetivos diarios, metas en calendario y encabezado limpio
+
+- Logros: el texto se lee con reglas, sin IA (`src/lib/logro-parse.ts`): "salí a correr dos horas ayer" elige 2 h y ayer y se guarda "Salí a correr". Lo que se elige a mano no se pisa. Por qué: cargar tiene que ser muy rápido y la IA no está conectada.
+- Balde: Trabajo, Libre y Sueño van en la misma lista y en la torta (Sueño con lunita). Se saca la barra de arriba: el balde ya cuenta lo mismo.
+- Encabezado: el logo y LIFEBUCKET al centro, el sueño a la izquierda y la cuenta a la derecha (en compu y en celular).
+- Columna derecha: arriba, objetivos diarios (5 lugares de base y + para más; grilla del mes con un tilde por objetivo y día, puntaje del día y % del mes); abajo, metas anuales en calendario de 12 meses con un pop-up por mes. Datos nuevos `dailyGoals` y `dailyChecks` (se sincronizan con la nube como el resto). El reporte suma una sección de objetivos diarios y el panel se cierra con una cruz.
+
+## 2026-10-12 · Paneles modulares, diario, logros diarios y "Cómo fue tu semana"
+
+- Paneles modulares en compu (`Modules.tsx`): cada panel se comprime a su título o se mueve de columna (arrastrando ⠿ o desde ···). La disposición se guarda en este navegador (`lb:layout`). Por qué: los paneles de la derecha quedaban chicos y cada uno usa la pantalla distinto.
+- Objetivos diarios pasan a llamarse Logros diarios: nombres en vertical arriba de cada columna; si el panel es chico, abren en la semana de hoy.
+- Logros pasa a ser el Diario: lo que destacás del día. Si el texto trae actividad y duración suma al balde; si no, queda como nota (categoría opcional).
+- Balde: arriba la base (Trabajo, Libre, Sueño) y abajo lo que te hace bien, cada grupo de mayor a menor.
+- Las métricas del mes arrancan el primer día de uso (`startedAt`, STORE_VERSION 7): si empezaste a mitad de mes, no te suma los días anteriores.
+- El reporte pasa a ser "Cómo fue tu semana / tu mes" (`RecapBook.tsx`, texto por reglas en `src/lib/recap.ts`): un libro con capítulos y gráficos, que se puede escuchar en voz alta. Metas anuales: el pop-up de un mes se abre solo con clic.
+
+## 2026-10-12 · LifeBucket como acompañante motivacional
+
+- Objetivo: un acompañante para personas a las que les cuesta organizarse y se traban año tras año con sus objetivos. No es un calendario ni un checklist: cada parte tiene sonidos, frases y recomendaciones (`src/lib/motivation.ts`, `Cheer.tsx`).
+- Arranque guiado (`Setup.tsx`): bienvenida con el mensaje de LifeBucket y música zen (generada en el navegador, `src/lib/zen.ts`); después, con cada panel destacado, rutina (trabajo y sueño, y luego el tiempo libre), no negociables (y los de hoy), metas importantes, diario y cuándo preguntar. Termina en "Bienvenido a tu dashboard de vida". Quien ya tenía semana cargada no lo repite (STORE_VERSION 8, `setupDone`).
+- Recordatorios dentro de la app (`Reminder.tsx`): al abrir o desde una hora (mañana, mediodía, noche), una vez por día. Sin notificaciones del sistema por ahora.
+- Dashboard fijo (`Modules.tsx`): rutina arriba; abajo Tu Balde (un balde dibujado por capas) y Metas importantes; a la derecha No negociables a lo largo y Mi diario personal. Se comprimen y se ajusta el alto; no se mueven de lugar.
+- No negociables (antes logros diarios): lista por mes (`goalMonths`), se puede cambiar mes a mes. Con poco alto, se ve el día para tildar y el mes como calendario de colores.
+- Mi diario personal (`Diary.tsx`, `src/lib/diary.ts`): un texto puede traer varios logros; se reconoce categoría, duración y día. Se abre como libro: de un lado se escribe, del otro la historia del mes con tarjetas de color e hitos.
+- Metas importantes: guardan cuándo se crearon, cuándo se cumplieron y cuántas veces se postergaron; avisan si una meta parece tarea simple, hábito o rutina (`src/lib/goal-tips.ts`).
+
+## 2026-10-12 · Ajustes de balde, metas, no negociables y rutina
+
+- Tu Balde: totales por grupo (Para vos; Libre y sueño) con horas y %, y en el dibujo solo un % chiquito en cada capa.
+- Metas importantes: las metas se ven adentro de cada mes, con «+ Sumar» (sin pop-up). Se postergan arrastrándolas a otro mes o con →; el reporte expandido muestra propuestas, cumplidas, no cumplidas, postergadas y el recorrido de cada meta (creada, meses, días, cumplida).
+- No negociables: vuelve la columna larga con la grilla del mes entero por día (el diario de abajo queda chico, solo para escribir).
+- Rutina semanal: botón «Editar rutina» (sueño y cada bloque, agrupados por categoría). Se saca la pastilla del sueño de arriba.
+
+## 2026-10-12 · Resumen general con IA, diario como libro y avisos
+
+- No negociables: los nombres van en horizontal (se doblan si no entran). Con expandir, «mes a mes»: gráfico de líneas del cumplimiento (total y de cada hábito) y un resumen de cada mes.
+- Mi diario personal (expandido): meses con flechas; a la izquierda, escribir y un gráfico de líneas con las horas de cada grupo en los últimos 6 meses; a la derecha, el cuento del mes. Al anotar suena una hoja de papel.
+- «Cómo viene tu balde» pasa a ser «Resumen general» (mes y año con proyección). La IA (`/api/summary`, Claude Sonnet 5.5, salida estructurada) escribe el relato con todos los datos; los gráficos los pone la app. Sin clave o si falla, queda el texto armado por reglas.
+- Avisos (`src/lib/nudges.ts`): si algo está vacío o conviene (rutina sin trabajo, sin no negociables, metas del año vacías, diario sin cargar, metas trabadas, grupos sin tiempo, poco sueño), salta un aviso por visita y todos quedan juntos en la campanita «Recomendaciones y recordatorios».
+
+## 2026-10-12 · Arranque obligatorio y empezar de cero
+
+- El arranque guiado no deja seguir hasta completar cada paso: sueño configurado y al menos un bloque de trabajo; al menos una actividad que se repite; al menos un no negociable; tildar los de hoy (o «Hoy ninguno»); al menos una meta en los meses que quedan; algo escrito en el diario hoy. Al lado del botón se dice qué falta.
+- «Empezar de cero (borra todo)» en el menú de la cuenta: con confirmación, borra todos los datos (en el navegador y en la nube), cierra la sesión y al volver a entrar arranca la bienvenida (con la música de intro) y la configuración.
+- La música zen suena siempre por defecto (desde el primer toque, porque el navegador no deja antes); solo se apaga con el botón.
+
+## 2026-10-12 · Ajustes del arranque y del tablero
+
+- Paso 1 del arranque: tres botones directos (configurar sueño, trabajo y emprendimiento, con «No tengo»); sale el paso de tiempos libres. Los pasos 2 a 4 se completan en el mismo cartel (no negociables, los de hoy, metas con el mes y el diario) y se aplican al tablero. La capa de la guía ya no bloquea los clics sobre lo destacado.
+- El sueño no se muestra en el calendario hasta configurarlo (`sleepSet`, STORE_VERSION 9).
+- Tablero: a la izquierda Tu Balde (con su resumen) y Metas importantes debajo; al centro la rutina a todo lo alto; a la derecha No negociables y Mi diario personal.
+- Balde: total «Tiempo para vos»; Trabajo, Libre y Sueño sueltos debajo de la línea.
+- Diario: se elige la fecha (Hoy, Ayer u otro día) además de la que dice el texto.
+- Los avisos de «le falta X» abren el editor de la rutina con un ejemplo de esa categoría; el de sueño abre la configuración de sueño.
+- Música: el parlante de arriba la prende y apaga (tachado si está apagada). Los sonidos de la app se silencian desde el menú de la cuenta.
+- El botón flotante del asistente con IA queda apagado por ahora.
+
+## 2026-10-12 · Arranque más guiado
+
+- Bienvenida en frases cortas; después, un paso que presenta la rutina («vamos a configurarla muy rápido… para ver qué espacio queda libre para vos»).
+- La rutina en cuatro subpasos: sueño, trabajo, emprendimiento (o «No tengo») y «lo importante» (Deporte, Mente y Alma, Hobbies, Habilidades, cada uno con su explicación y un ejemplo). Vínculos no va en la rutina: los encuentros se anotan en el diario.
+- Los pasos de no negociables, metas y diario se completan en el panel del tablero; el cartel solo guía («qué tocar», paso a paso).
+- Editor de bloques: lo que ya tenés aparece como sugerencia solo mientras escribís; si venís de una categoría, ideas de esa categoría. Cada categoría muestra qué entra en ella.

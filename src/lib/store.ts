@@ -157,15 +157,16 @@ export interface Moment {
 }
 
 /**
- * Un logro del día ("salí a comer con amigos", "medité 20 minutos"): lo que hiciste, con su fecha,
- * su categoría y cuánto duró. No se repite (eso es la semana): es el diario de cada noche.
+ * Una entrada del diario ("salí a comer con amigos", "hoy me animé a hablar en la reunión"): lo que
+ * destacás del día. Si trae una actividad con duración, tiene categoría y minutos y suma al balde; si no,
+ * es solo una nota (category null, minutes 0).
  */
 export type LogroCat = "cuerpo" | "interior" | "alma" | "mente" | "vinculos" | "trabajo";
 export interface Logro {
   id: string;
   date: DateKey;
   text: string;
-  category: LogroCat;
+  category: LogroCat | null;
   minutes: number;
 }
 
@@ -173,6 +174,12 @@ export interface Logro {
 export type TaskKind = "trabajo" | "cuerpo" | "interior" | "mente" | "alma" | "vinculos" | "otro";
 
 /** Un objetivo del año ("hacer un viaje"): por mes, con fecha opcional y sin horario. */
+/** Un objetivo de todos los días ("meditar", "no tomar alcohol"): se tilda cada día que se cumple. */
+export interface DailyGoal {
+  id: string;
+  name: string;
+}
+
 export interface YearTask {
   kind?: TaskKind;
   id: string;
@@ -181,6 +188,18 @@ export interface YearTask {
   month: string;
   date?: DateKey;
   done: boolean;
+  /** Cuándo se creó (para saber cuánto lleva abierta). */
+  createdAt?: DateKey;
+  /** Cuándo se cumplió. */
+  doneAt?: DateKey;
+  /** Los meses por los que pasó antes de postergarse (cada vez que se pasa a un mes posterior). */
+  history?: string[];
+}
+
+/** Pasar una meta a otro mes: si es a uno posterior, cuenta como postergada (queda el mes de antes). */
+function withMonth(t: YearTask, month: string): YearTask {
+  if (t.month === month) return t;
+  return { ...t, month, history: month > t.month && !t.done ? [...(t.history ?? []), t.month] : t.history };
 }
 
 export interface TargetsChange {
@@ -217,7 +236,7 @@ export interface Mission {
   blockIds: string[];
 }
 
-interface PlannerState {
+export interface PlannerState {
   onboarded: boolean;
   userName: string;
   activities: Activity[];
@@ -258,6 +277,28 @@ interface PlannerState {
   moments: Moment[];
   /** El diario de logros: lo que hiciste cada día (suma a la semana y al mes). */
   logros: Logro[];
+  /** Ya configuraste tu horario de sueño (hasta entonces el calendario no lo muestra). */
+  sleepSet: boolean;
+  setSleepSet: (v: boolean) => void;
+  /** El arranque guiado (rutina, no negociables, metas, diario y recordatorios) ya se hizo. */
+  setupDone: boolean;
+  setSetupDone: (done: boolean) => void;
+  /** Cuándo te pregunta la app por tu día: al abrir, o a partir de una hora (mañana, mediodía o noche). */
+  reminder: { when: "abrir" | "manana" | "mediodia" | "noche"; hour: number } | null;
+  setReminder: (r: PlannerState["reminder"]) => void;
+  /** El último día en que la app te preguntó por tu día. */
+  lastReminder: DateKey | "";
+  setLastReminder: (d: DateKey) => void;
+  /** Los no negociables de cada mes (ids): si un mes no tiene lista propia, vale la del último mes que tenga. */
+  goalMonths: Record<string, string[]>;
+  setGoalMonth: (month: string, ids: string[]) => void;
+  /** El primer día que usaste la app: las métricas del mes arrancan acá. */
+  startedAt: DateKey | "";
+  setStartedAt: (date: DateKey) => void;
+  /** Objetivos diarios (la base son 5; se pueden sumar más). */
+  dailyGoals: DailyGoal[];
+  /** Qué objetivos diarios se cumplieron cada día: fecha → ids. */
+  dailyChecks: Record<DateKey, string[]>;
   /** Semana a semana: el % de cada parte (la clave es el lunes de cada semana). */
   routineHistory: { date: DateKey; shares: Partial<Record<string, number>> }[];
   /** El lunes de la última semana que confirmaste (para preguntar al empezar una nueva). */
@@ -287,6 +328,10 @@ interface PlannerState {
   addLogro: (l: Omit<Logro, "id">) => void;
   removeLogro: (id: string) => void;
   updateLogro: (id: string, patch: Partial<Omit<Logro, "id">>) => void;
+  addDailyGoal: (name: string) => void;
+  renameDailyGoal: (id: string, name: string) => void;
+  removeDailyGoal: (id: string) => void;
+  toggleDailyCheck: (date: DateKey, goalId: string) => void;
   addMoment: (m: Omit<Moment, "id">) => void;
   removeMoment: (id: string) => void;
   updateMoment: (id: string, patch: Partial<Omit<Moment, "id">>) => void;
@@ -316,7 +361,7 @@ interface PlannerState {
 /** Dónde se guardan los datos en el navegador. Antes se llamaba "lifeplan:v1". */
 const STORAGE_KEY = "lifebucket:v1";
 /** Versión del formato de los datos (la usa también la nube). */
-export const STORE_VERSION = 6;
+export const STORE_VERSION = 9;
 const LEGACY_STORAGE_KEY = "lifeplan:v1";
 
 // Migración del nombre: si hay datos con la clave vieja y todavía no con la nueva, se copian
@@ -360,6 +405,20 @@ export const usePlanner = create<PlannerState>()(
       tasks: [],
       moments: [],
       logros: [],
+      sleepSet: false,
+      setSleepSet: (sleepSet) => set({ sleepSet }),
+      setupDone: false,
+      setSetupDone: (setupDone) => set({ setupDone }),
+      reminder: null,
+      setReminder: (reminder) => set({ reminder }),
+      lastReminder: "",
+      setLastReminder: (lastReminder) => set({ lastReminder }),
+      goalMonths: {},
+      setGoalMonth: (month, ids) => set((s) => ({ goalMonths: { ...s.goalMonths, [month]: ids } })),
+      startedAt: "",
+      setStartedAt: (startedAt) => set({ startedAt }),
+      dailyGoals: [],
+      dailyChecks: {},
       routineHistory: [],
       weekSeen: "",
 
@@ -403,7 +462,7 @@ export const usePlanner = create<PlannerState>()(
         set((s) => ({ missions: [...s.missions, m] }));
         return m;
       },
-      setSleep: (sleep) => set((s) => ({ sleep: { ...sleep, overrides: sleep.overrides ?? s.sleep.overrides } })),
+      setSleep: (sleep) => set((s) => ({ sleep: { ...sleep, overrides: sleep.overrides ?? s.sleep.overrides }, sleepSet: true })),
       setWork: (work) => set({ work }),
       setWeekSetupPending: (weekSetupPending) => set({ weekSetupPending }),
       setIdeal: (ideal) => set({ ideal }),
@@ -415,23 +474,66 @@ export const usePlanner = create<PlannerState>()(
           return { routineHistory: [...rest, { date: week, shares }].sort((a, b) => a.date.localeCompare(b.date)).slice(-104) };
         }),
       setWeekSeen: (weekSeen) => set({ weekSeen }),
-      addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: newId(), done: false }] })),
+      addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: newId(), done: false, createdAt: toKey(new Date()) }] })),
       addLogro: (l) => set((s) => ({ logros: [...s.logros, { ...l, id: newId() }] })),
       removeLogro: (id) => set((s) => ({ logros: s.logros.filter((l) => l.id !== id) })),
       updateLogro: (id, patch) => set((s) => ({ logros: s.logros.map((l) => (l.id === id ? { ...l, ...patch } : l)) })),
+      addDailyGoal: (name) =>
+        set((s) => {
+          const id = newId();
+          const month = toKey(new Date()).slice(0, 7);
+          const current = activeGoalIds(s, month);
+          return {
+            dailyGoals: [...s.dailyGoals, { id, name: name.trim() }],
+            goalMonths: current ? { ...s.goalMonths, [month]: [...current, id] } : s.goalMonths,
+          };
+        }),
+      renameDailyGoal: (id, name) => set((s) => ({ dailyGoals: s.dailyGoals.map((g) => (g.id === id ? { ...g, name: name.trim() } : g)) })),
+      // Al sacar un objetivo se borran también sus tildes.
+      // Sacar un no negociable lo saca de este mes en adelante: los meses anteriores conservan su lista.
+      removeDailyGoal: (id) =>
+        set((s) => {
+          const month = toKey(new Date()).slice(0, 7);
+          const ids = (activeGoalIds(s, month) ?? s.dailyGoals.map((g) => g.id)).filter((x) => x !== id);
+          // Si ya se usó en meses anteriores, se conserva para esos meses (con su lista congelada).
+          const firstCheck = Object.keys(s.dailyChecks).filter((d) => d.slice(0, 7) < month && s.dailyChecks[d].includes(id)).sort()[0];
+          const usedBefore = Object.entries(s.goalMonths).some(([m, l]) => m < month && l.includes(id)) || !!firstCheck;
+          if (usedBefore) {
+            const frozen = activeGoalIds(s, month) ? {} : { [firstCheck!.slice(0, 7)]: s.dailyGoals.map((g) => g.id) };
+            return { goalMonths: { ...frozen, ...s.goalMonths, [month]: ids } };
+          }
+          return {
+          goalMonths: { ...s.goalMonths, ...(activeGoalIds(s, month) ? { [month]: ids } : {}) },
+          dailyGoals: s.dailyGoals.filter((g) => g.id !== id),
+          dailyChecks: Object.fromEntries(
+            Object.entries(s.dailyChecks)
+              .map(([d, ids]) => [d, ids.filter((x) => x !== id)] as const)
+              .filter(([, ids]) => ids.length > 0),
+          ),
+          };
+        }),
+      toggleDailyCheck: (date, goalId) =>
+        set((s) => {
+          const list = s.dailyChecks[date] ?? [];
+          const next = list.includes(goalId) ? list.filter((x) => x !== goalId) : [...list, goalId];
+          const rest = { ...s.dailyChecks };
+          delete rest[date];
+          return { dailyChecks: next.length ? { ...rest, [date]: next } : rest };
+        }),
       addMoment: (m) => set((s) => ({ moments: [...s.moments, { ...m, id: newId() }] })),
       removeMoment: (id) => set((s) => ({ moments: s.moments.filter((m) => m.id !== id) })),
       updateMoment: (id, patch) => set((s) => ({ moments: s.moments.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
-      toggleTask: (id) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })),
+      toggleTask: (id) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done, doneAt: t.done ? undefined : toKey(new Date()) } : t)) })),
       removeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
-      updateTask: (id, patch) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
+      updateTask: (id, patch) =>
+        set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...(patch.month ? withMonth(t, patch.month) : t), ...patch, history: patch.month ? withMonth(t, patch.month).history : t.history } : t)) })),
       moveTask: (id, month) =>
         set((s) => ({
           tasks: s.tasks.map((t) => {
             if (t.id !== id || t.month === month) return t;
             const [y, m] = month.split("-").map(Number);
             const day = t.date ? Math.min(Number(t.date.slice(8, 10)), new Date(y, m, 0).getDate()) : null;
-            return { ...t, month, date: day ? `${month}-${String(day).padStart(2, "0")}` : undefined };
+            return { ...withMonth(t, month), date: day ? `${month}-${String(day).padStart(2, "0")}` : undefined };
           }),
         })),
       removeSeries: (id) =>
@@ -640,8 +742,43 @@ export const usePlanner = create<PlannerState>()(
 
 /** Lleva datos guardados con una versión vieja al formato actual (del navegador o de la nube). */
 export function migratePlanner(persisted: unknown, version: number): PlannerState {
-  const state = migrateLegacy(persisted, version);
-  return version < 6 ? toV6(state) : state;
+  let state = migrateLegacy(persisted, version);
+  if (version < 6) state = toV6(state);
+  if (version < 7) state = { ...state, startedAt: state.startedAt || firstDay(state) };
+  // v8: llega el arranque guiado; quien ya tenía su semana cargada no lo repite.
+  if (version < 8) state = { ...state, setupDone: state.setupDone || (state.routine ?? []).length > 0 };
+  // v9: el sueño se muestra recién cuando lo configurás; quien ya venía usando la app, ya lo tiene.
+  if (version < 9) state = { ...state, sleepSet: state.sleepSet || state.setupDone || (state.routine ?? []).length > 0 };
+  return state;
+}
+
+/**
+ * Los no negociables de un mes: su lista propia o la del último mes anterior que tenga una. null si nunca se
+ * eligieron por mes (valen todos).
+ */
+export function activeGoalIds(s: Pick<PlannerState, "goalMonths">, month: string): string[] | null {
+  const months = Object.keys(s.goalMonths ?? {})
+    .filter((m) => m <= month)
+    .sort();
+  const last = months[months.length - 1];
+  return last ? s.goalMonths[last] : null;
+}
+
+/** Los no negociables vigentes en un mes, en orden. */
+export function goalsFor(s: Pick<PlannerState, "goalMonths" | "dailyGoals">, month: string): DailyGoal[] {
+  const ids = activeGoalIds(s, month);
+  if (!ids) return s.dailyGoals;
+  return ids.map((id) => s.dailyGoals.find((g) => g.id === id)).filter(Boolean) as DailyGoal[];
+}
+
+/** El primer día con algo cargado (logros, tildes o semanas guardadas); si no hay nada, hoy. */
+export function firstDay(state: Partial<PlannerState>): DateKey {
+  const dates = [
+    ...(state.logros ?? []).map((l) => l.date),
+    ...Object.keys(state.dailyChecks ?? {}),
+    ...(state.routineHistory ?? []).map((h) => h.date),
+  ].filter(Boolean) as DateKey[];
+  return dates.length ? dates.sort()[0] : toKey(new Date());
 }
 
 /**

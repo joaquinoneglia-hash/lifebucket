@@ -7,7 +7,7 @@ import { guessQuadrant } from "@/lib/categorize";
 import { cn, formatMinutes } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { partStyle } from "@/lib/mode";
-import { QUADRANTS, type QuadrantId } from "@/lib/quadrants";
+import { QUADRANTS, type QuadrantId, QUADRANT_BY_ID, QUADRANT_HINT } from "@/lib/quadrants";
 import { WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
 import { newId, usePlanner } from "@/lib/store";
 import { formatTime } from "@/lib/time";
@@ -38,7 +38,10 @@ export function BlockEditor({
   onClose,
   quadrants,
   minutes: initialMinutes,
+  draft,
 }: {
+  /** Un bloque nuevo precargado (por ejemplo, desde la configuración guiada: "Trabajo", de lunes a viernes). */
+  draft?: { name: string; quadrant: QuadrantId; days: number[] };
   /** Duración inicial al crear (p. ej. la franja que arrastraste). */
   minutes?: number;
   /** Qué categorías se pueden elegir (por defecto, todas menos Libre). */
@@ -52,11 +55,11 @@ export function BlockEditor({
 }) {
   const isMobile = !useMediaQuery("(min-width: 640px)");
   const pickable = quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id) || q.id === block?.quadrant) : PICKABLE;
-  const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? pickable[0]?.id ?? "cuerpo");
-  const [name, setName] = useState(block?.name ?? "");
+  const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? draft?.quadrant ?? pickable[0]?.id ?? "cuerpo");
+  const [name, setName] = useState(block?.name ?? draft?.name ?? "");
   // La categoría se elige sola según lo que escribís, hasta que la elijas vos a mano.
   const routine = usePlanner((s) => s.routine);
-  const [manual, setManual] = useState(!!block);
+  const [manual, setManual] = useState(!!block || !!draft);
   const [suggested, setSuggested] = useState<QuadrantId | null>(null);
   const write = (text: string) => {
     setName(text);
@@ -67,8 +70,15 @@ export function BlockEditor({
     if (ok) setQuadrant(ok);
   };
   // Lo que ya tenés en tu semana (sin repetir), para elegirlo de un toque.
-  const yours = [...new Map(routine.map((b) => [b.name, b])).values()].filter((b) => b.name !== name && pickable.some((q) => q.id === b.quadrant)).slice(0, 6);
-  const [days, setDays] = useState<number[]>(block?.days ?? [day]);
+  // Sugerencias: mientras escribís, lo que ya tenés en tu semana que empieza igual (como un predictivo); si
+  // todavía no escribiste nada (por ejemplo, viniste de "Sumar deporte"), ideas de esa categoría.
+  const [typed, setTyped] = useState(false);
+  const q = name.trim().toLowerCase();
+  const yours = typed && q
+    ? [...new Map(routine.map((b) => [b.name, b])).values()].filter((b) => b.name.toLowerCase() !== q && b.name.toLowerCase().includes(q) && pickable.some((x) => x.id === b.quadrant)).slice(0, 6)
+    : [];
+  const ideas = !typed ? SUGGESTED_ACTIVITIES[quadrant].filter((n) => n.toLowerCase() !== q).slice(0, 6) : [];
+  const [days, setDays] = useState<number[]>(block?.days ?? draft?.days ?? [day]);
   const [from, setFrom] = useState(block?.start ?? start);
   const [minutes, setMinutes] = useState(block?.minutes ?? initialMinutes ?? 60);
   const valid = name.trim() && days.length;
@@ -89,25 +99,25 @@ export function BlockEditor({
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="routine-name" className="text-[12px] text-ink-muted">
-            ¿Qué es?
+            {block ? "¿Qué es?" : "¿Qué vas a agregar?"}
           </label>
           <input
             id="routine-name"
             data-autofocus
             value={name}
-            onChange={(e) => write(e.target.value)}
+            onChange={(e) => {
+              setTyped(true);
+              write(e.target.value);
+            }}
             placeholder="Gimnasio, trabajo, leer, almuerzo…"
             autoComplete="off"
             enterKeyHint="next"
             className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] focus:border-ink focus:outline-none"
           />
-          {!block && (
-            <div className="flex flex-wrap gap-1">
-              {(yours.length
-                ? yours.map((b) => ({ name: b.name, quadrant: b.quadrant }))
-                : SUGGESTED_ACTIVITIES[quadrant === "trabajo" ? "trabajo" : quadrant].slice(0, 5).map((n) => ({ name: n, quadrant }))
-              )
-                .filter((it) => it.name !== name)
+          {!block && (yours.length > 0 || ideas.length > 0) && (
+            <div className="flex flex-wrap items-center gap-1">
+              {!yours.length && <span className="text-[11px] text-ink-faint">Ideas:</span>}
+              {(yours.length ? yours.map((b) => ({ name: b.name, quadrant: b.quadrant })) : ideas.map((n) => ({ name: n, quadrant })))
                 .map((it) => (
                   <button
                     key={it.name}
@@ -162,6 +172,9 @@ export function BlockEditor({
               </button>
             ))}
           </div>
+          <p className="text-[11.5px] leading-snug text-ink-muted">
+            <b className="font-semibold text-ink">{QUADRANT_BY_ID[quadrant].name}:</b> {QUADRANT_HINT[quadrant].charAt(0).toLowerCase() + QUADRANT_HINT[quadrant].slice(1)}
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">

@@ -23,6 +23,13 @@ export function stopSpeaking() {
   if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
+/** La velocidad de lectura (1 = normal). Se puede cambiar mientras habla. */
+let rate = 1;
+export function setSpeechRate(r: number) {
+  rate = r;
+  if (current.audio) current.audio.playbackRate = r;
+}
+
 /** Habla y resuelve cuando termina (o si se corta). */
 export async function speak(text: string): Promise<void> {
   stopSpeaking();
@@ -53,6 +60,7 @@ async function speakRemote(text: string): Promise<boolean> {
   }
 
   const audio = new Audio();
+  audio.playbackRate = rate;
   current.audio = audio;
   const ended = new Promise<void>((resolve) => {
     audio.onended = () => resolve();
@@ -79,6 +87,7 @@ async function speakRemote(text: string): Promise<boolean> {
       await append(value);
       if (!started) {
         started = true;
+        audio.playbackRate = rate;
         audio.play().catch(() => undefined);
       }
     }
@@ -94,25 +103,55 @@ async function speakRemote(text: string): Promise<boolean> {
   return true;
 }
 
-/** La voz del navegador (respaldo): una en español si hay. */
+/**
+ * La mejor voz en español del navegador: primero las "naturales" (neuronales: las de Edge, las de Google en
+ * Chrome, las mejoradas de Apple), y entre ellas, rioplatense, latina y después cualquier español.
+ */
+function bestVoice(voices: SpeechSynthesisVoice[]) {
+  const es = voices.filter((v) => v.lang.toLowerCase().startsWith("es"));
+  const score = (v: SpeechSynthesisVoice) => {
+    const n = v.name.toLowerCase();
+    let s = 0;
+    if (/natural|neural|online/.test(n)) s += 100;
+    if (/google/.test(n)) s += 60;
+    if (/premium|enhanced|mejorad/.test(n)) s += 50;
+    if (v.lang === "es-AR") s += 30;
+    else if (/es-(419|us|mx|uy|cl|co)/i.test(v.lang)) s += 20;
+    else if (v.lang === "es-ES") s += 10;
+    if (!v.localService) s += 5;
+    return s;
+  };
+  return es.sort((a, b) => score(b) - score(a))[0] ?? null;
+}
+
+/** Las voces tardan en cargar la primera vez (Chrome): se espera un momento. */
+function loadVoices(): Promise<SpeechSynthesisVoice[]> {
+  const synth = window.speechSynthesis;
+  const now = synth.getVoices();
+  if (now.length) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const done = () => resolve(synth.getVoices());
+    synth.addEventListener("voiceschanged", done, { once: true });
+    setTimeout(done, 800);
+  });
+}
+
+/** La voz del navegador (respaldo): la más humana en español que haya. */
 function speakBrowser(text: string): Promise<void> {
   return new Promise((resolve) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
     const synth = window.speechSynthesis;
+    void loadVoices().then((voices) => {
     const u = new SpeechSynthesisUtterance(text);
-    const voices = synth.getVoices();
-    u.voice =
-      voices.find((v) => v.lang === "es-AR") ??
-      voices.find((v) => v.lang.startsWith("es-4") || v.lang === "es-US") ??
-      voices.find((v) => v.lang.startsWith("es")) ??
-      null;
+    u.voice = bestVoice(voices);
     u.lang = u.voice?.lang ?? "es-AR";
-    u.rate = 1.05;
-    const fallback = setTimeout(resolve, 1200 + text.length * 75);
+    u.rate = 1.02 * rate;
+    const fallback = setTimeout(resolve, 1200 + (text.length * 75) / rate);
     u.onend = u.onerror = () => {
       clearTimeout(fallback);
       resolve();
     };
     synth.speak(u);
+    });
   });
 }

@@ -62,3 +62,14 @@ export function quadrantStyle(id: QuadrantId): CSSProperties {
     "--q-soft": `var(--color-${id}-soft)`,
   } as CSSProperties;
 }
+
+/** Qué entra en cada categoría, en una línea (para que se entienda al elegir). */
+export const QUADRANT_HINT: Record<QuadrantId, string> = {
+  cuerpo: "Moverte: entrenar, correr, nadar, yoga, caminar.",
+  interior: "Cuidar tu cabeza y tu alma: meditar, terapia, respirar, rezar.",
+  alma: "Lo que hacés por gusto, sin fin económico: música, ajedrez, cocinar, dibujar.",
+  mente: "Estudiar o aprender algo nuevo: un idioma, un curso, leer, programar.",
+  vinculos: "Tiempo con los tuyos: pareja, familia, amigos.",
+  trabajo: "Tu empleo, tu emprendimiento o tus proyectos pagos.",
+  libre: "Comidas, descanso, traslados y lo de la casa.",
+};

@@ -3,7 +3,7 @@
  * Se pueden silenciar (se recuerda en este navegador).
  */
 
-export type Sfx = "click" | "pop" | "bubble" | "complete" | "delete" | "open" | "close";
+export type Sfx = "click" | "pop" | "bubble" | "complete" | "delete" | "open" | "close" | "paper";
 
 const MUTE_KEY = "lb:muted";
 let ctx: AudioContext | null = null;
@@ -90,7 +90,58 @@ export function play(name: Sfx) {
     case "close":
       tone(a, { freq: 900, to: 600, dur: 0.06, type: "triangle", gain: 0.05 });
       break;
+    case "paper":
+      paper(a);
+      break;
   }
+}
+
+/** El roce de una hoja: ruido que pasa por un filtro que barre, en dos tiempos (como dar vuelta una página). */
+function paper(a: AudioContext) {
+  const len = Math.floor(a.sampleRate * 0.45);
+  const buffer = a.createBuffer(1, len, a.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (0.6 + 0.4 * Math.sin(i / 90));
+  for (const [start, from, to, gain] of [
+    [0, 1800, 5200, 0.09],
+    [0.16, 3600, 1400, 0.06],
+  ] as const) {
+    const src = a.createBufferSource();
+    src.buffer = buffer;
+    const f = a.createBiquadFilter();
+    f.type = "bandpass";
+    f.Q.value = 0.9;
+    const t = a.currentTime + start;
+    f.frequency.setValueAtTime(from, t);
+    f.frequency.exponentialRampToValueAtTime(to, t + 0.22);
+    const g = a.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+    src.connect(f).connect(g).connect(a.destination);
+    src.start(t);
+    src.stop(t + 0.3);
+  }
+}
+
+/**
+ * Un escalón de la escalerita: suena cada vez que un bloque crece (o se mueve) media hora mientras lo
+ * arrastrás. Cuanto más largo, más agudo (una escala mayor que sube); si se achica, baja.
+ */
+const SCALE = [0, 2, 4, 5, 7, 9, 11];
+let lastStep = 0;
+export function step(n: number) {
+  if (isMuted()) return;
+  const a = audio();
+  if (!a) return;
+  // Sin metralleta: como mucho un escalón cada 35 ms.
+  const now = performance.now();
+  if (now - lastStep < 35) return;
+  lastStep = now;
+  const i = Math.max(0, Math.min(28, n));
+  const semis = Math.floor(i / 7) * 12 + SCALE[i % 7];
+  const freq = 392 * Math.pow(2, semis / 12);
+  tone(a, { freq, to: freq * 1.04, dur: 0.05, type: "triangle", gain: 0.05 });
 }
 
 /**

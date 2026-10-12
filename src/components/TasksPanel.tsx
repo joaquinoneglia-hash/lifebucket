@@ -9,6 +9,8 @@ import { fromKey, toKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { play } from "@/lib/sfx";
 import { usePlanner, type TaskKind, type YearTask } from "@/lib/store";
+import { goalAge, goalTip } from "@/lib/goal-tips";
+import { cheer } from "@/lib/motivation";
 
 const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const dayMonth = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
@@ -217,7 +219,7 @@ function Tally({ ok, notOk, late }: { ok: number; notOk: number; late?: boolean 
   );
 }
 
-function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; today: string }) {
+export function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; today: string }) {
   const addTask = usePlanner((s) => s.addTask);
   const toggleTask = usePlanner((s) => s.toggleTask);
   const removeTask = usePlanner((s) => s.removeTask);
@@ -234,7 +236,7 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
   const add = () => {
     if (!title.trim()) return;
     addTask({ title: title.trim(), month, date: date || undefined, kind });
-    play("pop");
+    cheer("goalAdded");
     setTitle("");
     setDate("");
     setKind("otro");
@@ -265,7 +267,7 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
               type="checkbox"
               checked={t.done}
               onChange={() => {
-                if (!t.done) play("complete");
+                if (!t.done) cheer("goalDone");
                 toggleTask(t.id);
               }}
               aria-label={`${t.title}: ${t.done ? "hecho" : "pendiente"}`}
@@ -285,6 +287,7 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
                 </span>
               )}
               {t.date && <span className={cn("shrink-0 text-[11px] tabular-nums", late ? "text-danger" : "text-ink-muted")}>{dayMonth.format(fromKey(t.date))}</span>}
+              <TaskAge task={t} today={today} />
             </button>
             <button
               type="button"
@@ -330,6 +333,7 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
             <Plus aria-hidden className="size-4" />
           </button>
         </div>
+        {title.trim() && goalTip(title) && <p className="animate-fade-up rounded-lg bg-[color-mix(in_oklab,#d99a00_12%,transparent)] px-2.5 py-1.5 text-[11.5px] leading-snug text-[#8a6200]">{goalTip(title)}</p>}
         {title.trim() && (
           <div className="animate-fade-up flex items-center gap-1.5">
             <KindPicker
@@ -590,5 +594,20 @@ function BalanceNote() {
         <X aria-hidden className="size-3.5" />
       </button>
     </li>
+  );
+}
+
+/** El seguimiento de una meta: cuántas veces se postergó y cuánto lleva abierta (con una alerta suave si se trabó). */
+function TaskAge({ task, today }: { task: YearTask; today: string }) {
+  const { days, moved, stuck } = goalAge(task, today);
+  if (task.done || (!moved && (days === null || days < 14))) return null;
+  const parts = [moved ? `postergada ×${moved}` : "", days !== null && days >= 14 ? `${days} días` : ""].filter(Boolean);
+  return (
+    <span
+      title={stuck ? "Se trabó: probá partirla en un primer paso más chico" : `Creada hace ${days ?? "?"} días`}
+      className={cn("shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-medium tabular-nums", stuck ? "bg-[color-mix(in_oklab,#d99a00_16%,transparent)] text-[#8a6200]" : "bg-surface-sunken text-ink-muted")}
+    >
+      {parts.join(" · ")}
+    </span>
   );
 }

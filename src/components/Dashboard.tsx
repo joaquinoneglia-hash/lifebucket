@@ -6,6 +6,7 @@ import { cn } from "@/lib/format";
 import { partStyle as quadrantStyle } from "@/lib/mode";
 import { usePlanner, type RoutineBlock } from "@/lib/store";
 import { DAY_MINUTES, partColor, PARTS, weekMinutes, weekRangeLabel, WEEK_MINUTES, type Part } from "@/lib/week-shares";
+import { monthStats } from "@/lib/daily-goals";
 import { SleepCard } from "./SleepMeter";
 import { isLate, kindColor, TASK_KINDS } from "./TasksPanel";
 
@@ -130,6 +131,8 @@ export function Dashboard() {
         )}
       </Card>
 
+      <DailyGoalsReport />
+
       <Card title={`Metas ${year}`}>
         {yearTasks.length ? (
           <>
@@ -178,6 +181,63 @@ export function Dashboard() {
         )}
       </Card>
     </div>
+  );
+}
+
+const MONTH_NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
+
+/** Objetivos diarios del mes: el cumplimiento, el de cada objetivo y el puntaje de cada día. */
+function DailyGoalsReport() {
+  const goals = usePlanner((s) => s.dailyGoals);
+  const checks = usePlanner((s) => s.dailyChecks);
+  const today = toKey(new Date());
+  const month = today.slice(0, 7);
+  const st = monthStats(goals, checks, month, today);
+  return (
+    <Card title={`Objetivos diarios · ${MONTH_NAMES[Number(month.slice(5)) - 1]}`}>
+      {goals.length ? (
+        <>
+          <p className="text-[13px] text-ink-muted">
+            <span className="text-[22px] leading-none font-semibold text-ink tabular-nums">{st.pct}%</span> cumplido · {st.done} de {st.possible} tildes en {st.days}{" "}
+            {st.days === 1 ? "día" : "días"}
+          </p>
+          {/* El puntaje de cada día del mes (los que faltan, vacíos). */}
+          <div className="flex h-12 items-end gap-[2px]" aria-hidden>
+            {st.perDay.map((d) => (
+              <span key={d.date} title={d.score === null ? undefined : `${Number(d.date.slice(8))}: ${d.score}/${goals.length}`} className="flex h-full min-w-0 flex-1 items-end rounded-[3px] bg-surface-sunken">
+                {d.score !== null && d.score > 0 && (
+                  <span className={cn("w-full rounded-[3px]", d.score === goals.length ? "bg-success" : "bg-ink/70")} style={{ height: `${(d.score / goals.length) * 100}%` }} />
+                )}
+              </span>
+            ))}
+          </div>
+          <p className="-mt-1 flex justify-between text-[10.5px] text-ink-faint tabular-nums">
+            <span>1</span>
+            <span>{st.perDay.length}</span>
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {st.perGoal
+              .slice()
+              .sort((a, b) => b.pct - a.pct)
+              .map(({ goal, done, pct }) => (
+                <li key={goal.id} className="flex flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5 text-[12px]">
+                    <span className="min-w-0 flex-1 truncate">{goal.name}</span>
+                    <span className="text-ink-muted tabular-nums">
+                      {done}/{st.days} · <span className="font-semibold text-ink">{pct}%</span>
+                    </span>
+                  </span>
+                  <span className="flex h-1.5 overflow-hidden rounded-full bg-surface-sunken">
+                    <span className="h-full rounded-full bg-success" style={{ width: `${pct}%` }} />
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </>
+      ) : (
+        <Empty>Cuando elijas tus objetivos diarios, acá ves cuánto los cumpliste en el mes.</Empty>
+      )}
+    </Card>
   );
 }
 

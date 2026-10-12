@@ -33,7 +33,7 @@ Cuentas: login obligatorio con Supabase Auth (Google o email y contraseña). `sr
 
 Versión en pasos (beta, oculta): `/pasos` (`src/app/pasos/page.tsx`, chequeo en `src/lib/beta.ts` con `BETA_EMAILS`), pantallas en `src/components/steps/`, estado aparte en `src/lib/steps-store.ts` y lógica (huecos, informe, propuesta) en `src/lib/steps.ts`.
 
-Pantalla principal (`SimpleApp.tsx`): balde (`Bucket.tsx`) y logros (`Logros.tsx`) a la izquierda, semana en el centro, metas a la derecha; en el celular, pestañas. Categorías: ids `cuerpo` (Deporte), `interior` (Mente y Alma), `alma` (Hobbies), `mente` (Habilidades), `vinculos`, `trabajo`, `libre`. Cálculo de semana y mes: `weekMinutes()` / `monthMinutes()` en `src/lib/week-shares.ts`.
+Pantalla principal (`SimpleApp.tsx`): dashboard fijo (`Modules.tsx`, se comprimen y se ajusta el alto): rutina semanal arriba; abajo Tu Balde (`Bucket.tsx`) y Metas importantes (`YearGoals.tsx` + `TasksPanel.tsx`); a la derecha No negociables (`DailyGoals.tsx`, lista por mes con `goalsFor()`) y Mi diario personal (`Diary.tsx`, varios logros por texto en `src/lib/diary.ts`). Arranque guiado: `Setup.tsx` (`setupDone`); recordatorios: `Reminder.tsx`; frases y sonidos: `src/lib/motivation.ts`; música zen: `src/lib/zen.ts`; "Cómo viene tu balde" (semana, mes y proyección del año): `RecapBook.tsx` + `src/lib/recap.ts`. En el celular, pestañas Rutina · Hoy · Metas · Balde. Para probar sin login en paralelo: `NEXT_DIST_DIR=.next-test` con las variables de Supabase vacías y otro puerto.
 
 Asistente de la semana (botón flotante): `src/components/AssistantFab.tsx` → `src/app/api/week-ai/route.ts` (Claude Sonnet 5.5, salida estructurada) → cambios aplicados con `src/lib/week-ai.ts`. Propone y el usuario confirma.
 

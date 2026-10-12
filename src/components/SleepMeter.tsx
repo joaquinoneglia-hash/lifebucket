@@ -51,12 +51,12 @@ export function SleepPill({ compact, onClick }: { compact?: boolean; onClick?: (
       ) : (
         <span className="text-[13px] font-medium whitespace-nowrap">Configurar horarios de sueño</span>
       )}
-      {/* En compu se abre hacia la izquierda (la pastilla está a la derecha); en el celular, hacia adentro. */}
+      {/* La pastilla está a la izquierda: el detalle se abre hacia adentro. */}
       <div
         role="tooltip"
         className={cn(
           "pointer-events-none absolute top-full z-40 mt-3 hidden w-60 max-w-[calc(100vw-32px)] rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] [@media(hover:hover)]:group-hover:block",
-          compact ? "left-0" : "right-0",
+          "left-0",
         )}
       >
         <SleepSummary st={st} />
