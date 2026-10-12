@@ -38,6 +38,58 @@ export function Sheet({
     else if (mobileAtOpen.current && isField(document.activeElement)) dialog.focus({ preventScroll: true });
   }, []);
 
+  // En el celular la hoja se cierra arrastrándola para abajo (desde arriba de todo de su contenido).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog || !mobileAtOpen.current) return;
+    let start: { y: number; t: number } | null = null;
+    let dy = 0;
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1 || (e.target as HTMLElement).closest("input, textarea, select")) return;
+      start = { y: e.touches[0].clientY, t: performance.now() };
+      dy = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start) return;
+      const d = e.touches[0].clientY - start.y;
+      // Solo si el contenido está arriba de todo y el dedo va para abajo: si no, es un scroll normal.
+      if (dy === 0 && (d <= 0 || dialog.scrollTop > 0)) {
+        if (d < -4 || dialog.scrollTop > 0) start = null;
+        return;
+      }
+      if (e.cancelable) e.preventDefault();
+      dy = Math.max(0, d);
+      dialog.style.transition = "none";
+      dialog.style.transform = `translateY(${dy}px)`;
+    };
+    const onEnd = () => {
+      if (!start) return;
+      const speed = dy / Math.max(1, performance.now() - start.t);
+      start = null;
+      if (!dy) return;
+      dialog.style.transition = "transform 220ms cubic-bezier(0.32, 0.72, 0, 1)";
+      if (dy > 110 || speed > 0.6) {
+        dialog.style.transform = "translateY(100%)";
+        window.setTimeout(() => closeRef.current(), 200);
+      } else {
+        dialog.style.transform = "";
+      }
+      dy = 0;
+    };
+    dialog.addEventListener("touchstart", onStart, { passive: true });
+    dialog.addEventListener("touchmove", onMove, { passive: false });
+    dialog.addEventListener("touchend", onEnd);
+    dialog.addEventListener("touchcancel", onEnd);
+    return () => {
+      dialog.removeEventListener("touchstart", onStart);
+      dialog.removeEventListener("touchmove", onMove);
+      dialog.removeEventListener("touchend", onEnd);
+      dialog.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   return (
     <dialog
       ref={ref}
@@ -57,7 +109,8 @@ export function Sheet({
             : cn("animate-fade-up m-auto max-h-[90dvh] w-full overflow-y-auto rounded-xl shadow-[var(--shadow-popover)]", width),
       )}
     >
-      {isMobile && <div aria-hidden className="mx-auto mt-2.5 h-1 w-9 rounded-full bg-line" />}
+      {/* La manija: se agarra para cerrar la hoja tirando para abajo. */}
+      {isMobile && <div aria-hidden className="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-ink/15" />}
       {children}
     </dialog>
   );

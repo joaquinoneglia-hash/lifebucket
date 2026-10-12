@@ -4,6 +4,7 @@ import { GripVertical, Moon, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { cn, formatMinutes } from "@/lib/format";
+import { useMediaQuery } from "@/lib/hooks";
 import { quadrantStyle } from "@/lib/quadrants";
 import { partStyle } from "@/lib/mode";
 import { awakeFor, WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
@@ -67,6 +68,8 @@ export function WeekTemplateGrid({
   const editable = !!(onChange || onCreateAt);
   const slotAt = (clientY: number, el: HTMLElement, wake: number, bed: number) => slotAtImpl(clientY, el, from, row, wake, bed);
   const row = Math.max(fit ? 5 : 9, Math.min(24, (height - 32) / ((to - from) / 30)));
+  // Columnas angostas (celular): el nombre de cada bloque va en varias líneas en vez de cortarse.
+  const compact = useMediaQuery("(max-width: 639px)");
   const top = (m: number) => ((m - from) / 30) * row;
   const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number } | null>(null);
   // Crear arrastrando: apretás en un hueco y estirás hacia abajo o arriba.
@@ -81,6 +84,13 @@ export function WeekTemplateGrid({
     return !!r && x >= r.left - 16 && x <= r.right + 16 && y >= r.top - 20 && y <= r.bottom + 12;
   };
   const [drag, setDrag] = useState<Drag | null>(null);
+  /** La franja que se está marcando, moviendo o estirando (para marcarla en la columna de las horas). */
+  const marked: [number, number] | null =
+    drag?.moved && !drag.overTrash
+      ? [drag.start, drag.start + drag.minutes]
+      : sel && (sel.moved || !sel.inside)
+        ? [Math.min(sel.a, sel.b), Math.max(sel.a, sel.b) + 30]
+        : null;
   const justDragged = useRef(false);
   // En pantallas táctiles el dedo dentro del calendario hace lo mismo que el mouse (crear, mover, estirar):
   // no scrollea la página. Para scrollear queda la columna de horas y lo de afuera.
@@ -132,10 +142,32 @@ export function WeekTemplateGrid({
           {Array.from({ length: (to - from) / 60 }, (_, i) => from + i * 60)
             .filter((_, i) => row >= 14 || i % 2 === 0)
             .map((m) => (
-              <span key={m} className="absolute right-1.5 -translate-y-1/2 text-[10px] text-ink-muted tabular-nums" style={{ top: Math.max(6, top(m)) }}>
+              <span
+                key={m}
+                className={cn("absolute right-1.5 -translate-y-1/2 text-[10px] text-ink-muted tabular-nums transition-opacity", marked && "opacity-30")}
+                style={{ top: Math.max(6, top(m)) }}
+              >
                 {formatTime(m)}
               </span>
             ))}
+          {/* Como en Google Calendar: la franja que estás marcando, con su hora de inicio y de fin. */}
+          {marked && (
+            <>
+              <span className="absolute right-0 left-1 rounded-l-md bg-ink/[0.08]" style={{ top: top(marked[0]), height: top(marked[1]) - top(marked[0]) }} />
+              <span
+                className="absolute right-0.5 z-[1] -translate-y-1/2 rounded-md bg-ink px-1 py-px text-[10px] font-semibold text-surface tabular-nums"
+                style={{ top: Math.max(8, top(marked[0])) }}
+              >
+                {formatTime(marked[0])}
+              </span>
+              <span
+                className="absolute right-0.5 z-[1] -translate-y-1/2 rounded-md bg-ink px-1 py-px text-[10px] font-semibold text-surface tabular-nums"
+                style={{ top: Math.min(top(to) - 8, top(marked[1])) }}
+              >
+                {formatTime(marked[1])}
+              </span>
+            </>
+          )}
         </div>
         {WEEK_ORDER.map((d, col) => {
           const { wake, bed } = range
@@ -203,12 +235,21 @@ export function WeekTemplateGrid({
                 <div
                   aria-hidden
                   style={{ ...quadrantStyle(drag.block.quadrant), top: top(drag.start) + 1, height: (drag.minutes / 30) * row - 2 }}
-                  className="pointer-events-none absolute inset-x-[3px] z-[5] flex flex-col overflow-hidden rounded-[5px] border-2 border-[var(--q)] bg-[var(--q-soft)] px-1.5 py-0.5 shadow-[var(--shadow-lifted)]"
+                  className={cn(
+                    "pointer-events-none absolute inset-x-[3px] z-[5] flex flex-col overflow-hidden rounded-[5px] border-2 border-[var(--q)] bg-[var(--q-soft)] shadow-[var(--shadow-lifted)]",
+                    compact ? "px-[2px] py-px" : "px-1.5 py-0.5",
+                  )}
                 >
-                  <span className="truncate text-[11px] font-semibold">{drag.block.name}</span>
-                  <span className="text-[10px] text-ink-muted tabular-nums">
-                    {formatTime(drag.start)}–{formatTime(drag.start + drag.minutes)}
-                  </span>
+                  {compact ? (
+                    <CompactLabel name={drag.block.name} start={drag.start} minutes={drag.minutes} height={(drag.minutes / 30) * row - 2} />
+                  ) : (
+                    <>
+                      <span className="truncate text-[11px] font-semibold">{drag.block.name}</span>
+                      <span className="text-[10px] text-ink-muted tabular-nums">
+                        {formatTime(drag.start)}–{formatTime(drag.start + drag.minutes)}
+                      </span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -325,21 +366,26 @@ export function WeekTemplateGrid({
                       aria-label={`${b.name}, ${DAY_SHORT[d]} ${formatTime(b.start)}, ${formatMinutes(b.minutes)}`}
                       style={partStyle(b.quadrant)}
                       className={cn(
-                        "flex size-full flex-col overflow-hidden rounded-[5px] px-1.5 text-left",
+                        "flex size-full flex-col overflow-hidden rounded-[5px] text-left",
+                        compact ? "px-[3px]" : "px-1.5",
                         b.quadrant === "trabajo"
                           ? "bg-[color-mix(in_oklab,var(--q-soft)_92%,transparent)]"
                           : b.quadrant === "libre"
                             ? "border border-[color-mix(in_oklab,var(--q)_35%,transparent)] bg-[var(--q-soft)]"
                             : "border border-[color-mix(in_oklab,var(--q)_25%,transparent)] bg-[var(--q-soft)]",
-                        h >= 22 ? "py-0.5" : "justify-center",
+                        compact ? (h >= 14 ? "py-px" : "justify-center") : h >= 22 ? "py-0.5" : "justify-center",
                         (onChange || onOpen) && "pressable hover:brightness-[0.97]",
                         highlight?.includes(b.id) && "animate-fade-up",
                       )}
                     >
-                      <span className={cn("truncate text-[11px] leading-tight font-semibold", b.quadrant === "libre" ? "text-ink-muted" : "text-[color-mix(in_oklab,var(--q)_70%,var(--color-ink))]")}>
-                        {b.name}
-                      </span>
-                      {h >= 30 && (
+                      {compact ? (
+                        <CompactLabel name={b.name} start={b.start} minutes={b.minutes} height={h} muted={b.quadrant === "libre"} />
+                      ) : (
+                        <span className={cn("truncate text-[11px] leading-tight font-semibold", b.quadrant === "libre" ? "text-ink-muted" : "text-[color-mix(in_oklab,var(--q)_70%,var(--color-ink))]")}>
+                          {b.name}
+                        </span>
+                      )}
+                      {!compact && h >= 30 && (
                         <span className="truncate text-[10px] leading-tight text-ink-muted tabular-nums">
                           {formatTime(b.start)}–{formatTime(b.start + b.minutes)}
                         </span>
@@ -369,12 +415,12 @@ export function WeekTemplateGrid({
         drag?.moved &&
         drag.mode === "move" &&
         createPortal(
-          <div className="pointer-events-none fixed inset-x-0 bottom-3 z-[60] flex justify-center px-4" aria-live="polite">
+          <div className="pointer-events-none fixed inset-x-0 bottom-[84px] z-[60] flex justify-center px-4 lg:bottom-8" aria-live="polite">
             <div
               ref={trashRef}
               className={cn(
                 "animate-sheet-in flex h-14 items-center gap-2.5 rounded-full px-6 text-[14px] font-medium shadow-[var(--shadow-popover)] transition-[background-color,color,transform] duration-150",
-                drag.overTrash ? "scale-105 bg-danger text-white" : "bg-surface text-ink-muted",
+                drag.overTrash ? "scale-105 bg-danger text-white" : "bg-ink text-surface",
               )}
             >
               <Trash2 aria-hidden className={cn("size-5 transition-transform duration-150", drag.overTrash && "-rotate-12")} />
@@ -449,4 +495,37 @@ function hourLines(row: number): CSSProperties {
     backgroundImage: "linear-gradient(to bottom, var(--color-line) 1px, transparent 1px)",
     backgroundSize: `100% ${row * 2}px`,
   };
+}
+
+const LINE = 10;
+/** "13" o "13:30" (para el rango corto de los bloques en el celular). */
+const shortTime = (m: number) => {
+  const h = Math.floor(m / 60) % 24;
+  return m % 60 ? `${h}:${String(m % 60).padStart(2, "0")}` : String(h);
+};
+
+/**
+ * El texto de un bloque en una columna angosta: el nombre en todas las líneas que entren (cortando
+ * palabras si hace falta) y, si sobra lugar, el horario corto abajo.
+ */
+function CompactLabel({ name, start, minutes, height, muted }: { name: string; start: number; minutes: number; height: number; muted?: boolean }) {
+  const room = Math.max(1, Math.floor((height - 2) / LINE));
+  const showTime = room >= 3;
+  const lines = Math.max(1, showTime ? room - 1 : room);
+  return (
+    <>
+      <span
+        lang="es"
+        className={cn("text-[9.5px] font-semibold [overflow-wrap:anywhere] hyphens-auto", muted ? "text-ink-muted" : "text-[color-mix(in_oklab,var(--q)_70%,var(--color-ink))]")}
+        style={{ lineHeight: `${LINE}px`, display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: lines, overflow: "hidden" }}
+      >
+        {name}
+      </span>
+      {showTime && (
+        <span className="mt-auto text-[9px] leading-[10px] text-ink-muted tabular-nums">
+          {shortTime(start)}–{shortTime(start + minutes)}
+        </span>
+      )}
+    </>
+  );
 }

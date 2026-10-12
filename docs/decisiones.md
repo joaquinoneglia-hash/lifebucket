@@ -2,6 +2,13 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-11 · Detalles del calendario en el celular
+
+- Las hojas (sumar a tu semana, sueño, etc.) se cierran también deslizándolas para abajo desde la manija o el borde de arriba.
+- En columnas angostas el nombre de cada bloque va en varias líneas (cortando palabras si hace falta) y el horario corto abajo si entra, en vez de "Br…".
+- El tacho para eliminar aparece más arriba (sobre las pestañas, apenas encima del calendario) y en negro con texto blanco; rojo al pasar por encima.
+- Al crear, mover o estirar un bloque, la columna de las horas marca la franja con su hora de inicio y de fin (como Google Calendar): con el dedo encima del bloque no se leía el rango.
+
 ## 2026-10-11 · Tacho, Momentos simplificado y objetivos por año
 
 - Arrastrar un bloque muestra un tacho abajo de la pantalla; soltarlo ahí pregunta qué eliminar. Los botones dicen qué pasa: "Solo este evento (lunes)" / "Eliminar todos los eventos" (o "Eliminar evento" si no se repite).
