@@ -31,6 +31,8 @@ Chequeos antes de dar algo por terminado: `npx tsc --noEmit` y `npm run lint`.
 
 Cuentas: login obligatorio con Supabase Auth (Google o email y contraseña). `src/middleware.ts` cierra todo sin sesión (en desarrollo sin Supabase configurado abre igual); pantalla en `src/app/login/`, vuelta de Google en `src/app/auth/callback/`, clientes en `src/lib/supabase/`. Cada ingreso queda en las tablas `usuarios` e `ingresos` (SQL en `supabase/migrations/`). Publicada en Vercel desde `main`: https://lifebucket-kappa.vercel.app (Supabase → URL Configuration tiene ese dominio y `http://localhost:3000/**` como redirects).
 
+Versión en pasos (beta, oculta): `/pasos` (`src/app/pasos/page.tsx`, chequeo en `src/lib/beta.ts` con `BETA_EMAILS`), pantallas en `src/components/steps/`, estado aparte en `src/lib/steps-store.ts` y lógica (huecos, informe, propuesta) en `src/lib/steps.ts`.
+
 Asistente de la semana (botón flotante): `src/components/AssistantFab.tsx` → `src/app/api/week-ai/route.ts` (Claude Sonnet 5.5, salida estructurada) → cambios aplicados con `src/lib/week-ai.ts`. Propone y el usuario confirma.
 
 Claves (solo en `.env.local` y en Vercel, nunca en el repo): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `ANTHROPIC_API_KEY`, `ELEVENLABS_API_KEY`. Sin clave, las rutas de IA responden 503 con un mensaje claro. Para probar la UI sin clave, interceptar `/api/assistant` en Playwright.

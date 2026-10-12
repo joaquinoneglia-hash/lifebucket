@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { FlaskConical, LogOut, Sparkles, Volume2, VolumeX } from "lucide-react";
+import Link from "next/link";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -16,6 +17,14 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
   const [open, setOpen] = useState(false);
   // En el celular el botón de sonido vive acá (en el encabezado no entra).
   const [mute, setMute] = useState(isMuted);
+  // Las versiones de prueba solo aparecen para las cuentas habilitadas (lo decide el servidor).
+  const [beta, setBeta] = useState(false);
+  useEffect(() => {
+    fetch("/api/beta")
+      .then((r) => (r.ok ? r.json() : { beta: false }))
+      .then((d: { beta?: boolean }) => setBeta(!!d.beta))
+      .catch(() => {});
+  }, []);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -75,6 +84,15 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
             <Sparkles aria-hidden className="size-4" />
             Ver la guía otra vez
           </button>
+          {beta && (
+            <Link
+              href="/pasos"
+              className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+            >
+              <FlaskConical aria-hidden className="size-4" />
+              Versión en pasos (beta)
+            </Link>
+          )}
           {withSound && (
             <button
               type="button"

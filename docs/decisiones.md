@@ -2,6 +2,13 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-11 · Versión en pasos (beta, oculta)
+
+- Prueba de un formato tipo formulario/encuesta, en `/pasos`, que solo ven las cuentas de `BETA_EMAILS` (por defecto, la de Joaco; el chequeo es en el servidor, `src/lib/beta.ts`). La app actual no cambia; el acceso aparece en el menú de la cuenta solo para esas cuentas.
+- Pasos: intro → sueño (semana y finde) → la semana categoría por categoría (Trabajo, Cuerpo, Mente, Disfrute, comidas/traslados/descanso) → huecos sin asignar (se agrupan los que se repiten; se asignan o se dejan libres) → "Así es tu vida hoy" (barras contra una persona promedio, lo que más tiempo lleva, informe con recomendaciones) → "¿Te pone contento?" → mejorar.
+- Mejorar: metas en horas por semana (+1/+2/+3/+5 h), no en porcentajes; la app propone dónde ponerlas (primero en huecos, en la franja que mejor le queda a cada cosa; si no, sobre bloques de Libre) y muestra antes y después.
+- Trabaja sobre una copia aparte (`lifebucket:pasos:v1`); al final se puede pasar la semana (y el sueño) a la app, con confirmación.
+
 ## 2026-10-11 · El sueño es una categoría
 
 - Los porcentajes pasan a ser sobre la semana entera (168 h) y el Sueño es una categoría más, con su color (chips de arriba, torta de Resultados, semana a semana). Antes se calculaba sobre las 133 h de 05:00 a 24:00 sin sueño, y las horas dormidas dentro de esa franja (por ejemplo, de 5 a 7) se contaban como Libre por error.
