@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
+import { NoZoom } from "@/components/NoZoom";
 
 const vietnam = Be_Vietnam_Pro({
   variable: "--font-vietnam",
@@ -17,9 +18,10 @@ export const viewport: Viewport = {
   themeColor: "#F6F8FB",
   width: "device-width",
   initialScale: 1,
-  // En iPhone, Safari hacía zoom al tocar un campo y quedaba así (las hojas se veían cortadas).
-  // Con esto arranca y se queda a escala 1; el zoom con dos dedos sigue andando en iPhone.
+  // La app se queda siempre a escala 1: sin zoom al tocar un campo (en iPhone dejaba las hojas cortadas)
+  // ni con dos dedos. Safari de iPhone ignora esto en parte; lo completa <NoZoom />.
   maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -29,7 +31,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es-AR" className={vietnam.variable}>
-      <body>{children}</body>
+      <body>
+        <NoZoom />
+        {children}
+      </body>
     </html>
   );
 }

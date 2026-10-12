@@ -1,7 +1,7 @@
 "use client";
 
 import { BarChart3, CalendarDays, ChevronUp, GripVertical, ListChecks, PartyPopper, Moon, PanelLeftOpen, Volume2, VolumeX, type LucideIcon } from "lucide-react";
-import { useEffect, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { cn } from "@/lib/format";
 import { useMediaQuery, useViewportHeight } from "@/lib/hooks";
 import { BOND_HOURS, bondBreakdown, bondWeekMinutes, funWeekMinutes } from "@/lib/bonds";
@@ -21,6 +21,7 @@ import { SleepPill } from "./SleepMeter";
 import { TOUR_EVENT, UserMenu } from "./UserMenu";
 import { MAIN_TOUR, Tour } from "./Tour";
 import { Welcome } from "./Welcome";
+import { ScrollRail } from "./ScrollRail";
 import { firstName, useUser } from "@/lib/supabase/use-user";
 import { TasksPanel } from "./TasksPanel";
 import { SecondaryButton, Sheet } from "./ui";
@@ -34,6 +35,7 @@ const DAY_NAME: Record<number, string> = { 1: "lunes", 2: "martes", 3: "miércol
 type Section = "semana" | "momentos" | "tablero" | "objetivos";
 const DEFAULT_ORDER: Section[] = ["semana", "momentos", "objetivos", "tablero"];
 const OPEN_KEY = "lb:open";
+const SECTION_LABEL: Record<string, string> = { semana: "Semana", momentos: "Momentos", tablero: "Resultados", objetivos: "Objetivos" };
 // v2: Objetivos pasó a ir antes que Resultados (se arranca de nuevo con ese orden).
 const ORDER_KEY = "lb:sections:v2";
 
@@ -112,6 +114,75 @@ export function SimpleApp() {
       localStorage.setItem(ORDER_KEY, JSON.stringify(next));
     } catch {}
   };
+  // Con el dedo (el arrastre de la web no existe en pantallas táctiles): mantener apretado el encabezado
+  // de una sección y arrastrarla sobre otra.
+  const [touchOver, setTouchOver] = useState<Section | null>(null);
+  const suppressClick = useRef(false);
+  const reorderRef = useRef(reorder);
+  reorderRef.current = reorder;
+  useEffect(() => {
+    let press: { id: Section; x: number; y: number; timer: number; active: boolean } | null = null;
+    let over: Section | null = null;
+    const start = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      const t = e.target as HTMLElement;
+      const header = t.closest("[data-section-header]");
+      if (!header || t.closest("button, input, select, textarea, a")) return;
+      const id = header.closest<HTMLElement>("[data-section]")?.dataset.section as Section | undefined;
+      if (!id) return;
+      const { clientX: x, clientY: y } = e.touches[0];
+      const timer = window.setTimeout(() => {
+        if (!press) return;
+        press.active = true;
+        setDragging(press.id);
+        play("pop");
+        if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(12);
+      }, 380);
+      press = { id, x, y, timer, active: false };
+    };
+    const move = (e: TouchEvent) => {
+      if (!press) return;
+      const p = e.touches[0];
+      if (!press.active) {
+        if (Math.abs(p.clientX - press.x) > 8 || Math.abs(p.clientY - press.y) > 8) {
+          window.clearTimeout(press.timer);
+          press = null;
+        }
+        return;
+      }
+      if (e.cancelable) e.preventDefault();
+      const target = document.elementFromPoint(p.clientX, p.clientY)?.closest<HTMLElement>("[data-section]")?.dataset.section as Section | undefined;
+      over = target && target !== press.id ? target : null;
+      setTouchOver(over);
+      // Cerca de los bordes de la pantalla, la página se mueve sola para llegar a las secciones de abajo o de arriba.
+      if (p.clientY < 80) window.scrollBy(0, -12);
+      else if (p.clientY > window.innerHeight - 80) window.scrollBy(0, 12);
+    };
+    const end = () => {
+      if (!press) return;
+      window.clearTimeout(press.timer);
+      if (press.active) {
+        suppressClick.current = true;
+        window.setTimeout(() => (suppressClick.current = false), 400);
+        if (over) reorderRef.current(press.id, over);
+        setDragging(null);
+        setTouchOver(null);
+      }
+      press = null;
+      over = null;
+    };
+    window.addEventListener("touchstart", start, { passive: true });
+    window.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", end);
+    window.addEventListener("touchcancel", end);
+    return () => {
+      window.removeEventListener("touchstart", start);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", end);
+      window.removeEventListener("touchcancel", end);
+    };
+  }, []);
+
   const dragProps = (id: Section) => ({
     onHeaderDragStart: (e: DragEvent) => {
       e.dataTransfer.setData("text/section", id);
@@ -200,6 +271,7 @@ export function SimpleApp() {
         desktop={desktop}
         grow
         dimmed={dragging === "semana"}
+        over={touchOver === "semana"}
         {...dragProps("semana")}
         actions={
           <>
@@ -234,6 +306,8 @@ export function SimpleApp() {
       <section
         key="momentos"
         data-tour="momentos"
+        data-section="momentos"
+        data-over={touchOver === "momentos" || undefined}
         aria-label="Momentos del mes"
         {...dragProps("momentos").dropProps}
         className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-[360px]" : "h-[70dvh]", dragging === "momentos" && "opacity-40")}
@@ -241,7 +315,7 @@ export function SimpleApp() {
         <MomentsPanel className="h-full" onCollapse={() => toggle("momentos")} onHeaderDragStart={dragProps("momentos").onHeaderDragStart} />
       </section>
     ) : (
-      <Collapsed key="momentos" tour="momentos" title="Momentos" icon={PartyPopper} onOpen={() => toggle("momentos")} desktop={desktop} />
+      <Collapsed key="momentos" tour="momentos" over={touchOver === "momentos"} title="Momentos" icon={PartyPopper} onOpen={() => toggle("momentos")} desktop={desktop} />
     ),
     tablero: (
       <Panel
@@ -256,6 +330,7 @@ export function SimpleApp() {
         width="w-[340px]"
         scroll
         dimmed={dragging === "tablero"}
+        over={touchOver === "tablero"}
         {...dragProps("tablero")}
       >
         <Dashboard />
@@ -265,6 +340,8 @@ export function SimpleApp() {
       <section
         key="objetivos"
         data-tour="objetivos"
+        data-section="objetivos"
+        data-over={touchOver === "objetivos" || undefined}
         aria-label="Objetivos del año"
         {...dragProps("objetivos").dropProps}
         className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-80" : "h-[70dvh]", dragging === "objetivos" && "opacity-40")}
@@ -272,7 +349,7 @@ export function SimpleApp() {
         <TasksPanel className="h-full" onCollapse={() => toggle("objetivos")} onHeaderDragStart={dragProps("objetivos").onHeaderDragStart} />
       </section>
     ) : (
-      <Collapsed key="objetivos" tour="objetivos" title="Objetivos" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
+      <Collapsed key="objetivos" tour="objetivos" over={touchOver === "objetivos"} title="Objetivos" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
     ),
   };
 
@@ -332,7 +409,23 @@ export function SimpleApp() {
         </header>
       )}
 
-      <main className={cn("flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6", desktop ? "flex-row" : "flex-col")}>{order.map((s) => sections[s])}</main>
+      <main
+        id="contenido"
+        onClick={(e) => {
+          // Tocar el encabezado de una sección la comprime (los botones de adentro hacen lo suyo).
+          const t = e.target as HTMLElement;
+          const header = t.closest("[data-section-header]");
+          if (!header || t.closest("button, input, select, textarea, a, label")) return;
+          if (suppressClick.current) return;
+          const id = header.closest<HTMLElement>("[data-section]")?.dataset.section as Section | undefined;
+          if (id && open[id]) toggle(id);
+        }}
+        className={cn("flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6", desktop ? "flex-row" : "flex-col")}
+      >
+        {order.map((s) => sections[s])}
+      </main>
+
+      {!wide && intro === "none" && <ScrollRail labels={SECTION_LABEL} />}
 
       {editing && (
         <BlockEditor
@@ -535,6 +628,7 @@ function Panel({
   scroll,
   actions,
   dimmed,
+  over,
   onHeaderDragStart,
   dropProps,
   children,
@@ -551,24 +645,29 @@ function Panel({
   scroll?: boolean;
   actions?: React.ReactNode;
   dimmed?: boolean;
+  /** Otra sección se está soltando acá (reordenar con el dedo). */
+  over?: boolean;
   onHeaderDragStart: (e: DragEvent) => void;
   dropProps: { onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void; onDragEnd: () => void };
   children: React.ReactNode;
 }) {
-  if (!open) return <Collapsed tour={id} title={title} icon={icon} onOpen={onToggle} desktop={desktop} />;
+  if (!open) return <Collapsed tour={id} over={over} title={title} icon={icon} onOpen={onToggle} desktop={desktop} />;
   return (
     <section
       data-tour={id}
+      data-section={id}
+      data-over={over || undefined}
       aria-labelledby={`panel-${id}`}
       {...dropProps}
       className={cn("card flex min-w-0 flex-col overflow-hidden transition-opacity", desktop && (grow ? "flex-1" : cn("shrink-0", width)), dimmed && "opacity-40")}
     >
       <header
         data-tour={`${id}-header`}
+        data-section-header
         draggable
         onDragStart={onHeaderDragStart}
-        title="Arrastrá para reordenar"
-        className="flex shrink-0 cursor-grab items-center justify-between gap-2 border-b border-line px-4 py-2 active:cursor-grabbing"
+        title="Tocá para comprimir · arrastrá para reordenar"
+        className="flex shrink-0 cursor-grab items-center justify-between gap-2 border-b border-line px-4 py-2 select-none [-webkit-touch-callout:none] active:cursor-grabbing"
       >
         <span className="flex items-center gap-1.5">
           <GripVertical aria-hidden className="size-4 text-ink-faint" />
@@ -596,11 +695,13 @@ function Panel({
 }
 
 /** Sección comprimida: una pestañita con su nombre para volver a abrirla. */
-function Collapsed({ tour, title, icon: Icon, onOpen, desktop }: { tour: string; title: string; icon: LucideIcon; onOpen: () => void; desktop: boolean }) {
+function Collapsed({ tour, over, title, icon: Icon, onOpen, desktop }: { tour: string; over?: boolean; title: string; icon: LucideIcon; onOpen: () => void; desktop: boolean }) {
   return (
     <button
       type="button"
       data-tour={tour}
+      data-section={tour}
+      data-over={over || undefined}
       onClick={onOpen}
       aria-label={`Abrir ${title.toLowerCase()}`}
       className={cn("card pressable flex shrink-0 items-center gap-3 text-ink-muted hover:text-ink", desktop ? "w-11 flex-col py-4" : "h-11 px-4")}

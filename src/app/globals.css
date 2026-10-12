@@ -335,10 +335,9 @@ body::before {
   }
 }
 
-/* Sin "tirar para recargar" ni rebote: en el calendario se arrastra para crear y mover. */
-html,
-body {
-  overscroll-behavior-y: none;
+/* Sin zoom con dos dedos ni con doble toque: la app queda siempre fija (scrollear sí). */
+html {
+  touch-action: pan-x pan-y;
 }
 
 /*
@@ -351,4 +350,10 @@ body {
   textarea {
     font-size: max(16px, 1em);
   }
+}
+
+/* Reordenar con el dedo: la sección sobre la que vas a soltar. */
+[data-section][data-over] {
+  outline: 2px dashed color-mix(in oklab, var(--color-ink) 35%, transparent);
+  outline-offset: 3px;
 }

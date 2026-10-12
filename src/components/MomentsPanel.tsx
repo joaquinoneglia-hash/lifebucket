@@ -49,9 +49,13 @@ export function MomentsPanel({
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
       <header
+        data-section-header
         draggable={!!onHeaderDragStart}
         onDragStart={onHeaderDragStart}
-        className={cn("flex items-center justify-between gap-2 border-b border-line px-4 py-2.5", onHeaderDragStart && "cursor-grab active:cursor-grabbing")}
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-line px-4 py-2.5 select-none [-webkit-touch-callout:none]",
+          onHeaderDragStart && "cursor-grab active:cursor-grabbing",
+        )}
       >
         <div className="flex items-center gap-1.5">
           {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}

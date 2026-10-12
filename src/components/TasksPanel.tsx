@@ -105,9 +105,13 @@ export function TasksPanel({
   return (
     <div className={cn("flex min-h-0 flex-col", className)}>
       <header
+        data-section-header
         draggable={!!onHeaderDragStart}
         onDragStart={onHeaderDragStart}
-        className={cn("flex items-center justify-between gap-2 border-b border-line px-4 py-2.5", onHeaderDragStart && "cursor-grab active:cursor-grabbing")}
+        className={cn(
+          "flex items-center justify-between gap-2 border-b border-line px-4 py-2.5 select-none [-webkit-touch-callout:none]",
+          onHeaderDragStart && "cursor-grab active:cursor-grabbing",
+        )}
       >
         <div className="flex items-center gap-1.5">
           {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
@@ -264,7 +268,7 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
             onChange={(e) => setDate(e.target.value)}
             aria-label="Fecha (opcional)"
             title="Fecha (opcional)"
-            className="h-8 w-[112px] rounded-md border border-line bg-surface px-1.5 text-[12px] text-ink-muted focus:border-ink focus:outline-none"
+            className="h-8 w-[112px] rounded-md border border-line bg-surface px-1.5 text-[12px] text-ink-muted focus:border-ink focus:outline-none [@media(pointer:coarse)]:w-[136px]"
           />
           <KindPicker value={kind} onChange={setKind} />
         </div>

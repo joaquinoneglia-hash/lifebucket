@@ -189,7 +189,7 @@ export const MAIN_TOUR: TourStep[] = [
     title: "Tu semana tipo",
     body: "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Arrastrá sobre un espacio vacío para crear un bloque y elegí qué es y en qué días se repite.",
     touchBody:
-      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o arrastrá el dedo para marcar el horario. Para scrollear, deslizá sobre la columna de las horas.",
+      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o arrastrá el dedo para marcar el horario. Adentro del calendario el dedo no mueve la página: para moverte usá la barrita de la derecha o deslizá fuera del calendario.",
   },
   {
     target: "semana",
@@ -226,8 +226,8 @@ export const MAIN_TOUR: TourStep[] = [
   {
     target: "semana-header",
     title: "Armalo a tu gusto",
-    body: "Cada sección se comprime con el botón de su esquina y se reordena arrastrando su encabezado. LifeBucket se acuerda de cómo lo dejaste.",
-    touchBody: "Cada sección se comprime con la flechita de su esquina, para que te quede a mano lo que más usás. LifeBucket se acuerda de cómo lo dejaste.",
+    body: "Tocá el encabezado de una sección para comprimirla y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
+    touchBody: "Tocá el encabezado de una sección para comprimirla o abrirla. Mantenelo apretado y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
   },
   {
     target: "cuenta",
