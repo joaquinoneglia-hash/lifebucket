@@ -32,7 +32,10 @@ export function WeekTemplateGrid({
   onDelete,
   onMove,
   showSleep,
+  fit,
 }: {
+  /** Que entre sí o sí en `height` (pantallas bajas): las filas pueden achicarse más de lo normal. */
+  fit?: boolean;
   /** Rango fijo (minutos desde la medianoche); sin él, sale de tu sueño. Con rango fijo no se dibuja el sueño. */
   range?: [number, number];
   /** Si vienen, crear y abrir los maneja quien usa la grilla (en vez de la hoja propia). */
@@ -59,7 +62,7 @@ export function WeekTemplateGrid({
   const to = range ? range[1] : Math.ceil(Math.max(...windows.map((w) => w.bed)) / 60) * 60;
   const editable = !!(onChange || onCreateAt);
   const slotAt = (clientY: number, el: HTMLElement, wake: number, bed: number) => slotAtImpl(clientY, el, from, row, wake, bed);
-  const row = Math.max(9, Math.min(24, (height - 32) / ((to - from) / 30)));
+  const row = Math.max(fit ? 5 : 9, Math.min(24, (height - 32) / ((to - from) / 30)));
   const top = (m: number) => ((m - from) / 30) * row;
   const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number } | null>(null);
   // Crear arrastrando: apretás en un hueco y estirás hacia abajo o arriba.

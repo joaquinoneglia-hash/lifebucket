@@ -35,7 +35,7 @@ export function SleepPill({ compact }: { compact?: boolean }) {
   return (
     <div tabIndex={0} className="group relative flex items-center gap-2 rounded-full bg-surface/80 px-3 py-2 shadow-[var(--shadow-card)]">
       <Moon aria-hidden className="size-4 text-[var(--color-sleep)]" />
-      <span className="text-[13px] tabular-nums">
+      <span className="text-[13px] whitespace-nowrap tabular-nums">
         <span className="font-semibold">{hoursLabel(st.perNight)}</span>
         {!compact && <span className="text-ink-muted"> /noche</span>}
       </span>

@@ -273,6 +273,8 @@ interface PlannerState {
   removeMoment: (id: string) => void;
   updateMoment: (id: string, patch: Partial<Omit<Moment, "id">>) => void;
   removeTask: (id: string) => void;
+  /** Cambiar texto, tipo, fecha o mes de un objetivo. */
+  updateTask: (id: string, patch: Partial<Omit<YearTask, "id">>) => void;
   /** Pasa un objetivo a otro mes (si tenía fecha, conserva el día si existe en ese mes). */
   moveTask: (id: string, month: string) => void;
   /** Borra algo que se repite: la serie y sus bloques que todavía no pasaron. */
@@ -398,6 +400,7 @@ export const usePlanner = create<PlannerState>()(
       updateMoment: (id, patch) => set((s) => ({ moments: s.moments.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
       toggleTask: (id) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)) })),
       removeTask: (id) => set((s) => ({ tasks: s.tasks.filter((t) => t.id !== id) })),
+      updateTask: (id, patch) => set((s) => ({ tasks: s.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) })),
       moveTask: (id, month) =>
         set((s) => ({
           tasks: s.tasks.map((t) => {

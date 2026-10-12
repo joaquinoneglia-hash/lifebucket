@@ -1,13 +1,14 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { SUGGESTED_ACTIVITIES } from "@/lib/activities";
+import { guessQuadrant } from "@/lib/categorize";
 import { cn, formatMinutes } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { QUADRANTS, quadrantStyle, type QuadrantId } from "@/lib/quadrants";
 import { WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
-import { newId } from "@/lib/store";
+import { newId, usePlanner } from "@/lib/store";
 import { formatTime } from "@/lib/time";
 import { QuadrantIcon } from "../QuadrantIcon";
 import { GhostButton, PrimaryButton, Select, Sheet } from "../ui";
@@ -52,6 +53,20 @@ export function BlockEditor({
   const pickable = quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id)) : PICKABLE;
   const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? pickable[0]?.id ?? "cuerpo");
   const [name, setName] = useState(block?.name ?? "");
+  // La categoría se elige sola según lo que escribís, hasta que la elijas vos a mano.
+  const routine = usePlanner((s) => s.routine);
+  const [manual, setManual] = useState(!!block);
+  const [suggested, setSuggested] = useState<QuadrantId | null>(null);
+  const write = (text: string) => {
+    setName(text);
+    if (manual) return;
+    const g = guessQuadrant(text, routine);
+    const ok = g && pickable.some((q) => q.id === g) ? g : null;
+    setSuggested(ok);
+    if (ok) setQuadrant(ok);
+  };
+  // Lo que ya tenés en tu semana (sin repetir), para elegirlo de un toque.
+  const yours = [...new Map(routine.map((b) => [b.name, b])).values()].filter((b) => b.name !== name && pickable.some((q) => q.id === b.quadrant)).slice(0, 6);
   const [days, setDays] = useState<number[]>(block?.days ?? [day]);
   const [from, setFrom] = useState(block?.start ?? start);
   const [minutes, setMinutes] = useState(block?.minutes ?? initialMinutes ?? 60);
@@ -71,28 +86,6 @@ export function BlockEditor({
           {block ? "Cambiar bloque" : "Sumar a tu semana"}
         </h2>
 
-        <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-wrap gap-1.5">
-          {pickable.map((q) => (
-            <button
-              key={q.id}
-              type="button"
-              role="radio"
-              aria-checked={quadrant === q.id}
-              onClick={() => setQuadrant(q.id)}
-              style={quadrantStyle(q.id)}
-              className={cn(
-                "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium",
-                quadrant === q.id ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line hover:bg-surface-sunken",
-              )}
-            >
-              <span className="grid size-6 place-items-center rounded-full bg-[var(--q-soft)] text-[var(--q)]">
-                <QuadrantIcon id={q.id} className="size-3" />
-              </span>
-              {q.name}
-            </button>
-          ))}
-        </div>
-
         <div className="flex flex-col gap-1.5">
           <label htmlFor="routine-name" className="text-[12px] text-ink-muted">
             ¿Qué es?
@@ -101,24 +94,72 @@ export function BlockEditor({
             id="routine-name"
             data-autofocus
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={quadrant === "trabajo" ? "Empleo, emprendimiento…" : "Gimnasio, leer, cena con amigos…"}
+            onChange={(e) => write(e.target.value)}
+            placeholder="Gimnasio, trabajo, leer, almuerzo…"
             autoComplete="off"
+            enterKeyHint="next"
             className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] focus:border-ink focus:outline-none"
           />
-          <div className="flex flex-wrap gap-1">
-            {(quadrant === "trabajo" ? ["Empleo", "Emprendimiento", "Freelance"] : SUGGESTED_ACTIVITIES[quadrant].slice(0, 5))
-              .filter((n) => n !== name)
-              .map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setName(n)}
-                  className="pressable h-7 rounded-full bg-surface-sunken px-2.5 text-[12px] text-ink-muted hover:text-ink"
-                >
-                  {n}
-                </button>
-              ))}
+          {!block && (
+            <div className="flex flex-wrap gap-1">
+              {(yours.length
+                ? yours.map((b) => ({ name: b.name, quadrant: b.quadrant }))
+                : SUGGESTED_ACTIVITIES[quadrant === "trabajo" ? "trabajo" : quadrant].slice(0, 5).map((n) => ({ name: n, quadrant }))
+              )
+                .filter((it) => it.name !== name)
+                .map((it) => (
+                  <button
+                    key={it.name}
+                    type="button"
+                    onClick={() => {
+                      setName(it.name);
+                      setQuadrant(it.quadrant);
+                      setSuggested(it.quadrant);
+                    }}
+                    style={quadrantStyle(it.quadrant)}
+                    className="pressable inline-flex h-7 items-center gap-1.5 rounded-full bg-surface-sunken pr-2.5 pl-2 text-[12px] text-ink-muted hover:text-ink"
+                  >
+                    <span aria-hidden className="size-1.5 rounded-full bg-[var(--q)]" />
+                    {it.name}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="flex items-center gap-1.5 text-[12px] text-ink-muted">
+            Categoría
+            {suggested && !manual && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-medium text-ink">
+                <Sparkles aria-hidden className="size-3" />
+                Sugerida
+              </span>
+            )}
+          </span>
+          <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-wrap gap-1.5">
+            {pickable.map((q) => (
+              <button
+                key={q.id}
+                type="button"
+                role="radio"
+                aria-checked={quadrant === q.id}
+                onClick={() => {
+                  setQuadrant(q.id);
+                  setManual(true);
+                }}
+                style={quadrantStyle(q.id)}
+                className={cn(
+                  "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors",
+                  quadrant === q.id ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line hover:bg-surface-sunken",
+                )}
+              >
+                <span className="grid size-6 place-items-center rounded-full bg-[var(--q-soft)] text-[var(--q)]">
+                  <QuadrantIcon id={q.id} className="size-3" />
+                </span>
+                {q.name}
+              </button>
+            ))}
           </div>
         </div>
 

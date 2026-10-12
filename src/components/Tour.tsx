@@ -10,8 +10,9 @@ export type TourStep = {
   target: string;
   title: string;
   body: string;
-  /** Otro texto para el celular (sin mouse). */
-  touchBody?: string;
+  /** En el celular (con pestañas): otro texto y, si hace falta, otra parte a resaltar. */
+  phoneBody?: string;
+  phoneTarget?: string;
 };
 
 type Rect = { top: number; left: number; width: number; height: number };
@@ -24,13 +25,15 @@ const CARD_W = 340;
  * Guía paso a paso: oscurece la pantalla, resalta una parte por vez y muestra un consejo al lado.
  * Se avanza con "Siguiente consejo" (o flechas / Enter) y se sale con "Saltar" (o Escape).
  */
-export function Tour({ steps: all, onClose }: { steps: TourStep[]; onClose: () => void }) {
-  // Solo los consejos de lo que se ve en esta pantalla (en el celular hay partes ocultas).
+export function Tour({ steps: all, phone = false, onClose }: { steps: TourStep[]; phone?: boolean; onClose: () => void }) {
+  // Los textos del celular, y solo los consejos de lo que se ve en esta pantalla.
   const [steps] = useState(() =>
-    all.filter((s) => {
-      const el = document.querySelector<HTMLElement>(`[data-tour="${s.target}"]`);
-      return !!el && el.getClientRects().length > 0;
-    }),
+    all
+      .map((s) => (phone ? { ...s, target: s.phoneTarget ?? s.target, body: s.phoneBody ?? s.body } : s))
+      .filter((s) => {
+        const el = document.querySelector<HTMLElement>(`[data-tour="${s.target}"]`);
+        return !!el && el.getClientRects().length > 0;
+      }),
   );
   const [i, setI] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
@@ -91,7 +94,8 @@ export function Tour({ steps: all, onClose }: { steps: TourStep[]; onClose: () =
   // Dónde va la tarjeta: abajo, arriba, a la derecha o a la izquierda de la parte; si no entra, en una esquina.
   let pos: React.CSSProperties;
   if (narrow) {
-    pos = { left: 16, right: 16, bottom: 16 };
+    // En el celular la tarjeta va abajo, salvo que lo resaltado esté abajo (por ejemplo, las pestañas).
+    pos = rect && rect.top + rect.height / 2 > vp.h / 2 && rect.height < vp.h / 2 ? { left: 16, right: 16, top: 16 } : { left: 16, right: 16, bottom: 16 };
   } else if (!rect) {
     pos = { left: Math.max(16, (vp.w - CARD_W) / 2), top: Math.max(16, (vp.h - cardH) / 2) };
   } else {
@@ -145,7 +149,7 @@ export function Tour({ steps: all, onClose }: { steps: TourStep[]; onClose: () =
             {step.title}
           </h2>
           <p id="tour-body" className="mt-1.5 text-[14px] leading-relaxed text-ink-muted">
-            {narrow && step.touchBody ? step.touchBody : step.body}
+            {step.body}
           </p>
         </div>
         <div className="mt-1 flex items-center justify-between gap-3">
@@ -181,27 +185,27 @@ export const MAIN_TOUR: TourStep[] = [
     target: "shares",
     title: "Tu balde, en porcentajes",
     body: "Cada color es una parte de tu vida: Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre. El número es cuánto de tu semana despierta se lleva cada una. Pasá el mouse para ver qué incluye y el detalle.",
-    touchBody:
+    phoneBody:
       "Cada color es una parte de tu vida: Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre. El número es cuánto de tu semana despierta se lleva cada una. Tocá una para ver qué incluye y el detalle.",
   },
   {
     target: "semana",
     title: "Tu semana tipo",
     body: "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Arrastrá sobre un espacio vacío para crear un bloque y elegí qué es y en qué días se repite.",
-    touchBody:
-      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o arrastrá el dedo para marcar el horario. Adentro del calendario el dedo no mueve la página: para moverte usá la barrita de la derecha o deslizá fuera del calendario.",
+    phoneBody:
+      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o arrastrá el dedo para marcar el horario.",
   },
   {
     target: "semana",
     title: "Editar bloques",
     body: "Tocá un bloque para cambiarle el horario, los días o la categoría. Agarralo de ⠿ para moverlo, estiralo desde los bordes y, si arrastrás adentro de un bloque, metés otro en el medio (por ejemplo, el almuerzo dentro del trabajo).",
-    touchBody:
+    phoneBody:
       "Tocá un bloque para cambiarle el horario, los días o la categoría, o para borrarlo. Arrastralo para moverlo (también a otro día); si lo agarrás desde el borde de arriba o de abajo, lo estirás.",
   },
   {
     target: "sueno-btn",
     title: "Tu sueño",
-    body: "Configurá a qué hora te dormís y te levantás, en semana y el finde. Se ve con rayitas en el calendario y queda fuera del balance.",
+    body: "Configurá a qué hora te dormís y te levantás, en semana y el finde. Se ve con lunitas en el calendario y queda fuera del balance.",
   },
   {
     target: "sueno",
@@ -212,22 +216,28 @@ export const MAIN_TOUR: TourStep[] = [
     target: "momentos",
     title: "Momentos del mes",
     body: "Vínculos (amor, familia, amigos) y los planes de Disfrute no van en el calendario: cargalos acá con el + cuando pasan. Elegís cuánto duró y con quién, y suman a tus porcentajes.",
+    phoneBody:
+      "En esta pestaña cargás Vínculos (amor, familia, amigos) y planes de Disfrute, que no van en el calendario. Elegís cuánto duró y con quién, y suman a tus porcentajes.",
+  },
+  {
+    target: "objetivos",
+    title: "Objetivos del año",
+    body: "Anotá metas por mes y elegí de qué tipo son (se sugiere solo). Marcalas cuando las cumplas; si se pasan de fecha quedan en rojo y las podés arrastrar a otro mes.",
+    phoneBody:
+      "Tus metas del año, mes por mes. Tocá “Agregar objetivo”: el tipo se sugiere solo y la fecha es opcional. Si se pasan de fecha quedan en rojo; tocalas para pasarlas a otro mes.",
   },
   {
     target: "tablero",
     title: "Resultados",
     body: "La torta de tu semana, el sueño, la carga de cada día y cómo vas cambiando semana a semana. Si está comprimido, tocalo para abrirlo.",
-  },
-  {
-    target: "objetivos",
-    title: "Objetivos del año",
-    body: "Anotá metas por mes y elegí de qué tipo son. Marcalas cuando las cumplas; si se pasan de fecha quedan en rojo y las podés arrastrar a otro mes.",
+    phoneBody: "La torta de tu semana, el sueño, la carga de cada día y cómo vas cambiando semana a semana.",
   },
   {
     target: "semana-header",
     title: "Armalo a tu gusto",
     body: "Tocá el encabezado de una sección para comprimirla y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
-    touchBody: "Tocá el encabezado de una sección para comprimirla o abrirla. Mantenelo apretado y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
+    phoneTarget: "tabs",
+    phoneBody: "Con estas pestañas vas de tu Semana a Momentos, Objetivos y Resultados. LifeBucket se acuerda de dónde quedaste.",
   },
   {
     target: "cuenta",

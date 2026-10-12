@@ -21,7 +21,6 @@ import { SleepPill } from "./SleepMeter";
 import { TOUR_EVENT, UserMenu } from "./UserMenu";
 import { MAIN_TOUR, Tour } from "./Tour";
 import { Welcome } from "./Welcome";
-import { ScrollRail } from "./ScrollRail";
 import { firstName, useUser } from "@/lib/supabase/use-user";
 import { TasksPanel } from "./TasksPanel";
 import { SecondaryButton, Sheet } from "./ui";
@@ -35,7 +34,14 @@ const DAY_NAME: Record<number, string> = { 1: "lunes", 2: "martes", 3: "miércol
 type Section = "semana" | "momentos" | "tablero" | "objetivos";
 const DEFAULT_ORDER: Section[] = ["semana", "momentos", "objetivos", "tablero"];
 const OPEN_KEY = "lb:open";
-const SECTION_LABEL: Record<string, string> = { semana: "Semana", momentos: "Momentos", tablero: "Resultados", objetivos: "Objetivos" };
+const TAB_KEY = "lb:tab";
+/** Las pestañas del celular, en este orden. */
+const TABS: { id: Section; label: string; icon: LucideIcon }[] = [
+  { id: "semana", label: "Semana", icon: CalendarDays },
+  { id: "momentos", label: "Momentos", icon: PartyPopper },
+  { id: "objetivos", label: "Objetivos", icon: ListChecks },
+  { id: "tablero", label: "Resultados", icon: BarChart3 },
+];
 // v2: Objetivos pasó a ir antes que Resultados (se arranca de nuevo con ese orden).
 const ORDER_KEY = "lb:sections:v2";
 
@@ -218,7 +224,11 @@ export function SimpleApp() {
     } catch {}
   }, [seenKey]);
   useEffect(() => {
-    const start = () => setIntro("tour");
+    const start = () => {
+      // La guía arranca por la Semana (en el celular, la pestaña).
+      setTab("semana");
+      setIntro("tour");
+    };
     window.addEventListener(TOUR_EVENT, start);
     return () => window.removeEventListener(TOUR_EVENT, start);
   }, []);
@@ -230,6 +240,23 @@ export function SimpleApp() {
 
   const desktop = useMediaQuery("(min-width: 1024px)");
   const wide = useMediaQuery("(min-width: 768px)");
+  // En el celular (y tablets angostas) cada sección es una pestaña: la Semana entra entera, sin scroll.
+  const phone = !desktop;
+  const [tab, setTab] = useState<Section>(() => {
+    try {
+      const saved = localStorage.getItem(TAB_KEY) as Section | null;
+      if (saved && DEFAULT_ORDER.includes(saved)) return saved;
+    } catch {}
+    return "semana";
+  });
+  const goTab = (t: Section) => {
+    if (t === tab) return;
+    play("click");
+    setTab(t);
+    try {
+      localStorage.setItem(TAB_KEY, t);
+    } catch {}
+  };
   const vh = useViewportHeight();
   // Sin scroll: la grilla usa todo el alto que queda debajo del encabezado.
   const gridHeight = Math.max(380, vh - (desktop ? 150 : 230));
@@ -283,7 +310,7 @@ export function SimpleApp() {
             className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
             <Moon aria-hidden className="size-4" />
-            Sueño
+            Configuración del sueño
           </button>
           </>
         }
@@ -353,6 +380,56 @@ export function SimpleApp() {
     ),
   };
 
+  const sleepButton = (
+    <button
+      type="button"
+      data-tour="sueno-btn"
+      onClick={() => setSleepOpen(true)}
+      className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+    >
+      <Moon aria-hidden className="size-4" />
+      Configuración del sueño
+    </button>
+  );
+  const phoneSections: Record<Section, React.ReactNode> = {
+    semana: (
+      <Panel id="semana" title="Semana" subtitle={weekRangeLabel(monday)} icon={CalendarDays} open onToggle={() => {}} desktop={false} fixed actions={sleepButton}>
+        <FitHeight>
+          {(h) => (
+            <WeekTemplateGrid
+              template={routine}
+              sleep={usePlanner.getState().sleep}
+              range={RANGE}
+              showSleep
+              height={h}
+              fit
+              onChange={save}
+              onCreateAt={(day, start, minutes) => setEditing({ day, start, minutes })}
+              onOpen={(block, day) => setEditing({ block, day, start: block.start })}
+              onDelete={(block, day) => (block.days.length > 1 ? setAskDelete({ block, day }) : remove(block, day, true))}
+              onMove={(block, day, next) => change({ block, day, toDay: next.day, patch: { start: next.start, minutes: next.minutes }, verb: next.minutes !== block.minutes ? "cambiar" : "mover" })}
+            />
+          )}
+        </FitHeight>
+      </Panel>
+    ),
+    momentos: (
+      <section data-tour="momentos" aria-label="Momentos del mes" className="card flex h-full min-h-0 flex-col overflow-hidden">
+        <MomentsPanel className="h-full" />
+      </section>
+    ),
+    objetivos: (
+      <section data-tour="objetivos" aria-label="Objetivos del año" className="card flex h-full min-h-0 flex-col overflow-hidden">
+        <TasksPanel className="h-full" />
+      </section>
+    ),
+    tablero: (
+      <Panel id="tablero" title="Resultados" icon={BarChart3} open onToggle={() => {}} desktop={false} fixed scroll>
+        <Dashboard />
+      </Panel>
+    ),
+  };
+
   const muteButton = (
     <button
       type="button"
@@ -371,7 +448,7 @@ export function SimpleApp() {
   );
 
   return (
-    <div className={cn("flex flex-col", desktop ? "h-dvh overflow-hidden" : "min-h-dvh")}>
+    <div className="flex h-dvh flex-col overflow-hidden">
       {wide ? (
         <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 pt-4 pb-3 sm:px-6">
           <div className="flex items-center gap-2.5">
@@ -409,6 +486,37 @@ export function SimpleApp() {
         </header>
       )}
 
+      {phone ? (
+        <>
+          <main id="contenido" key={tab} className="animate-fade-up flex min-h-0 flex-1 flex-col px-3 pb-2">
+            {phoneSections[tab]}
+          </main>
+          <nav
+            data-tour="tabs"
+            aria-label="Secciones"
+            className="grid shrink-0 grid-cols-4 border-t border-line bg-surface/85 px-2 pt-1.5 pb-[max(6px,env(safe-area-inset-bottom))] backdrop-blur-xl"
+          >
+            {TABS.map((t) => {
+              const on = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  data-tour={on ? undefined : t.id}
+                  aria-current={on ? "page" : undefined}
+                  onClick={() => goTab(t.id)}
+                  className={cn("pressable flex flex-col items-center gap-0.5 rounded-lg py-1 text-[11px] font-medium", on ? "text-ink" : "text-ink-muted")}
+                >
+                  <span className={cn("grid h-7 w-12 place-items-center rounded-full transition-colors duration-200", on && "bg-ink/[0.07]")}>
+                    <t.icon aria-hidden className="size-[18px]" strokeWidth={on ? 2.2 : 1.8} />
+                  </span>
+                  {t.label}
+                </button>
+              );
+            })}
+          </nav>
+        </>
+      ) : (
       <main
         id="contenido"
         onClick={(e) => {
@@ -424,8 +532,7 @@ export function SimpleApp() {
       >
         {order.map((s) => sections[s])}
       </main>
-
-      {!wide && intro === "none" && <ScrollRail labels={SECTION_LABEL} />}
+      )}
 
       {editing && (
         <BlockEditor
@@ -495,11 +602,12 @@ export function SimpleApp() {
           name={firstName(user)}
           onDone={(tour) => {
             markSeen();
+            if (tour) setTab("semana");
             setIntro(tour ? "tour" : "none");
           }}
         />
       )}
-      {intro === "tour" && <Tour steps={MAIN_TOUR} onClose={() => setIntro("none")} />}
+      {intro === "tour" && <Tour steps={MAIN_TOUR} phone={phone} onClose={() => setIntro("none")} />}
 
       {newWeek && intro === "none" && (
         <NewWeek
@@ -629,6 +737,7 @@ function Panel({
   actions,
   dimmed,
   over,
+  fixed,
   onHeaderDragStart,
   dropProps,
   children,
@@ -647,10 +756,28 @@ function Panel({
   dimmed?: boolean;
   /** Otra sección se está soltando acá (reordenar con el dedo). */
   over?: boolean;
-  onHeaderDragStart: (e: DragEvent) => void;
-  dropProps: { onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void; onDragEnd: () => void };
+  /** Pestaña del celular: ocupa todo y no se comprime ni se arrastra. */
+  fixed?: boolean;
+  onHeaderDragStart?: (e: DragEvent) => void;
+  dropProps?: { onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void; onDragEnd: () => void };
   children: React.ReactNode;
 }) {
+  if (fixed) {
+    return (
+      <section data-tour={id} aria-labelledby={`panel-${id}`} className="card flex h-full min-h-0 flex-col overflow-hidden">
+        <header data-tour={`${id}-header`} className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <h2 id={`panel-${id}`} className="type-title">
+              {title}
+            </h2>
+            {subtitle && <span className="hidden truncate text-[12px] text-ink-muted tabular-nums min-[380px]:inline">{subtitle}</span>}
+          </span>
+          {actions && <span className="flex shrink-0 items-center gap-1">{actions}</span>}
+        </header>
+        <div className={cn("min-h-0 flex-1 p-3", scroll && "overflow-y-auto p-4")}>{children}</div>
+      </section>
+    );
+  }
   if (!open) return <Collapsed tour={id} over={over} title={title} icon={icon} onOpen={onToggle} desktop={desktop} />;
   return (
     <section
@@ -810,7 +937,7 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
     const open = items.find((it) => it.id === picked);
     return (
       <div data-tour="shares" className="flex flex-col gap-2">
-        <ul aria-label="Tu semana en porcentajes" className="grid grid-cols-3 gap-1.5">
+        <ul aria-label="Tu semana en porcentajes" className="grid grid-cols-3 gap-1">
           {items.map((it) => (
             <li key={it.id} style={partStyle(it.id)}>
               <button
@@ -818,7 +945,7 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
                 aria-expanded={picked === it.id}
                 onClick={() => setPicked(picked === it.id ? null : it.id)}
                 className={cn(
-                  "flex w-full items-center gap-1 rounded-full bg-surface/80 px-2 py-1.5 text-[11.5px] tabular-nums shadow-[var(--shadow-card)] transition-shadow",
+                  "flex w-full items-center gap-1 rounded-full bg-surface/80 px-2 py-1 text-[11.5px] tabular-nums shadow-[var(--shadow-card)] transition-shadow",
                   picked === it.id && "ring-2 ring-[var(--q)]",
                 )}
               >
@@ -866,3 +993,20 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
   );
 }
 
+/** Mide el alto disponible y se lo pasa al contenido (la grilla de la semana se ajusta a la pantalla). */
+function FitHeight({ children }: { children: (height: number) => React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [h, setH] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => setH(Math.floor(e.contentRect.height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="h-full min-h-0 overflow-hidden">
+      {h > 0 && children(h)}
+    </div>
+  );
+}

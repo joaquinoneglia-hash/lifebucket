@@ -1,6 +1,8 @@
 "use client";
 
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, PanelRightClose, Plus, X } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, GripVertical, PanelRightClose, Plus, Trash2, X } from "lucide-react";
+import { guessQuadrant } from "@/lib/categorize";
+import { GhostButton, PrimaryButton, Segmented, Select, Sheet } from "./ui";
 import { useMediaQuery } from "@/lib/hooks";
 import { useState, type DragEvent } from "react";
 import { fromKey, toKey } from "@/lib/dates";
@@ -189,27 +191,43 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
   const addTask = usePlanner((s) => s.addTask);
   const toggleTask = usePlanner((s) => s.toggleTask);
   const removeTask = usePlanner((s) => s.removeTask);
+  // En el celular se suma y se edita en una hoja (más cómoda que una línea con el teclado).
+  const phone = !useMediaQuery("(min-width: 1024px)");
+  const [sheet, setSheet] = useState<{ task?: YearTask } | null>(null);
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [kind, setKind] = useState<TaskKind>("otro");
+  const [manualKind, setManualKind] = useState(false);
   const [y, m] = month.split("-").map(Number);
   const last = new Date(y, m, 0).getDate();
+
+  const add = () => {
+    if (!title.trim()) return;
+    addTask({ title: title.trim(), month, date: date || undefined, kind });
+    play("pop");
+    setTitle("");
+    setDate("");
+    setKind("otro");
+    setManualKind(false);
+  };
 
   return (
     <div className="flex flex-col gap-1 px-2 pb-3">
       {list.map((t) => {
         const late = isLate(t, today);
+        const kindLabel = TASK_KINDS.find((k) => k.id === t.kind && k.id !== "otro")?.label;
         return (
           <div
             key={t.id}
-            draggable
+            draggable={!phone}
             onDragStart={(e) => {
               e.dataTransfer.setData("text/task", t.id);
               e.dataTransfer.effectAllowed = "move";
             }}
-            title={late ? "Venció: arrastralo a otro mes" : "Arrastralo para pasarlo a otro mes"}
+            title={phone ? undefined : late ? "Venció: arrastralo a otro mes" : "Arrastralo para pasarlo a otro mes"}
             className={cn(
-              "group flex cursor-grab items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-sunken/60 active:cursor-grabbing",
+              "group flex items-center gap-2 rounded-md px-1 py-1 hover:bg-surface-sunken/60",
+              !phone && "cursor-grab active:cursor-grabbing",
               late && "bg-[color-mix(in_oklab,var(--color-danger)_8%,transparent)]",
             )}
           >
@@ -223,9 +241,21 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
               aria-label={`${t.title}: ${t.done ? "hecho" : "pendiente"}`}
               className="size-4 shrink-0 cursor-pointer accent-[var(--color-ink)]"
             />
-            <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: kindColor(t.kind) }} />
-            <span className={cn("min-w-0 flex-1 truncate text-[13px]", t.done && "text-ink-muted line-through", late && "font-medium text-danger")}>{t.title}</span>
-            {t.date && <span className={cn("shrink-0 text-[11px] tabular-nums", late ? "text-danger" : "text-ink-muted")}>{dayMonth.format(fromKey(t.date))}</span>}
+            <button
+              type="button"
+              onClick={() => setSheet({ task: t })}
+              aria-label={`Editar ${t.title}`}
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            >
+              <span className={cn("min-w-0 flex-1 truncate text-[13px]", t.done && "text-ink-muted line-through", late && "font-medium text-danger")}>{t.title}</span>
+              {kindLabel && (
+                <span className="inline-flex shrink-0 items-center gap-1 text-[10.5px] font-medium text-ink-muted">
+                  <span aria-hidden className="size-1.5 rounded-full" style={{ background: kindColor(t.kind) }} />
+                  {kindLabel}
+                </span>
+              )}
+              {t.date && <span className={cn("shrink-0 text-[11px] tabular-nums", late ? "text-danger" : "text-ink-muted")}>{dayMonth.format(fromKey(t.date))}</span>}
+            </button>
             <button
               type="button"
               aria-label={`Borrar ${t.title}`}
@@ -233,51 +263,232 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
                 play("delete");
                 removeTask(t.id);
               }}
-              className="grid size-6 shrink-0 place-items-center rounded text-ink-muted opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100"
+              className="grid size-7 shrink-0 place-items-center rounded text-ink-muted opacity-0 group-hover:opacity-100 hover:text-danger focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
             >
-              <X aria-hidden className="size-3.5" />
+              <Trash2 aria-hidden className="size-3.5" />
             </button>
           </div>
         );
       })}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!title.trim()) return;
-          addTask({ title: title.trim(), month, date: date || undefined, kind });
-          play("pop");
-          setTitle("");
-          setDate("");
-        }}
-        className="flex flex-col gap-1.5 pt-1"
-      >
-        <div className="flex items-center gap-1.5">
-          <Plus aria-hidden className="size-4 shrink-0 text-ink-faint" />
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Objetivo…"
-            aria-label="Nuevo objetivo"
-            className="h-8 min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 text-[13px] placeholder:text-ink-faint hover:border-line focus:border-ink focus:bg-surface focus:outline-none"
-          />
-          <input
-            type="date"
-            value={date}
-            min={`${month}-01`}
-            max={`${month}-${pad(last)}`}
-            onChange={(e) => setDate(e.target.value)}
-            aria-label="Fecha (opcional)"
-            title="Fecha (opcional)"
-            className="h-8 w-[112px] rounded-md border border-line bg-surface px-1.5 text-[12px] text-ink-muted focus:border-ink focus:outline-none [@media(pointer:coarse)]:w-[136px]"
-          />
-          <KindPicker value={kind} onChange={setKind} />
-        </div>
-      </form>
+
+      {phone ? (
+        <button
+          type="button"
+          onClick={() => setSheet({})}
+          className="pressable mt-1 flex h-9 items-center gap-1.5 rounded-md px-1.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+        >
+          <Plus aria-hidden className="size-4" />
+          Agregar objetivo
+        </button>
+      ) : (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            add();
+          }}
+          className="flex flex-col gap-1.5 pt-1"
+        >
+          <div className="flex items-center gap-1.5">
+            <input
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (!manualKind) setKind(kindFor(e.target.value));
+              }}
+              placeholder="Nuevo objetivo…"
+              aria-label="Nuevo objetivo"
+              className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[13px] placeholder:text-ink-faint focus:border-ink focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={!title.trim()}
+              aria-label="Agregar objetivo"
+              title="Agregar (Enter)"
+              className="pressable grid size-8 shrink-0 place-items-center rounded-md bg-ink text-surface hover:bg-ink/90 disabled:opacity-30"
+            >
+              <Plus aria-hidden className="size-4" />
+            </button>
+          </div>
+          {title.trim() && (
+            <div className="animate-fade-up flex items-center gap-1.5">
+              <KindPicker
+                value={kind}
+                onChange={(k) => {
+                  setKind(k);
+                  setManualKind(true);
+                }}
+              />
+              <input
+                type="date"
+                value={date}
+                min={`${month}-01`}
+                max={`${month}-${pad(last)}`}
+                onChange={(e) => setDate(e.target.value)}
+                aria-label="Fecha (opcional)"
+                title="Fecha (opcional)"
+                className="h-8 w-[118px] rounded-md border border-line bg-surface px-1.5 text-[12px] text-ink-muted focus:border-ink focus:outline-none"
+              />
+              <span className="text-[11px] text-ink-faint">{date ? "" : "Sin fecha"}</span>
+            </div>
+          )}
+        </form>
+      )}
+
+      {sheet && <TaskSheet month={month} task={sheet.task} isMobile={phone} onClose={() => setSheet(null)} />}
     </div>
   );
 }
 
-/** El tipo del objetivo, al final de la línea: un puntito de color que abre la lista. */
+/** El tipo de objetivo que sugiere el texto (lo que no es Trabajo, Cuerpo, Mente o Disfrute va a "Otro"). */
+function kindFor(text: string): TaskKind {
+  const q = guessQuadrant(text);
+  return q === "trabajo" || q === "cuerpo" || q === "mente" || q === "alma" ? q : "otro";
+}
+
+/**
+ * Sumar o cambiar un objetivo en una hoja: qué es, de qué tipo (se sugiere solo), en qué mes y si tiene
+ * fecha o no. El botón grande hace lo mismo que el Enter de la compu.
+ */
+function TaskSheet({ month, task, isMobile, onClose }: { month: string; task?: YearTask; isMobile: boolean; onClose: () => void }) {
+  const addTask = usePlanner((s) => s.addTask);
+  const updateTask = usePlanner((s) => s.updateTask);
+  const removeTask = usePlanner((s) => s.removeTask);
+  const [title, setTitle] = useState(task?.title ?? "");
+  const [kind, setKind] = useState<TaskKind>(task?.kind ?? "otro");
+  const [manualKind, setManualKind] = useState(!!task);
+  const [inMonth, setInMonth] = useState(task?.month ?? month);
+  const [withDate, setWithDate] = useState(!!task?.date);
+  const [date, setDate] = useState(task?.date ?? "");
+  const [y, m] = inMonth.split("-").map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const valid = title.trim() && (!withDate || date);
+
+  const save = () => {
+    if (!valid) return;
+    const data = { title: title.trim(), kind, month: inMonth, date: withDate && date.startsWith(inMonth) ? date : undefined };
+    if (task) updateTask(task.id, data);
+    else addTask(data);
+    play("pop");
+    onClose();
+  };
+
+  return (
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="task-sheet-title" width="max-w-[440px]">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+        className="flex flex-col gap-4 p-5"
+      >
+        <h2 id="task-sheet-title" className="type-headline">
+          {task ? "Cambiar objetivo" : "Nuevo objetivo"}
+        </h2>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-[12px] text-ink-muted">¿Qué querés lograr?</span>
+          <input
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (!manualKind) setKind(kindFor(e.target.value));
+            }}
+            placeholder="Correr 10 km, leer 2 libros, un viaje…"
+            enterKeyHint="done"
+            autoComplete="off"
+            className="h-11 rounded-md border border-line bg-surface px-3 text-[14px] focus:border-ink focus:outline-none"
+          />
+        </label>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[12px] text-ink-muted">Tipo{!manualKind && kind !== "otro" ? " · sugerido, lo podés cambiar" : ""}</span>
+          <div role="radiogroup" aria-label="Tipo de objetivo" className="flex flex-wrap gap-1.5">
+            {TASK_KINDS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                role="radio"
+                aria-checked={kind === k.id}
+                onClick={() => {
+                  setKind(k.id);
+                  setManualKind(true);
+                }}
+                className={cn(
+                  "pressable inline-flex h-9 items-center gap-1.5 rounded-full border px-3 text-[13px] font-medium",
+                  kind === k.id ? "border-ink bg-ink text-surface" : "border-line text-ink-muted",
+                )}
+              >
+                <span aria-hidden className="size-2 rounded-full" style={{ background: kindColor(k.id) }} />
+                {k.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+          <label className="flex min-w-0 flex-col gap-1.5">
+            <span className="text-[12px] text-ink-muted">Mes</span>
+            <Select
+              label="Mes"
+              value={inMonth}
+              onChange={(v) => setInMonth(v)}
+              options={MONTHS.map((name, i) => ({ value: `${y}-${pad(i + 1)}`, label: name }))}
+            />
+          </label>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px] text-ink-muted">Fecha</span>
+            <Segmented
+              label="Fecha"
+              value={withDate ? "con" : "sin"}
+              onChange={(v) => setWithDate(v === "con")}
+              options={[
+                { id: "sin", label: "Sin fecha" },
+                { id: "con", label: "Con fecha" },
+              ]}
+            />
+          </div>
+        </div>
+        {withDate && (
+          <input
+            type="date"
+            value={date}
+            min={`${inMonth}-01`}
+            max={`${inMonth}-${pad(last)}`}
+            onChange={(e) => setDate(e.target.value)}
+            aria-label="Fecha"
+            className="h-11 rounded-md border border-line bg-surface px-3 text-[14px] focus:border-ink focus:outline-none"
+          />
+        )}
+
+        <footer className="flex items-center justify-between gap-2 pt-1">
+          {task ? (
+            <GhostButton
+              danger
+              onClick={() => {
+                play("delete");
+                removeTask(task.id);
+                onClose();
+              }}
+            >
+              <Trash2 aria-hidden className="size-4" />
+              Borrar
+            </GhostButton>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <GhostButton onClick={onClose}>Cancelar</GhostButton>
+            <PrimaryButton type="submit" disabled={!valid} className="h-11 px-6">
+              {task ? "Guardar" : "Agregar"}
+            </PrimaryButton>
+          </div>
+        </footer>
+      </form>
+    </Sheet>
+  );
+}
+
+/** El tipo del objetivo: el color y el nombre, abre la lista. */
 function KindPicker({ value, onChange }: { value: TaskKind; onChange: (k: TaskKind) => void }) {
   const [open, setOpen] = useState(false);
   const current = TASK_KINDS.find((k) => k.id === value)!;
@@ -289,11 +500,12 @@ function KindPicker({ value, onChange }: { value: TaskKind; onChange: (k: TaskKi
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Tipo: ${current.label}`}
-        title={`Tipo: ${current.label}`}
-        className="flex h-8 items-center gap-1 rounded-md border border-line bg-surface px-2 hover:bg-surface-sunken"
+        title="Tipo de objetivo"
+        className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-[12px] text-ink-muted hover:bg-surface-sunken"
       >
-        <span aria-hidden className="size-2.5 rounded-full" style={{ background: kindColor(value) }} />
-        <ChevronDown aria-hidden className="size-3 text-ink-muted" />
+        <span aria-hidden className="size-2 rounded-full" style={{ background: kindColor(value) }} />
+        {current.label}
+        <ChevronDown aria-hidden className="size-3" />
       </button>
       {open && (
         <ul role="listbox" aria-label="Tipo de objetivo" className="animate-fade-up absolute top-full right-0 z-30 mt-1 w-36 rounded-lg bg-surface p-1 shadow-[var(--shadow-popover)]">
