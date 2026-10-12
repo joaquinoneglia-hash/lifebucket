@@ -29,11 +29,16 @@ function SleepBar({ perNight, thick }: { perNight: number; thick?: boolean }) {
 }
 
 /** Versión chica para el encabezado: horas por noche y la barrita; al pasar el mouse, el detalle. */
-export function SleepPill({ compact }: { compact?: boolean }) {
+export function SleepPill({ compact, onClick }: { compact?: boolean; onClick?: () => void }) {
   const sleep = usePlanner((s) => s.sleep);
   const st = sleepStats(sleep);
   return (
-    <div tabIndex={0} className="group relative flex items-center gap-2 rounded-full bg-surface/80 px-3 py-2 shadow-[var(--shadow-card)]">
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Sueño: ${hoursLabel(st.perNight)} por noche. Tocá para configurarlo`}
+      className="pressable group relative flex items-center gap-2 rounded-full bg-surface/80 px-3 py-2 text-left shadow-[var(--shadow-card)] hover:bg-surface"
+    >
       <Moon aria-hidden className="size-4 text-[var(--color-sleep)]" />
       <span className="text-[13px] whitespace-nowrap tabular-nums">
         <span className="font-semibold">{hoursLabel(st.perNight)}</span>
@@ -48,13 +53,13 @@ export function SleepPill({ compact }: { compact?: boolean }) {
       <div
         role="tooltip"
         className={cn(
-          "pointer-events-none absolute top-full z-40 mt-3 hidden w-60 max-w-[calc(100vw-32px)] rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] group-hover:block group-focus:block",
+          "pointer-events-none absolute top-full z-40 mt-3 hidden w-60 max-w-[calc(100vw-32px)] rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] [@media(hover:hover)]:group-hover:block",
           compact ? "left-0" : "right-0",
         )}
       >
         <SleepSummary st={st} />
       </div>
-    </div>
+    </button>
   );
 }
 

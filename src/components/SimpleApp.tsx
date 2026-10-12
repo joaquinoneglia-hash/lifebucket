@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, CalendarDays, ChevronUp, GripVertical, ListChecks, PartyPopper, Moon, PanelLeftOpen, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronUp, Eraser, GripVertical, ListChecks, PartyPopper, PanelLeftOpen, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { cn } from "@/lib/format";
 import { formatTime } from "@/lib/time";
@@ -22,6 +22,7 @@ import { SleepPill } from "./SleepMeter";
 import { TOUR_EVENT, UserMenu } from "./UserMenu";
 import { MAIN_TOUR, Tour } from "./Tour";
 import { Welcome } from "./Welcome";
+import { AssistantFab } from "./AssistantFab";
 import { ScrollLock } from "./ScrollLock";
 import { firstName, useUser } from "@/lib/supabase/use-user";
 import { TasksPanel } from "./TasksPanel";
@@ -223,6 +224,18 @@ export function SimpleApp() {
   const [askDelete, setAskDelete] = useState<{ block: RoutineBlock; day: number } | null>(null);
   const [askChange, setAskChange] = useState<Change | null>(null);
   const [sleepOpen, setSleepOpen] = useState(false);
+  const [askClear, setAskClear] = useState(false);
+  const clearButton = (
+    <button
+      type="button"
+      onClick={() => setAskClear(true)}
+      disabled={!routine.length}
+      className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-danger disabled:opacity-40"
+    >
+      <Eraser aria-hidden className="size-4" />
+      Limpiar todo
+    </button>
+  );
 
   // Primera vez de cada cuenta: bienvenida y después (si quiere) la guía. La guía se puede volver a ver desde la cuenta.
   const user = useUser();
@@ -314,15 +327,7 @@ export function SimpleApp() {
         actions={
           <>
           <span className="hidden text-[11.5px] text-ink-faint 2xl:inline">Arrastrá dentro de un bloque para meter otro · ⠿ para mover</span>
-          <button
-            type="button"
-            data-tour="sueno-btn"
-            onClick={() => setSleepOpen(true)}
-            className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
-          >
-            <Moon aria-hidden className="size-4" />
-            Configuración del sueño
-          </button>
+          {clearButton}
           </>
         }
       >
@@ -392,20 +397,10 @@ export function SimpleApp() {
     ),
   };
 
-  const sleepButton = (
-    <button
-      type="button"
-      data-tour="sueno-btn"
-      onClick={() => setSleepOpen(true)}
-      className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
-    >
-      <Moon aria-hidden className="size-4" />
-      Configuración del sueño
-    </button>
-  );
+
   const phoneSections: Record<Section, React.ReactNode> = {
     semana: (
-      <Panel id="semana" title="Semana" subtitle={weekRangeLabel(monday)} icon={CalendarDays} open onToggle={() => {}} desktop={false} fixed actions={sleepButton}>
+      <Panel id="semana" title="Semana" subtitle={weekRangeLabel(monday)} icon={CalendarDays} open onToggle={() => {}} desktop={false} fixed actions={clearButton}>
         <FitHeight>
           {(h) => (
             <WeekTemplateGrid
@@ -472,7 +467,7 @@ export function SimpleApp() {
           <Shares routine={routine} />
           <div className="flex items-center justify-end gap-2">
             <div data-tour="sueno">
-              <SleepPill />
+              <SleepPill onClick={() => setSleepOpen(true)} />
             </div>
             <div data-tour="cuenta" className="flex items-center gap-2">
               {muteButton}
@@ -485,7 +480,7 @@ export function SimpleApp() {
         <header className="flex shrink-0 flex-col gap-2.5 px-4 pt-3 pb-2">
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
             <div data-tour="sueno" className="justify-self-start">
-              <SleepPill compact />
+              <SleepPill compact onClick={() => setSleepOpen(true)} />
             </div>
             <h1 className="flex items-center gap-1.5">
               <BrandMark size={22} />
@@ -612,6 +607,25 @@ export function SimpleApp() {
           isMobile={!desktop}
         />
       )}
+
+      {askClear && (
+        <Ask
+          title="¿Limpiar toda la semana?"
+          text="Se borran todos los bloques de tu semana tipo. Tus momentos, tus objetivos y tu sueño quedan como están."
+          all="Limpiar todo"
+          danger
+          onOne={() => {}}
+          onAll={() => {
+            save([]);
+            setAskClear(false);
+            play("delete");
+          }}
+          onCancel={() => setAskClear(false)}
+          isMobile={!desktop}
+        />
+      )}
+
+      {intro === "none" && <AssistantFab raised={phone && tab === "momentos"} />}
 
       {sleepOpen && <SleepDialog isMobile={!desktop} onClose={() => setSleepOpen(false)} />}
 
@@ -884,11 +898,12 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
   const bonds = Math.min(bondWeekMinutes(moments), Math.max(0, WEEK_MINUTES - used));
   const fun = funWeekMinutes(moments);
   const funMin = Math.min(fun.minutes, Math.max(0, WEEK_MINUTES - used - bonds));
+  // De mayor a menor: lo que más tiempo te lleva, primero.
   const items = [
     ...busy.map((it) => (it.id === "alma" ? { ...it, value: it.value + funMin } : it)),
     { id: "vinculos" as QuadrantId, value: bonds },
     { id: "libre" as QuadrantId, value: Math.max(0, WEEK_MINUTES - used - bonds - funMin) },
-  ];
+  ].sort((a, b) => b.value - a.value);
   const pct = (m: number) => Math.round((m / WEEK_MINUTES) * 100);
   const label: Record<string, string> = { trabajo: "Trabajo", cuerpo: "Cuerpo", mente: "Mente", alma: "Disfrute", vinculos: "Vínculos", libre: "Libre" };
 
@@ -993,7 +1008,6 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
           style={partStyle(it.id)}
           className={cn(
             "group relative flex cursor-default items-center gap-1.5 rounded-full text-[13px] tabular-nums outline-offset-4",
-            it.id === "libre" && "border-l border-line pl-4",
           )}
         >
           <span aria-hidden className="size-2 rounded-full bg-[var(--q)]" />

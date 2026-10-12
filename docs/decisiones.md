@@ -2,6 +2,14 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-11 · Asistente con IA, limpiar todo y aclaraciones
+
+- Asistente (botón flotante): pedís cambios hablando o escribiendo y propone bloques, cambios, momentos u objetivos; se aplican solo si confirmás. Usa Claude Sonnet 5.5 (`WEEK_MODEL`): entiende bien modificaciones en lenguaje natural y responde rápido, que importa con voz. Voz con el reconocimiento del navegador (es-AR). Necesita `ANTHROPIC_API_KEY` en el servidor (Vercel); sin clave avisa que no está activado. Ruta `src/app/api/week-ai`, lógica en `src/lib/week-ai.ts`.
+- El sueño se configura tocando la lunita de arriba; donde estaba ese botón va "Limpiar todo" (borra los bloques de la semana, con confirmación).
+- Los porcentajes de arriba se ordenan de mayor a menor.
+- Momentos muestra cuánto suman por semana: las horas del mes se reparten en ~4,3 semanas (24 h en el mes ≈ 5,6 h por semana ≈ 4% de la semana despierta).
+- Objetivos aclara que no cambian el balance. La bienvenida y la guía aclaran que LifeBucket no es una agenda de eventos sino la semana tipo en bloques.
+
 ## 2026-10-11 · Detalles del calendario en el celular
 
 - Las hojas (sumar a tu semana, sueño, etc.) se cierran también deslizándolas para abajo desde la manija o el borde de arriba.

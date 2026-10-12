@@ -27,6 +27,8 @@ const shift = (month: string, by: number) => {
 };
 const monthName = (month: string) => MONTHS[Number(month.slice(5, 7)) - 1];
 const HOURS = [1, 2, 3, 4, 5, 6];
+/** Un mes tiene ~4,3 semanas: así se pasan las horas del mes a los porcentajes de la semana. */
+const WEEKS_PER_MONTH = 4.3;
 const hoursText = (h: number) => `${String(h).replace(".", ",")} h`;
 
 /** Todos los tipos: los tres de Vínculos y Disfrute. */
@@ -129,15 +131,20 @@ export function MomentsPanel({
 }
 
 /** El total de una parte en el mes. */
-function Summary({ label, color, hours, count }: { label: string; color: string; hours: number; count: number }) {
+function Summary({ label, color, hours }: { label: string; color: string; hours: number; count?: number }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-surface-sunken/70 px-2.5 py-1.5">
-      <span aria-hidden className="h-6 w-1 rounded-full" style={{ background: color }} />
+      <span aria-hidden className="w-1 self-stretch rounded-full" style={{ background: color }} />
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="text-[11px] text-ink-muted">{label}</span>
         <span className="text-[13px] font-semibold tabular-nums">
-          {hoursText(hours)} <span className="font-normal text-ink-muted">· {count}</span>
+          {hoursText(hours)} <span className="font-normal text-ink-muted">en el mes</span>
         </span>
+        {hours > 0 && (
+          <span className="text-[10.5px] text-ink-muted tabular-nums" title="Los momentos del mes se reparten en sus semanas: así suman a los porcentajes de arriba.">
+            ≈ {hoursText(Math.round((hours / WEEKS_PER_MONTH) * 10) / 10)} por semana
+          </span>
+        )}
       </span>
     </div>
   );

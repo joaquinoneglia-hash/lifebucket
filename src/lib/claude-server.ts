@@ -5,6 +5,12 @@ import { NextResponse } from "next/server";
 /** Modelo para todas las funciones con IA de LifeBucket. */
 export const MODEL = "claude-opus-5-5";
 
+/**
+ * Modelo del asistente de la semana (el botón flotante): entiende bien pedidos en lenguaje natural y
+ * modificaciones ("pasá el gimnasio al martes") y responde rápido, que importa cuando hablás.
+ */
+export const WEEK_MODEL = "claude-sonnet-5-5";
+
 export const client = new Anthropic();
 
 export const MISSING_KEY = "Falta configurar la clave de la API de Claude (ANTHROPIC_API_KEY en .env.local).";

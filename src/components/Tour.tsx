@@ -190,6 +190,11 @@ export const MAIN_TOUR: TourStep[] = [
   },
   {
     target: "semana",
+    title: "No es una agenda",
+    body: "LifeBucket no es para anotar reuniones, turnos o salidas con fecha y hora. Es tu semana tipo armada en bloques (trabajo, gimnasio, estudio, descanso…) para ver de un vistazo cómo estás repartiendo tu tiempo y qué querés cambiar.",
+  },
+  {
+    target: "semana",
     title: "Tu semana tipo",
     body: "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Arrastrá sobre un espacio vacío para crear un bloque y elegí qué es y en qué días se repite.",
     phoneBody:
@@ -203,14 +208,9 @@ export const MAIN_TOUR: TourStep[] = [
       "Tocá un bloque para cambiarle el horario, los días o la categoría, o para borrarlo. Arrastralo para moverlo (también a otro día); si lo agarrás desde el borde de arriba o de abajo, lo estirás.",
   },
   {
-    target: "sueno-btn",
-    title: "Tu sueño",
-    body: "Configurá a qué hora te dormís y te levantás, en semana y el finde. Se ve con lunitas en el calendario y queda fuera del balance.",
-  },
-  {
     target: "sueno",
-    title: "¿Dormís lo suficiente?",
-    body: "Tus horas por noche contra la meta de 8 h. La franja verde es lo recomendado (entre 7 y 9 h).",
+    title: "Tu sueño",
+    body: "Tus horas por noche contra la meta de 8 h (lo recomendado es entre 7 y 9). Tocá la lunita para configurar a qué hora te dormís y te levantás; en el calendario se ve con lunitas y queda fuera del balance.",
   },
   {
     target: "momentos",
@@ -238,6 +238,11 @@ export const MAIN_TOUR: TourStep[] = [
     body: "Tocá el encabezado de una sección para comprimirla y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
     phoneTarget: "tabs",
     phoneBody: "Con estas pestañas vas de tu Semana a Momentos, Objetivos y Resultados. LifeBucket se acuerda de dónde quedaste.",
+  },
+  {
+    target: "asistente",
+    title: "Tu asistente",
+    body: "Pedile cambios hablando o escribiendo: «gimnasio lunes y jueves de 7 a 8», «pasá el almuerzo a las 14», «ayer cené con amigos». Te muestra lo que va a hacer y lo aplicás con un toque.",
   },
   {
     target: "cuenta",

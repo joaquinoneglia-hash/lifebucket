@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, ChevronUp, GripVertical, PanelRightClose, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, GripVertical, Info, PanelRightClose, Plus, Trash2, X } from "lucide-react";
 import { guessQuadrant } from "@/lib/categorize";
 import { GhostButton, PrimaryButton, Segmented, Select, Sheet } from "./ui";
 import { useMediaQuery } from "@/lib/hooks";
@@ -87,6 +87,7 @@ export function TasksPanel({
       </header>
 
       <ol className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        <BalanceNote />
         {years.map((y) => {
           const list = tasks.filter((t) => t.month.startsWith(`${y}-`));
           const isOpen = openYears.includes(y);
@@ -553,4 +554,39 @@ function KindPicker({ value, onChange }: { value: TaskKind; onChange: (k: TaskKi
 function CollapseIcon() {
   const desktop = useMediaQuery("(min-width: 1024px)");
   return desktop ? <PanelRightClose aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />;
+}
+
+const NOTE_KEY = "lb:tasks-note";
+/** Una aclaración arriba de los objetivos (se cierra y no vuelve a aparecer). */
+function BalanceNote() {
+  const [show, setShow] = useState(() => {
+    try {
+      return !localStorage.getItem(NOTE_KEY);
+    } catch {
+      return true;
+    }
+  });
+  if (!show) return null;
+  return (
+    <li className="mx-1 mb-2 flex items-start gap-2 rounded-xl bg-surface-sunken px-3 py-2.5">
+      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />
+      <p className="flex-1 text-[12.5px] leading-snug text-ink-muted">
+        <span className="font-semibold text-ink">Tus objetivos no cambian tu balance de vida.</span> Están para que te organices: el balance sale solo de tu
+        semana y tus momentos.
+      </p>
+      <button
+        type="button"
+        aria-label="Entendido, no mostrar más"
+        onClick={() => {
+          setShow(false);
+          try {
+            localStorage.setItem(NOTE_KEY, "1");
+          } catch {}
+        }}
+        className="pressable -mt-0.5 -mr-1 grid size-7 shrink-0 place-items-center rounded-full text-ink-muted hover:bg-surface hover:text-ink"
+      >
+        <X aria-hidden className="size-3.5" />
+      </button>
+    </li>
+  );
 }

@@ -106,7 +106,9 @@ export function Welcome({ name, onDone }: { name?: string; onDone: (tour: boolea
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-[13px] leading-snug text-ink-muted">Tu semana es un balde de horas. Cada parte de tu vida lo llena con su color.</p>
+          <p className="mt-4 text-[13px] leading-snug text-ink-muted">
+            No es una agenda de reuniones ni de salidas: es tu semana tipo en bloques, para ver cómo repartís tu tiempo.
+          </p>
         </div>
 
         <div className="animate-welcome-rise mt-9 flex w-full max-w-[320px] flex-col gap-2" style={at(2800)}>
