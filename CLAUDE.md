@@ -65,7 +65,7 @@ docs/
 PRODUCT.md, DESIGN.md
 ```
 
-Modelo: el día despierto está 100% asignado (lo no agendado es Libre); el sueño es fijo y queda fuera del balance. Para medir un período en el modo completo usar `periodBlocks()` de `src/lib/report.ts`, no `inPeriod()`.
+Modelo: los % son sobre la semana entera (168 h). El Sueño es una categoría más (sale del horario de sueño, `weekMinutes()` en `src/lib/week-shares.ts`); el resto del tiempo despierto sin bloques es Libre. Para medir un período en el modo completo usar `periodBlocks()` de `src/lib/report.ts`, no `inPeriod()`.
 
 ## Reglas de trabajo
 

@@ -6,16 +6,17 @@ import { BrandMark } from "./BrandMark";
 
 /** Una semana de ejemplo para la barra: cada parte con su color. */
 const DEMO: { id: string; label: string; share: number }[] = [
-  { id: "trabajo", label: "Trabajo", share: 30 },
-  { id: "cuerpo", label: "Cuerpo", share: 9 },
-  { id: "mente", label: "Mente", share: 8 },
-  { id: "alma", label: "Disfrute", share: 13 },
-  { id: "vinculos", label: "Vínculos", share: 8 },
-  { id: "libre", label: "Libre", share: 32 },
+  { id: "sueno", label: "Sueño", share: 33 },
+  { id: "trabajo", label: "Trabajo", share: 24 },
+  { id: "cuerpo", label: "Cuerpo", share: 6 },
+  { id: "mente", label: "Mente", share: 5 },
+  { id: "alma", label: "Disfrute", share: 9 },
+  { id: "vinculos", label: "Vínculos", share: 5 },
+  { id: "libre", label: "Libre", share: 18 },
 ];
 
 /** Libre usa el gris de la app; el resto, el color de su parte. */
-const colorOf = (id: string) => (id === "libre" ? "#aab1be" : `var(--color-${id})`);
+const colorOf = (id: string) => (id === "libre" ? "#aab1be" : id === "sueno" ? "var(--color-sleep)" : `var(--color-${id})`);
 
 /**
  * La bienvenida, una sola vez por cuenta: el logo, tu nombre, qué hace la app y una semana de ejemplo

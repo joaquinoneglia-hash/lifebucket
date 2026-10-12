@@ -28,7 +28,7 @@ function SleepBar({ perNight, thick }: { perNight: number; thick?: boolean }) {
   );
 }
 
-/** Versión chica para el encabezado: horas por noche y la barrita; al pasar el mouse, el detalle. */
+/** El botón del encabezado para configurar el sueño; al pasar el mouse, cuánto dormís. */
 export function SleepPill({ compact, onClick }: { compact?: boolean; onClick?: () => void }) {
   const sleep = usePlanner((s) => s.sleep);
   const st = sleepStats(sleep);
@@ -37,17 +37,19 @@ export function SleepPill({ compact, onClick }: { compact?: boolean; onClick?: (
       type="button"
       onClick={onClick}
       aria-label={`Sueño: ${hoursLabel(st.perNight)} por noche. Tocá para configurarlo`}
-      className="pressable group relative flex items-center gap-2 rounded-full bg-surface/80 px-3 py-2 text-left shadow-[var(--shadow-card)] hover:bg-surface"
+      className={cn(
+        "pressable group relative flex items-center rounded-full bg-surface/80 text-left shadow-[var(--shadow-card)] hover:bg-surface",
+        compact ? "gap-1.5 px-2.5 py-1.5 max-[359px]:gap-1 max-[359px]:px-2" : "gap-2 px-3.5 py-2",
+      )}
     >
-      <Moon aria-hidden className="size-4 text-[var(--color-sleep)]" />
-      <span className="text-[13px] whitespace-nowrap tabular-nums">
-        <span className="font-semibold">{hoursLabel(st.perNight)}</span>
-        {!compact && <span className="text-ink-muted"> /noche</span>}
-      </span>
-      {!compact && (
-        <span className="w-14">
-          <SleepBar perNight={st.perNight} />
+      <Moon aria-hidden className="size-4 shrink-0 text-[var(--color-sleep)]" />
+      {compact ? (
+        <span className="flex flex-col text-[10.5px] leading-[1.15] font-medium max-[359px]:text-[9.5px]">
+          <span className="text-ink-muted">Configurar</span>
+          <span className="whitespace-nowrap">horarios de sueño</span>
         </span>
+      ) : (
+        <span className="text-[13px] font-medium whitespace-nowrap">Configurar horarios de sueño</span>
       )}
       {/* En compu se abre hacia la izquierda (la pastilla está a la derecha); en el celular, hacia adentro. */}
       <div

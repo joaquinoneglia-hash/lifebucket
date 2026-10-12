@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut, Sparkles } from "lucide-react";
+import { LogOut, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { isMuted, play, setMuted } from "@/lib/sfx";
 import { useEffect, useRef, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { authConfigured } from "@/lib/supabase/config";
@@ -10,9 +11,11 @@ import { useUser } from "@/lib/supabase/use-user";
 export const TOUR_EVENT = "lb:tour";
 
 /** La cuenta en el encabezado: la inicial (o la foto de Google) y, al tocarla, el email, la guía y "Salir". */
-export function UserMenu() {
+export function UserMenu({ withSound }: { withSound?: boolean }) {
   const who = useUser();
   const [open, setOpen] = useState(false);
+  // En el celular el botón de sonido vive acá (en el encabezado no entra).
+  const [mute, setMute] = useState(isMuted);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,6 +75,21 @@ export function UserMenu() {
             <Sparkles aria-hidden className="size-4" />
             Ver la guía otra vez
           </button>
+          {withSound && (
+            <button
+              type="button"
+              onClick={() => {
+                setMuted(!mute);
+                setMute(!mute);
+                if (mute) play("pop");
+              }}
+              aria-pressed={!mute}
+              className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+            >
+              {mute ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
+              {mute ? "Activar sonidos" : "Silenciar sonidos"}
+            </button>
+          )}
           {authConfigured && (
             <button
               type="button"

@@ -24,7 +24,7 @@ const DAILY: Part[] = ["trabajo", "cuerpo", "mente", "alma"];
 const partOf = (b: RoutineBlock): Part | null =>
   b.quadrant === "vinculos" ? "alma" : b.quadrant === "trabajo" || b.quadrant === "cuerpo" || b.quadrant === "mente" || b.quadrant === "alma" ? b.quadrant : null;
 const h = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-AR")} h`;
-const color = (p: Part) => (p === "libre" ? "#aab1be" : `var(--color-${p})`);
+const color = (p: Part) => (p === "libre" ? "#aab1be" : p === "sueno" ? "var(--color-sleep)" : `var(--color-${p})`);
 
 /**
  * Resultados: tu semana en una torta (las seis partes), el sueño, la carga de cada día en líneas,
@@ -36,11 +36,12 @@ export function Dashboard() {
   const history = usePlanner((s) => s.routineHistory);
   const tasks = usePlanner((s) => s.tasks);
 
-  const minutes = weekMinutes(routine, moments);
+  const sleep = usePlanner((s) => s.sleep);
+  const minutes = weekMinutes(routine, moments, sleep);
 
   // Cada día: cuánto de cada parte (Libre: lo que queda de las 19 h).
   const byDay = DAYS.map((d) => {
-    const parts = { trabajo: 0, cuerpo: 0, mente: 0, alma: 0, vinculos: 0, libre: 0 } as Record<Part, number>;
+    const parts = { trabajo: 0, cuerpo: 0, mente: 0, alma: 0, vinculos: 0, libre: 0, sueno: 0 } as Record<Part, number>;
     for (const b of routine) {
       const p = partOf(b);
       if (p && b.days.includes(d.dow)) parts[p] += b.minutes;
@@ -270,7 +271,7 @@ function DailyLines({ days }: { days: { dow: number; short: string; name: string
 function Evolution({ weeks }: { weeks: { week: string; shares: Partial<Record<string, number>> }[] }) {
   const W = 290;
   const H = 96;
-  const lines = PARTS.filter((p) => p.id !== "libre");
+  const lines = PARTS.filter((p) => p.id !== "libre" && p.id !== "sueno");
   const max = Math.max(10, ...weeks.flatMap((w) => lines.map((p) => w.shares[p.id] ?? 0)));
   const x = (i: number) => 4 + (i / Math.max(1, weeks.length - 1)) * (W - 8);
   const y = (v: number) => H - 4 - (v / max) * (H - 12);

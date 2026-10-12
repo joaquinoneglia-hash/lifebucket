@@ -2,6 +2,13 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-11 · El sueño es una categoría
+
+- Los porcentajes pasan a ser sobre la semana entera (168 h) y el Sueño es una categoría más, con su color (chips de arriba, torta de Resultados, semana a semana). Antes se calculaba sobre las 133 h de 05:00 a 24:00 sin sueño, y las horas dormidas dentro de esa franja (por ejemplo, de 5 a 7) se contaban como Libre por error.
+- El botón de arriba dice siempre "Configurar horarios de sueño" (las horas por noche se ven en el chip de Sueño y al pasar el mouse).
+- En el celular el sonido se activa y silencia desde el menú de la cuenta (en el encabezado no entraba).
+- Las semanas guardadas antes de este cambio quedan con sus porcentajes viejos (sin Sueño).
+
 ## 2026-10-11 · Asistente con IA, limpiar todo y aclaraciones
 
 - Asistente (botón flotante): pedís cambios hablando o escribiendo y propone bloques, cambios, momentos u objetivos; se aplican solo si confirmás. Usa Claude Sonnet 5.5 (`WEEK_MODEL`): entiende bien modificaciones en lenguaje natural y responde rápido, que importa con voz. Voz con el reconocimiento del navegador (es-AR). Necesita `ANTHROPIC_API_KEY` en el servidor (Vercel); sin clave avisa que no está activado. Ruta `src/app/api/week-ai`, lógica en `src/lib/week-ai.ts`.

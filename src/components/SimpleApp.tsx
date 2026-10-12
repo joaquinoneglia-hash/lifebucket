@@ -5,12 +5,13 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { cn } from "@/lib/format";
 import { formatTime } from "@/lib/time";
 import { useMediaQuery, useViewportHeight } from "@/lib/hooks";
-import { BOND_HOURS, bondBreakdown, bondWeekMinutes, funWeekMinutes } from "@/lib/bonds";
+import { BOND_HOURS, bondBreakdown, funWeekMinutes } from "@/lib/bonds";
 import { partStyle, SIMPLE_QUADRANTS } from "@/lib/mode";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import type { QuadrantId } from "@/lib/quadrants";
 import { carve, WEEK_ORDER } from "@/lib/routine";
-import { PARTS, thisMonday, weekRangeLabel, weekShares } from "@/lib/week-shares";
+import { PARTS, thisMonday, weekMinutes, WEEK_MINUTES, weekRangeLabel, weekShares } from "@/lib/week-shares";
+import { hoursLabel, sleepStats } from "@/lib/sleep-stats";
 import { newId, usePlanner, type RoutineBlock } from "@/lib/store";
 import { MomentsPanel } from "./MomentsPanel";
 import { BrandMark } from "./BrandMark";
@@ -30,7 +31,6 @@ import { SecondaryButton, Sheet } from "./ui";
 
 /** La semana tipo va de 05:00 a 24:00, sin fechas. */
 const RANGE: [number, number] = [5 * 60, 24 * 60];
-const WEEK_MINUTES = (RANGE[1] - RANGE[0]) * 7;
 
 const DAY_NAME: Record<number, string> = { 1: "lunes", 2: "martes", 3: "miércoles", 4: "jueves", 5: "viernes", 6: "sábado", 0: "domingo" };
 /** "de lunes a viernes", "todos los días" o "lunes, miércoles y viernes". */
@@ -72,6 +72,7 @@ export function SimpleApp() {
   const setRoutine = usePlanner((s) => s.setRoutine);
   const logRoutine = usePlanner((s) => s.logRoutine);
   const moments = usePlanner((s) => s.moments);
+  const sleepSettings = usePlanner((s) => s.sleep);
   const weekSeen = usePlanner((s) => s.weekSeen);
   const setWeekSeen = usePlanner((s) => s.setWeekSeen);
   const history = usePlanner((s) => s.routineHistory);
@@ -85,8 +86,8 @@ export function SimpleApp() {
   }, [weekSeen, monday, setWeekSeen]);
   // Mientras sea la semana confirmada, sus % se guardan solos con cada cambio (para el reporte semana a semana).
   useEffect(() => {
-    if (weekSeen === monday) logRoutine(weekShares(routine, moments), monday);
-  }, [routine, moments, weekSeen, monday, logRoutine]);
+    if (weekSeen === monday) logRoutine(weekShares(routine, moments, sleepSettings), monday);
+  }, [routine, moments, sleepSettings, weekSeen, monday, logRoutine]);
 
   // Qué secciones están abiertas (se recuerda). El tablero arranca cerrado para que la semana tenga lugar.
   const [open, setOpen] = useState<Record<Section, boolean>>(() => {
@@ -484,11 +485,10 @@ export function SimpleApp() {
             </div>
             <h1 className="flex items-center gap-1.5">
               <BrandMark size={22} />
-              <span className="text-[14px] font-semibold tracking-[0.16em]">LIFEBUCKET</span>
+              <span className="text-[14px] font-semibold tracking-[0.16em] max-[359px]:text-[12px] max-[359px]:tracking-[0.08em]">LIFEBUCKET</span>
             </h1>
             <div data-tour="cuenta" className="flex items-center gap-0.5 justify-self-end">
-              {muteButton}
-              <UserMenu />
+              <UserMenu withSound />
             </div>
           </div>
           <Shares routine={routine} mobile />
@@ -880,35 +880,32 @@ const MEANING: Record<string, string> = {
   alma: "Ocio y lo que te gusta: hobbies, salir a hacer algo, música, series. Suma también tus planes de Momentos.",
   vinculos: "Tu gente: amor, familia y amigos. Suma con los momentos que cargás en Momentos.",
   libre: "Descanso, comidas, traslados y lo que no tiene nada agendado.",
+  sueno: "Lo que dormís, según tu horario de sueño. Se configura tocando la lunita de arriba.",
 };
+type PartId = QuadrantId | "sueno";
 const BOND_LABEL: Record<string, string> = { amor: "Amor", familia: "Familia", amigos: "Amigos" };
 
 /**
- * Los % de la semana (sobre las 133 h de 05:00 a 24:00): Trabajo, Cuerpo, Mente, Disfrute, Vínculos y
- * Libre. Vínculos no está en el calendario: sus momentos del mes se pasan a horas por semana y se
- * descuentan de Libre (pasan en tu tiempo libre).
+ * Los % de la semana entera (168 h): Sueño, Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre.
+ * Vínculos no está en el calendario: sus momentos del mes se pasan a horas por semana y se descuentan
+ * de Libre (pasan en tu tiempo libre).
  */
 function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean }) {
   const moments = usePlanner((s) => s.moments);
-  const [picked, setPicked] = useState<QuadrantId | null>(null);
-  const inQuadrant = (q: QuadrantId) => routine.filter((b) => b.quadrant === q);
-  const total = (list: RoutineBlock[]) => list.reduce((acc, b) => acc + b.minutes * b.days.length, 0);
-  const busy = (["trabajo", "cuerpo", "mente", "alma"] as QuadrantId[]).map((q) => ({ id: q, value: total(inQuadrant(q)) }));
-  const used = busy.reduce((acc, it) => acc + it.value, 0);
-  const bonds = Math.min(bondWeekMinutes(moments), Math.max(0, WEEK_MINUTES - used));
+  const sleep = usePlanner((s) => s.sleep);
+  const [picked, setPicked] = useState<PartId | null>(null);
+  const inQuadrant = (q: PartId) => routine.filter((b) => b.quadrant === q);
+  const minutes = weekMinutes(routine, moments, sleep);
   const fun = funWeekMinutes(moments);
-  const funMin = Math.min(fun.minutes, Math.max(0, WEEK_MINUTES - used - bonds));
+  const funMin = Math.min(fun.minutes, minutes.alma);
   // De mayor a menor: lo que más tiempo te lleva, primero.
-  const items = [
-    ...busy.map((it) => (it.id === "alma" ? { ...it, value: it.value + funMin } : it)),
-    { id: "vinculos" as QuadrantId, value: bonds },
-    { id: "libre" as QuadrantId, value: Math.max(0, WEEK_MINUTES - used - bonds - funMin) },
-  ].sort((a, b) => b.value - a.value);
+  const items = PARTS.map((p) => ({ id: p.id as PartId, value: minutes[p.id] })).sort((a, b) => b.value - a.value);
   const pct = (m: number) => Math.round((m / WEEK_MINUTES) * 100);
-  const label: Record<string, string> = { trabajo: "Trabajo", cuerpo: "Cuerpo", mente: "Mente", alma: "Disfrute", vinculos: "Vínculos", libre: "Libre" };
+  const label: Record<string, string> = { trabajo: "Trabajo", cuerpo: "Cuerpo", mente: "Mente", alma: "Disfrute", vinculos: "Vínculos", libre: "Libre", sueno: "Sueño" };
 
   /** Qué forma el % de cada parte, de lo que más pesa a lo que menos. */
-  const breakdown = (q: QuadrantId, value: number): [string, number][] => {
+  const breakdown = (q: PartId, value: number): [string, number][] => {
+    if (q === "sueno") return [[`${hoursLabel(sleepStats(sleep).perNight)} por noche en promedio`, value]];
     if (q === "vinculos") {
       return bondBreakdown(moments)
         .filter((b) => b.count)
@@ -971,7 +968,7 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
     const open = items.find((it) => it.id === picked);
     return (
       <div data-tour="shares" className="flex flex-col gap-2">
-        <ul aria-label="Tu semana en porcentajes" className="grid grid-cols-3 gap-1">
+        <ul aria-label="Tu semana en porcentajes" className="flex flex-wrap justify-center gap-1">
           {items.map((it) => (
             <li key={it.id} style={partStyle(it.id)}>
               <button
@@ -979,12 +976,12 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
                 aria-expanded={picked === it.id}
                 onClick={() => setPicked(picked === it.id ? null : it.id)}
                 className={cn(
-                  "flex w-full items-center gap-1 rounded-full bg-surface/80 px-2 py-1 text-[11.5px] tabular-nums shadow-[var(--shadow-card)] transition-shadow",
+                  "flex items-center gap-[3px] rounded-full bg-surface/80 px-1.5 py-1 text-[11px] whitespace-nowrap tabular-nums shadow-[var(--shadow-card)] transition-shadow",
                   picked === it.id && "ring-2 ring-[var(--q)]",
                 )}
               >
                 <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[var(--q)]" />
-                <span className="min-w-0 flex-1 truncate text-left text-ink-muted">{label[it.id]}</span>
+                <span className="text-ink-muted">{label[it.id]}</span>
                 <span className="font-semibold">{pct(it.value)}%</span>
               </button>
             </li>

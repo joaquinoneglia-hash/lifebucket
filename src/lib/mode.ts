@@ -11,7 +11,8 @@ export const SIMPLE_MODE = true;
  * Libre en gris suave: es el tiempo sin agendar más lo que marques como libre (almuerzo, descanso).
  * `--q` es el gris de los puntos y barras, `--q-soft` el fondo de los bloques.
  */
-export function partStyle(id: QuadrantId): CSSProperties {
+export function partStyle(id: QuadrantId | "sueno"): CSSProperties {
+  if (id === "sueno") return { "--q": "var(--color-sleep)", "--q-soft": "var(--color-sleep-soft)" } as CSSProperties;
   if (id !== "libre") return quadrantStyle(id);
   return { "--q": "#aab1be", "--q-soft": "#eceff3" } as CSSProperties;
 }
