@@ -15,6 +15,11 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#F6F8FB",
+  width: "device-width",
+  initialScale: 1,
+  // En iPhone, Safari hacía zoom al tocar un campo y quedaba así (las hojas se veían cortadas).
+  // Con esto arranca y se queda a escala 1; el zoom con dos dedos sigue andando en iPhone.
+  maximumScale: 1,
 };
 
 export default function RootLayout({
