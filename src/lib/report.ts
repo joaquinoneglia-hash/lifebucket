@@ -213,6 +213,7 @@ const ACTIVE_DAYS: Record<PeriodKind, number> = { week: 5, month: 18, year: 150 
 
 const QUADRANT_WIN: Record<Exclude<QuadrantId, "trabajo" | "libre">, string> = {
   cuerpo: "Cuerpo en movimiento",
+  interior: "En paz por dentro",
   mente: "Mente despierta",
   alma: "Alma cuidada",
   vinculos: "Cerca de los tuyos",

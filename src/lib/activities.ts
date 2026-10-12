@@ -2,9 +2,10 @@ import type { QuadrantRecord } from "./quadrants";
 
 /** Sugerencias para el arranque. Las primeras tres vienen preseleccionadas. */
 export const SUGGESTED_ACTIVITIES: QuadrantRecord<string[]> = {
-  cuerpo: ["Gimnasio", "Correr", "Caminar", "Yoga", "Fútbol", "Natación", "Bici", "Cocinar sano"],
-  mente: ["Leer", "Estudiar", "Curso online", "Idiomas", "Escribir", "Podcast", "Investigar"],
-  alma: ["Música", "Series", "Videojuegos", "Dibujar", "Salir a pasear", "Fotografía", "Cocinar"],
+  cuerpo: ["Gimnasio", "Correr", "Bici", "Fútbol", "Natación", "Caminar", "Yoga"],
+  interior: ["Meditar", "Terapia", "Respirar", "Escribir un diario", "Rezar"],
+  mente: ["Idiomas", "Estudiar", "Curso online", "Leer", "Programar", "Investigar"],
+  alma: ["Producir música", "Ajedrez", "Guitarra", "Dibujar", "Fotografía", "Cocinar", "Videojuegos"],
   vinculos: ["Pareja", "Amigos", "Familia", "Llamar a alguien", "Salida", "Asado", "Juegos de mesa"],
   trabajo: ["Trabajo profundo", "Reuniones", "Mails", "Proyecto", "Planificación", "Capacitación"],
   libre: ["Almuerzo", "Descanso", "Cena", "Traslados", "Siesta", "Casa", "Series", "Trámites"],

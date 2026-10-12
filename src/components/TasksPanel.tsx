@@ -15,10 +15,12 @@ const dayMonth = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "shor
 const pad = (n: number) => String(n).padStart(2, "0");
 
 export const TASK_KINDS: { id: TaskKind; label: string }[] = [
+  { id: "cuerpo", label: "Deporte" },
+  { id: "interior", label: "Mente y Alma" },
+  { id: "alma", label: "Hobbies" },
+  { id: "mente", label: "Habilidades" },
+  { id: "vinculos", label: "Vínculos" },
   { id: "trabajo", label: "Trabajo" },
-  { id: "cuerpo", label: "Cuerpo" },
-  { id: "mente", label: "Mente" },
-  { id: "alma", label: "Disfrute" },
   { id: "otro", label: "Otro" },
 ];
 /** El color de cada tipo (Otro va en gris tinta). */
@@ -67,7 +69,7 @@ export function TasksPanel({
         <div className="flex items-center gap-1.5">
           {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
           <div>
-            <h2 className="type-title">Metas y logros</h2>
+            <h2 className="type-title">Metas</h2>
             <p className="text-[11.5px] text-ink-muted tabular-nums">
               {yearTasks.length ? `${done} de ${yearTasks.length} hechos en ${current}` : "Lo que querés lograr"}
             </p>
@@ -76,7 +78,7 @@ export function TasksPanel({
         {onCollapse && (
           <button
             type="button"
-            aria-label="Comprimir metas y logros"
+            aria-label="Comprimir metas"
             title="Comprimir"
             onClick={onCollapse}
             className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
@@ -360,7 +362,7 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
 /** El tipo de objetivo que sugiere el texto (lo que no es Trabajo, Cuerpo, Mente o Disfrute va a "Otro"). */
 function kindFor(text: string): TaskKind {
   const q = guessQuadrant(text);
-  return q === "trabajo" || q === "cuerpo" || q === "mente" || q === "alma" ? q : "otro";
+  return q && q !== "libre" ? q : "otro";
 }
 
 /**
@@ -572,7 +574,7 @@ function BalanceNote() {
       <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />
       <p className="flex-1 text-[12.5px] leading-snug text-ink-muted">
         <span className="font-semibold text-ink">Tus metas no cambian tu balance de vida.</span> Están para que te organices: el balance sale solo de tu
-        semana y tus momentos.
+        semana y tus logros.
       </p>
       <button
         type="button"

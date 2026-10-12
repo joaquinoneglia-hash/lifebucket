@@ -1,6 +1,6 @@
 import { awakeFor, carve, WEEK_ORDER } from "./routine";
 import type { SleepSettings } from "./sleep";
-import { newId, type Moment, type RoutineBlock, type TaskKind, type YearTask } from "./store";
+import { newId, type Logro, type LogroCat, type RoutineBlock, type TaskKind, type YearTask } from "./store";
 import { formatTime } from "./time";
 import type { WeekAction } from "./week-ai-schema";
 
@@ -31,7 +31,7 @@ export function buildContext(routine: RoutineBlock[], sleep: SleepSettings): str
 }
 
 type Effects = {
-  addMoment: (m: Omit<Moment, "id">) => void;
+  addLogro: (l: Omit<Logro, "id">) => void;
   addTask: (t: Omit<YearTask, "id" | "done">) => void;
 };
 
@@ -81,9 +81,10 @@ export function applyWeekActions(routine: RoutineBlock[], actions: WeekAction[],
       case "clear_week":
         week = [];
         break;
-      case "add_moment": {
-        if (!a.momentKind) break;
-        fx.addMoment({ kind: a.momentKind, month: a.month ?? thisMonth, text: a.name?.trim() || "Momento", hours: a.hours ?? undefined });
+      case "add_logro": {
+        if (!a.name || !a.quadrant || a.quadrant === "libre") break;
+        const today = new Date().toISOString().slice(0, 10);
+        fx.addLogro({ text: a.name.trim(), category: a.quadrant as LogroCat, minutes: Math.max(15, a.minutes ?? 60), date: a.date && a.date <= today ? a.date : today });
         break;
       }
       case "add_task": {

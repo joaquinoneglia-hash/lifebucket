@@ -2,6 +2,16 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-12 · Semana tipo + logros, categorías nuevas y todo a la vista
+
+- Objetivo de la app: que cada persona vea cuánto tiempo le queda para lo que le hace bien (y cuánto se lleva el trabajo).
+- Categorías: Deporte (verde), Mente y Alma (violeta: meditar, terapia), Hobbies y disfrute (amarillo: por gusto, sin fin económico), Habilidades (azul: aprender algo intelectual) y Vínculos (rosa). La base: Trabajo, Libre y Sueño. Ids internos reusados para no perder datos: `cuerpo` = Deporte, `mente` = Habilidades, `alma` = Hobbies; nuevo `interior` = Mente y Alma.
+- Dos cosas distintas: la semana tipo (la estructura que se repite, en el calendario) y los logros (el diario de cada día: lo que hiciste una vez, con fecha, categoría y duración). Los logros reemplazan a Momentos y suman a los % de la semana y del mes.
+- Desktop, todo abierto: a la izquierda "Cómo llenás tu balde" (torta de la semana o del mes, con el reporte completo) y Logros; en el centro la semana; a la derecha Metas. Celular: pestañas Semana · Logros · Reporte · Metas.
+- "Metas y logros" vuelve a ser "Metas" (Logros ahora es el diario).
+- Datos v6: los Momentos pasan a logros (fechados el 1.º de su mes) y lo que era meditar o terapia en Mente pasa a Mente y Alma. También se migran los datos que llegan de la nube.
+- Los bloques muestran su total de horas.
+
 ## 2026-10-12 · Menos divisiones: Libre y sueño juntos, Disfrute solo en Momentos, Metas y logros
 
 - En la barra de arriba, Libre y Sueño son un solo espacio por llenar ("Libre y sueño", gris rayado).

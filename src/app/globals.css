@@ -12,10 +12,15 @@
 
   --color-cuerpo: #2e9e63;
   --color-cuerpo-soft: #e3f4ea;
-  --color-mente: #8a5cf0;
-  --color-mente-soft: #efe8fd;
-  --color-alma: #2b8fd6;
-  --color-alma-soft: #e3f0fb;
+  /* Habilidades (id mente) */
+  --color-mente: #2b8fd6;
+  --color-mente-soft: #e3f0fb;
+  /* Hobbies y disfrute (id alma) */
+  --color-alma: #d99a00;
+  --color-alma-soft: #fdf2d3;
+  /* Mente y Alma (id interior) */
+  --color-interior: #8a5cf0;
+  --color-interior-soft: #efe8fd;
   --color-vinculos: #e5508a;
   --color-vinculos-soft: #fce8f0;
   --color-trabajo: #d42a3c;

@@ -26,6 +26,7 @@ export interface MissionDraft {
 /** Franjas donde cada cuadrante suele entrar mejor (en minutos desde la medianoche). */
 const PREFERRED: QuadrantRecord<[number, number][]> = {
   cuerpo: [[7 * 60, 9 * 60], [18 * 60, 20 * 60]],
+  interior: [[7 * 60, 8 * 60], [21 * 60, 22 * 60]],
   mente: [[19 * 60, 22 * 60], [8 * 60, 10 * 60]],
   alma: [[7 * 60, 8 * 60 + 30], [21 * 60, 22 * 60 + 30]],
   vinculos: [[20 * 60, 22 * 60 + 30], [13 * 60, 16 * 60]],

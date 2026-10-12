@@ -184,69 +184,63 @@ export const MAIN_TOUR: TourStep[] = [
   {
     target: "shares",
     title: "Tu semana, en una barra",
-    body: "La barra es tu semana entera. La van llenando el Trabajo (rojo) y lo que te hace bien: Cuerpo, Mente y Alma (lo que disfrutás y tu gente). Lo que queda es espacio libre: tu tiempo sin agendar y lo que dormís. Pasá el mouse por cada grupo para ver el detalle.",
+    body: "La barra es tu semana entera. La llenan el Trabajo (rojo) y lo que te hace bien: Deporte, Mente y Alma, Hobbies, Habilidades y Vínculos. Lo que queda es libre y sueño. Pasá el mouse por cada grupo para ver el detalle.",
     phoneBody:
-      "La barra es tu semana entera. La van llenando el Trabajo (rojo) y lo que te hace bien: Cuerpo, Mente y Alma (lo que disfrutás y tu gente). Lo que queda es espacio libre: tu tiempo sin agendar y lo que dormís. Tocá cada grupo para ver el detalle.",
+      "La barra es tu semana entera. La llenan el Trabajo (rojo) y lo que te hace bien: Deporte, Mente y Alma, Hobbies, Habilidades y Vínculos. Lo que queda es libre y sueño. Tocá cada grupo para ver el detalle.",
   },
   {
     target: "semana",
-    title: "No es una agenda",
-    body: "LifeBucket no es para anotar reuniones, turnos o salidas con fecha y hora. Es tu semana tipo armada en bloques (trabajo, gimnasio, estudio, descanso…) para ver de un vistazo cómo estás repartiendo tu tiempo y qué querés cambiar.",
-  },
-  {
-    target: "semana",
-    title: "Tu semana tipo",
-    body: "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Arrastrá sobre un espacio vacío para crear un bloque y elegí qué es y en qué días se repite.",
+    title: "Tu semana tipo: la estructura",
+    body: "Acá va lo que se repite todas las semanas: trabajo, gimnasio, clases, comidas. No es una agenda de reuniones ni de eventos: es la estructura de tu semana. Arrastrá sobre un espacio vacío para crear un bloque.",
     phoneBody:
-      "De lunes a domingo, de 5 a 24 h y sin fechas: es cómo es una semana normal tuya. Tocá un espacio vacío para crear un bloque de una hora, o arrastrá el dedo para marcar el horario.",
+      "Acá va lo que se repite todas las semanas: trabajo, gimnasio, clases, comidas. No es una agenda de reuniones ni de eventos: es la estructura de tu semana. Tocá un espacio vacío para crear un bloque o arrastrá para marcar el horario.",
   },
   {
     target: "semana",
     title: "Editar bloques",
-    body: "Tocá un bloque para cambiarle el horario, los días o la categoría. Agarralo de ⠿ para moverlo, estiralo desde los bordes y, si arrastrás adentro de un bloque, metés otro en el medio (por ejemplo, el almuerzo dentro del trabajo).",
-    phoneBody:
-      "Tocá un bloque para cambiarle el horario, los días o la categoría, o para borrarlo. Arrastralo para moverlo (también a otro día); si lo agarrás desde el borde de arriba o de abajo, lo estirás.",
+    body: "Tocá un bloque para cambiarle el horario, los días o la categoría. Agarralo de ⠿ para moverlo, estiralo desde los bordes y, si lo arrastrás hasta el tacho de abajo, lo eliminás.",
+    phoneBody: "Tocá un bloque para cambiarle el horario, los días o la categoría. Arrastralo para moverlo, estiralo desde el borde, o llevalo al tacho de abajo para eliminarlo.",
+  },
+  {
+    target: "logros-panel",
+    phoneTarget: "logros",
+    title: "Tus logros: el diario",
+    body: "Lo que no se repite va acá: «hoy medité», «cené con amigos», «practiqué inglés». A la noche contá qué hiciste, la categoría se sugiere sola y elegís cuánto duró. Suma a tu semana y a tu mes.",
+    phoneBody: "En esta pestaña está tu diario de logros: lo que no se repite («hoy medité», «cené con amigos»). A la noche contá qué hiciste; la categoría se sugiere sola y suma a tu semana y a tu mes.",
+  },
+  {
+    target: "bucket",
+    phoneTarget: "logros",
+    title: "Cómo llenás tu balde",
+    body: "La torta junta tu semana tipo y tus logros: cuánto le dedicás a lo que te hace bien, de la semana o del mes. Abajo tenés el reporte completo.",
+    phoneBody: "Arriba de tus logros está el balde: cuánto le dedicás a lo que te hace bien, de la semana o del mes. El reporte completo está en la pestaña Reporte.",
   },
   {
     target: "sueno",
     title: "Tu sueño",
-    body: "Tus horas por noche contra la meta de 8 h (lo recomendado es entre 7 y 9). Tocá la lunita para configurar a qué hora te dormís y te levantás; en el calendario se ve con lunitas y queda fuera del balance.",
-  },
-  {
-    target: "momentos",
-    title: "Momentos del mes",
-    body: "Vínculos (amor, familia, amigos) y los planes de Disfrute no van en el calendario: cargalos acá con el + cuando pasan. Elegís cuánto duró y con quién, y suman a tus porcentajes.",
-    phoneBody:
-      "En esta pestaña cargás Vínculos (amor, familia, amigos) y planes de Disfrute, que no van en el calendario. Elegís cuánto duró y con quién, y suman a tus porcentajes.",
+    body: "Tocá acá para configurar a qué hora te dormís y te levantás. En el calendario se ve con lunitas.",
   },
   {
     target: "objetivos",
-    title: "Metas y logros",
-    body: "Anotá metas por mes y elegí de qué tipo son (se sugiere solo). Marcalas cuando las cumplas; si se pasan de fecha quedan en rojo y las podés arrastrar a otro mes.",
-    phoneBody:
-      "Tus metas del año, mes por mes (no cambian tu balance: son para organizarte). Escribila y dale Enter o +: el tipo se sugiere solo y la fecha es opcional. Si se pasan de fecha quedan en rojo; tocalas para pasarlas a otro mes.",
-  },
-  {
-    target: "tablero",
-    title: "Resultados",
-    body: "La torta de tu semana, el sueño, la carga de cada día y cómo vas cambiando semana a semana. Si está comprimido, tocalo para abrirlo.",
-    phoneBody: "La torta de tu semana, el sueño, la carga de cada día y cómo vas cambiando semana a semana.",
+    title: "Metas",
+    body: "Tus metas del año, mes por mes: un organizador personal que no cambia tu balance. Escribila y dale Enter o +; la fecha es opcional.",
+    phoneBody: "En esta pestaña están tus metas del año, mes por mes: un organizador personal que no cambia tu balance.",
   },
   {
     target: "semana-header",
-    title: "Armalo a tu gusto",
-    body: "Tocá el encabezado de una sección para comprimirla y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
     phoneTarget: "tabs",
-    phoneBody: "Con estas pestañas vas de tu Semana a Momentos, Metas y Resultados. LifeBucket se acuerda de dónde quedaste.",
+    title: "Todo a la vista",
+    body: "A la izquierda, cómo llenás tu balde y tus logros; en el centro, tu semana tipo; a la derecha, tus metas.",
+    phoneBody: "Con estas pestañas vas de tu Semana a tus Logros, el Reporte y tus Metas. LifeBucket se acuerda de dónde quedaste.",
   },
   {
     target: "asistente",
     title: "Tu asistente",
-    body: "Pedile cambios hablando o escribiendo: «gimnasio lunes y jueves de 7 a 8», «pasá el almuerzo a las 14», «ayer cené con amigos». Te muestra lo que va a hacer y lo aplicás con un toque.",
+    body: "Pedile cambios hablando o escribiendo: «gimnasio lunes y jueves de 7 a 8» o «hoy medité 20 minutos». Te muestra lo que va a hacer y lo aplicás con un toque.",
   },
   {
     target: "cuenta",
-    title: "Sonidos y cuenta",
-    body: "Desde acá silenciás los sonidos, volvés a ver esta guía cuando quieras o salís de tu cuenta.",
+    title: "Tu cuenta",
+    body: "Desde acá ves si tus datos están guardados, volvés a ver esta guía o salís de tu cuenta.",
   },
 ];

@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import { usePlanner } from "./store";
+import { migratePlanner, STORE_VERSION, usePlanner } from "./store";
 import { supabaseBrowser } from "./supabase/client";
 
 /**
@@ -15,7 +15,6 @@ export const useSync = create<{ status: SyncStatus; at: number | null }>(() => (
 const setStatus = (status: SyncStatus) => useSync.setState({ status, ...(status === "saved" ? { at: Date.now() } : {}) });
 
 const META_KEY = "lb:sync";
-const STORE_VERSION = 5;
 const SAVE_DELAY = 1500;
 
 /** A quién pertenecen los datos de este navegador y si quedó algo sin subir. */
@@ -127,11 +126,15 @@ export async function startCloudSync(userId: string) {
   if (row && !localPending) {
     // Manda la nube (otro dispositivo o la última copia buena).
     applying = true;
-    usePlanner.setState(row.estado as Partial<ReturnType<typeof usePlanner.getState>>);
+    // Si se guardó con un formato viejo, se lleva al actual (por ejemplo, momentos → logros).
+    const estado = (row.version ?? 5) < STORE_VERSION ? migratePlanner(row.estado, row.version ?? 5) : row.estado;
+    usePlanner.setState(estado as Partial<ReturnType<typeof usePlanner.getState>>);
     applying = false;
     writeMeta({ userId, dirty: false });
     ready = true;
-    setStatus("saved");
+    // Convertido a un formato nuevo: se guarda así en la nube.
+    if ((row.version ?? 5) < STORE_VERSION) await push();
+    else setStatus("saved");
     return;
   }
   if (!localIsMine) {

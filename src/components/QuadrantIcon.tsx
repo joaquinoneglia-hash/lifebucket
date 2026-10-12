@@ -1,10 +1,11 @@
-import { Brain, BriefcaseBusiness, Dumbbell, HeartHandshake, Sofa, Sparkles, type LucideProps } from "lucide-react";
+import { BriefcaseBusiness, Dumbbell, Flower2, GraduationCap, HeartHandshake, Palette, Sofa, type LucideProps } from "lucide-react";
 import type { QuadrantId } from "@/lib/quadrants";
 
 const ICONS = {
   cuerpo: Dumbbell,
-  mente: Brain,
-  alma: Sparkles,
+  interior: Flower2,
+  mente: GraduationCap,
+  alma: Palette,
   vinculos: HeartHandshake,
   trabajo: BriefcaseBusiness,
   libre: Sofa,

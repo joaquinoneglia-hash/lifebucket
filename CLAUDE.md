@@ -1,6 +1,6 @@
 # LifeBucket
 
-Planificador de balance de vida. Tu vida es un balde de horas por semana y la app te muestra con qué lo estás llenando: Sueño, Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre. Producto y decisiones de fondo en `PRODUCT.md`; sistema visual en `DESIGN.md`.
+Planificador de balance de vida. Tu vida es un balde de horas por semana y la app te muestra con qué lo estás llenando: lo que te hace bien (Deporte, Mente y Alma, Hobbies y disfrute, Habilidades, Vínculos) sobre la base de Trabajo, Libre y Sueño. Dos cosas: la semana tipo (lo que se repite) y los logros (el diario de cada día). Producto y decisiones de fondo en `PRODUCT.md`; sistema visual en `DESIGN.md`.
 
 Hoy la app corre en **modo simple** (`SIMPLE_MODE` en `src/lib/mode.ts`): una sola pantalla con la semana tipo (lunes a domingo, 05:00–24:00, sin fechas), Momentos (Vínculos y Disfrute del mes), Resultados y Objetivos del año. El resto (onboarding, planner por fechas, asistentes con IA) sigue en el código pero oculto.
 
@@ -32,6 +32,8 @@ Chequeos antes de dar algo por terminado: `npx tsc --noEmit` y `npm run lint`.
 Cuentas: login obligatorio con Supabase Auth (Google o email y contraseña). `src/middleware.ts` cierra todo sin sesión (en desarrollo sin Supabase configurado abre igual); pantalla en `src/app/login/`, vuelta de Google en `src/app/auth/callback/`, clientes en `src/lib/supabase/`. Cada ingreso queda en las tablas `usuarios` e `ingresos` (SQL en `supabase/migrations/`). Publicada en Vercel desde `main`: https://lifebucket-kappa.vercel.app (Supabase → URL Configuration tiene ese dominio y `http://localhost:3000/**` como redirects).
 
 Versión en pasos (beta, oculta): `/pasos` (`src/app/pasos/page.tsx`, chequeo en `src/lib/beta.ts` con `BETA_EMAILS`), pantallas en `src/components/steps/`, estado aparte en `src/lib/steps-store.ts` y lógica (huecos, informe, propuesta) en `src/lib/steps.ts`.
+
+Pantalla principal (`SimpleApp.tsx`): balde (`Bucket.tsx`) y logros (`Logros.tsx`) a la izquierda, semana en el centro, metas a la derecha; en el celular, pestañas. Categorías: ids `cuerpo` (Deporte), `interior` (Mente y Alma), `alma` (Hobbies), `mente` (Habilidades), `vinculos`, `trabajo`, `libre`. Cálculo de semana y mes: `weekMinutes()` / `monthMinutes()` en `src/lib/week-shares.ts`.
 
 Asistente de la semana (botón flotante): `src/components/AssistantFab.tsx` → `src/app/api/week-ai/route.ts` (Claude Sonnet 5.5, salida estructurada) → cambios aplicados con `src/lib/week-ai.ts`. Propone y el usuario confirma.
 

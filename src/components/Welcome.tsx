@@ -6,13 +6,13 @@ import { BrandMark } from "./BrandMark";
 
 /** Una semana de ejemplo para la barra: cada parte con su color. */
 const DEMO: { id: string; label: string; share: number }[] = [
-  { id: "sueno", label: "Sueño", share: 33 },
-  { id: "trabajo", label: "Trabajo", share: 24 },
-  { id: "cuerpo", label: "Cuerpo", share: 6 },
-  { id: "mente", label: "Mente", share: 5 },
-  { id: "alma", label: "Disfrute", share: 9 },
+  { id: "trabajo", label: "Trabajo", share: 26 },
+  { id: "cuerpo", label: "Deporte", share: 5 },
+  { id: "interior", label: "Mente y Alma", share: 2 },
+  { id: "alma", label: "Hobbies", share: 4 },
+  { id: "mente", label: "Habilidades", share: 3 },
   { id: "vinculos", label: "Vínculos", share: 5 },
-  { id: "libre", label: "Libre", share: 18 },
+  { id: "libre", label: "Libre y sueño", share: 55 },
 ];
 
 /** Libre usa el gris de la app; el resto, el color de su parte. */

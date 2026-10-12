@@ -1,21 +1,21 @@
 "use client";
 
-import { BarChart3, CalendarDays, ChevronUp, Eraser, GripVertical, ListChecks, PartyPopper, PanelLeftOpen, Volume2, VolumeX, type LucideIcon } from "lucide-react";
-import { useEffect, useRef, useState, type DragEvent } from "react";
+import { BarChart3, CalendarDays, Eraser, ListChecks, Trophy, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { addDays, fromKey, toKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { formatTime } from "@/lib/time";
-import { useMediaQuery, useViewportHeight } from "@/lib/hooks";
-import { bondBreakdown, funWeekMinutes } from "@/lib/bonds";
+import { useMediaQuery } from "@/lib/hooks";
 import { partStyle, SIMPLE_QUADRANTS } from "@/lib/mode";
 import { isMuted, play, setMuted } from "@/lib/sfx";
-import type { QuadrantId } from "@/lib/quadrants";
 import { carve, WEEK_ORDER } from "@/lib/routine";
-import { PARTS, thisMonday, weekMinutes, WEEK_MINUTES, weekRangeLabel, weekShares } from "@/lib/week-shares";
+import { ACTIVE_PARTS, partColor, PARTS, thisMonday, weekMinutes, WEEK_MINUTES, weekRangeLabel, weekShares, type Part } from "@/lib/week-shares";
 import { hoursLabel, sleepStats } from "@/lib/sleep-stats";
 import { newId, usePlanner, type RoutineBlock } from "@/lib/store";
-import { MomentsPanel } from "./MomentsPanel";
 import { BrandMark } from "./BrandMark";
+import { BucketCard } from "./Bucket";
 import { Dashboard } from "./Dashboard";
+import { LogrosPanel } from "./Logros";
 import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
@@ -45,19 +45,15 @@ function daysText(days: number[]) {
   return `los ${names.slice(0, -1).join(", ")} y ${names.at(-1)}`;
 }
 
-type Section = "semana" | "momentos" | "tablero" | "objetivos";
-const DEFAULT_ORDER: Section[] = ["semana", "momentos", "objetivos", "tablero"];
-const OPEN_KEY = "lb:open";
+type Section = "semana" | "logros" | "tablero" | "objetivos";
 const TAB_KEY = "lb:tab";
 /** Las pestañas del celular, en este orden. */
 const TABS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "semana", label: "Semana", icon: CalendarDays },
-  { id: "momentos", label: "Momentos", icon: PartyPopper },
+  { id: "logros", label: "Logros", icon: Trophy },
+  { id: "tablero", label: "Reporte", icon: BarChart3 },
   { id: "objetivos", label: "Metas", icon: ListChecks },
-  { id: "tablero", label: "Resultados", icon: BarChart3 },
 ];
-// v2: Objetivos pasó a ir antes que Resultados (se arranca de nuevo con ese orden).
-const ORDER_KEY = "lb:sections:v2";
 
 /** Un cambio de un bloque que está en varios días: se pregunta si va solo para ese día o para todos. */
 type Change = { block: RoutineBlock; day: number; patch: Partial<Omit<RoutineBlock, "id" | "days">>; toDay?: number; verb: "mover" | "cambiar" };
@@ -65,15 +61,15 @@ type Change = { block: RoutineBlock; day: number; patch: Partial<Omit<RoutineBlo
 const sameDays = (a: number[], b: number[]) => a.length === b.length && a.every((d) => b.includes(d));
 
 /**
- * Modo simple, todo en una pantalla: tu semana (lunes a domingo, sin fechas) en bloques de Trabajo,
- * Cuerpo, Mente y Disfrute, el tablero y tus objetivos del año. Cada sección se comprime, se abre y se
- * reordena arrastrando su encabezado.
+ * LifeBucket: en la compu, todo a la vista. A la izquierda, cómo llenás tu balde (la torta de la semana
+ * o del mes) y tus logros (el diario de cada día); en el centro, la semana tipo (los bloques que se
+ * repiten); a la derecha, tus metas. En el celular, cada cosa en su pestaña.
  */
 export function SimpleApp() {
   const routine = usePlanner((s) => s.routine);
   const setRoutine = usePlanner((s) => s.setRoutine);
   const logRoutine = usePlanner((s) => s.logRoutine);
-  const moments = usePlanner((s) => s.moments);
+  const logros = usePlanner((s) => s.logros);
   const sleepSettings = usePlanner((s) => s.sleep);
   const weekSeen = usePlanner((s) => s.weekSeen);
   const setWeekSeen = usePlanner((s) => s.setWeekSeen);
@@ -88,26 +84,9 @@ export function SimpleApp() {
   }, [weekSeen, monday, setWeekSeen]);
   // Mientras sea la semana confirmada, sus % se guardan solos con cada cambio (para el reporte semana a semana).
   useEffect(() => {
-    if (weekSeen === monday) logRoutine(weekShares(routine, moments, sleepSettings), monday);
-  }, [routine, moments, sleepSettings, weekSeen, monday, logRoutine]);
+    if (weekSeen === monday) logRoutine(weekShares(routine, logros, sleepSettings), monday);
+  }, [routine, logros, sleepSettings, weekSeen, monday, logRoutine]);
 
-  // Qué secciones están abiertas (se recuerda). El tablero arranca cerrado para que la semana tenga lugar.
-  const [open, setOpen] = useState<Record<Section, boolean>>(() => {
-    const base = { semana: true, momentos: true, tablero: false, objetivos: true };
-    try {
-      return { ...base, ...(JSON.parse(localStorage.getItem(OPEN_KEY) ?? "{}") as Partial<Record<Section, boolean>>) };
-    } catch {
-      return base;
-    }
-  });
-  const toggle = (s: Section) => {
-    play(open[s] ? "close" : "open");
-    const next = { ...open, [s]: !open[s] };
-    setOpen(next);
-    try {
-      localStorage.setItem(OPEN_KEY, JSON.stringify(next));
-    } catch {}
-  };
   // Un clic suave en cada botón (los sonidos propios de cada acción van aparte).
   const [mute, setMute] = useState(isMuted);
   useEffect(() => {
@@ -117,112 +96,6 @@ export function SimpleApp() {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, []);
-  const [order, setOrder] = useState<Section[]>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "null") as Section[] | null;
-      if (saved && sameDays(saved as unknown as number[], DEFAULT_ORDER as unknown as number[])) return saved;
-    } catch {}
-    return DEFAULT_ORDER;
-  });
-  const [dragging, setDragging] = useState<Section | null>(null);
-  const reorder = (from: Section, to: Section) => {
-    if (from === to) return;
-    const next = order.filter((s) => s !== from);
-    next.splice(next.indexOf(to) + (order.indexOf(from) < order.indexOf(to) ? 1 : 0), 0, from);
-    setOrder(next);
-    play("bubble");
-    try {
-      localStorage.setItem(ORDER_KEY, JSON.stringify(next));
-    } catch {}
-  };
-  // Con el dedo (el arrastre de la web no existe en pantallas táctiles): mantener apretado el encabezado
-  // de una sección y arrastrarla sobre otra.
-  const [touchOver, setTouchOver] = useState<Section | null>(null);
-  const suppressClick = useRef(false);
-  const reorderRef = useRef(reorder);
-  reorderRef.current = reorder;
-  useEffect(() => {
-    let press: { id: Section; x: number; y: number; timer: number; active: boolean } | null = null;
-    let over: Section | null = null;
-    const start = (e: TouchEvent) => {
-      if (e.touches.length !== 1) return;
-      const t = e.target as HTMLElement;
-      const header = t.closest("[data-section-header]");
-      if (!header || t.closest("button, input, select, textarea, a")) return;
-      const id = header.closest<HTMLElement>("[data-section]")?.dataset.section as Section | undefined;
-      if (!id) return;
-      const { clientX: x, clientY: y } = e.touches[0];
-      const timer = window.setTimeout(() => {
-        if (!press) return;
-        press.active = true;
-        setDragging(press.id);
-        play("pop");
-        if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(12);
-      }, 380);
-      press = { id, x, y, timer, active: false };
-    };
-    const move = (e: TouchEvent) => {
-      if (!press) return;
-      const p = e.touches[0];
-      if (!press.active) {
-        if (Math.abs(p.clientX - press.x) > 8 || Math.abs(p.clientY - press.y) > 8) {
-          window.clearTimeout(press.timer);
-          press = null;
-        }
-        return;
-      }
-      if (e.cancelable) e.preventDefault();
-      const target = document.elementFromPoint(p.clientX, p.clientY)?.closest<HTMLElement>("[data-section]")?.dataset.section as Section | undefined;
-      over = target && target !== press.id ? target : null;
-      setTouchOver(over);
-      // Cerca de los bordes de la pantalla, la página se mueve sola para llegar a las secciones de abajo o de arriba.
-      if (p.clientY < 80) window.scrollBy(0, -12);
-      else if (p.clientY > window.innerHeight - 80) window.scrollBy(0, 12);
-    };
-    const end = () => {
-      if (!press) return;
-      window.clearTimeout(press.timer);
-      if (press.active) {
-        suppressClick.current = true;
-        window.setTimeout(() => (suppressClick.current = false), 400);
-        if (over) reorderRef.current(press.id, over);
-        setDragging(null);
-        setTouchOver(null);
-      }
-      press = null;
-      over = null;
-    };
-    window.addEventListener("touchstart", start, { passive: true });
-    window.addEventListener("touchmove", move, { passive: false });
-    window.addEventListener("touchend", end);
-    window.addEventListener("touchcancel", end);
-    return () => {
-      window.removeEventListener("touchstart", start);
-      window.removeEventListener("touchmove", move);
-      window.removeEventListener("touchend", end);
-      window.removeEventListener("touchcancel", end);
-    };
-  }, []);
-
-  const dragProps = (id: Section) => ({
-    onHeaderDragStart: (e: DragEvent) => {
-      e.dataTransfer.setData("text/section", id);
-      e.dataTransfer.effectAllowed = "move";
-      setDragging(id);
-    },
-    dropProps: {
-      onDragOver: (e: DragEvent) => {
-        if (e.dataTransfer.types.includes("text/section")) e.preventDefault();
-      },
-      onDrop: (e: DragEvent) => {
-        const from = e.dataTransfer.getData("text/section") as Section;
-        setDragging(null);
-        if (from) reorder(from, id);
-      },
-      onDragEnd: () => setDragging(null),
-    },
-  });
-
   const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number } | null>(null);
   const [askDelete, setAskDelete] = useState<{ block: RoutineBlock; day: number } | null>(null);
   const [askChange, setAskChange] = useState<Change | null>(null);
@@ -276,7 +149,7 @@ export function SimpleApp() {
   const [tab, setTab] = useState<Section>(() => {
     try {
       const saved = localStorage.getItem(TAB_KEY) as Section | null;
-      if (saved && DEFAULT_ORDER.includes(saved)) return saved;
+      if (saved && TABS.some((t) => t.id === saved)) return saved;
     } catch {}
     return "semana";
   });
@@ -288,10 +161,6 @@ export function SimpleApp() {
       localStorage.setItem(TAB_KEY, t);
     } catch {}
   };
-  const vh = useViewportHeight();
-  // Sin scroll: la grilla usa todo el alto que queda debajo del encabezado.
-  const gridHeight = Math.max(380, vh - (desktop ? 150 : 230));
-
   const remove = (block: RoutineBlock, day: number, all: boolean) => {
     play("delete");
     if (all || block.days.length === 1) save(routine.filter((b) => b.id !== block.id));
@@ -316,130 +185,43 @@ export function SimpleApp() {
   };
   const change = (c: Change) => (c.block.days.length > 1 ? setAskChange(c) : apply(c, true));
 
-  const sections: Record<Section, React.ReactNode> = {
-    semana: (
-      <Panel
-        key="semana"
-        id="semana"
-        title="Semana"
-        subtitle={weekRangeLabel(monday)}
-        icon={CalendarDays}
-        open={open.semana}
-        onToggle={() => toggle("semana")}
-        desktop={desktop}
-        grow
-        dimmed={dragging === "semana"}
-        over={touchOver === "semana"}
-        {...dragProps("semana")}
-        actions={
-          <>
-          <span className="hidden text-[11.5px] text-ink-faint 2xl:inline">Arrastrá dentro de un bloque para meter otro · ⠿ para mover</span>
-          {clearButton}
-          </>
-        }
-      >
-        <WeekTemplateGrid
-          template={routine}
-          sleep={usePlanner.getState().sleep}
-          range={RANGE}
-          showSleep
-          height={gridHeight}
-          onChange={save}
-          onCreateAt={(day, start, minutes) => setEditing({ day, start, minutes })}
-          onOpen={(block, day) => setEditing({ block, day, start: block.start })}
-          onDelete={(block, day) => (block.days.length > 1 ? setAskDelete({ block, day }) : remove(block, day, true))}
-          onTrash={(block, day) => setAskDelete({ block, day })}
-          onMove={(block, day, next) => change({ block, day, toDay: next.day, patch: { start: next.start, minutes: next.minutes }, verb: next.minutes !== block.minutes ? "cambiar" : "mover" })}
-        />
-      </Panel>
-    ),
-    momentos: open.momentos ? (
-      <section
-        key="momentos"
-        data-tour="momentos"
-        data-section="momentos"
-        data-over={touchOver === "momentos" || undefined}
-        aria-label="Momentos del mes"
-        {...dragProps("momentos").dropProps}
-        className={cn("flex shrink-0 flex-col transition-opacity", desktop ? "w-[360px]" : "h-[70dvh]", dragging === "momentos" && "opacity-40")}
-      >
-        <MomentsPanel className="h-full" onCollapse={() => toggle("momentos")} onHeaderDragStart={dragProps("momentos").onHeaderDragStart} />
-      </section>
-    ) : (
-      <Collapsed key="momentos" tour="momentos" over={touchOver === "momentos"} title="Momentos" icon={PartyPopper} onOpen={() => toggle("momentos")} desktop={desktop} />
-    ),
-    tablero: (
-      <Panel
-        key="tablero"
-        id="tablero"
-        title="Resultados"
-        icon={BarChart3}
-        open={open.tablero}
-        onToggle={() => toggle("tablero")}
-        desktop={desktop}
-        grow={!open.semana}
-        width="w-[340px]"
-        scroll
-        dimmed={dragging === "tablero"}
-        over={touchOver === "tablero"}
-        {...dragProps("tablero")}
-      >
-        <Dashboard />
-      </Panel>
-    ),
-    objetivos: open.objetivos ? (
-      <section
-        key="objetivos"
-        data-tour="objetivos"
-        data-section="objetivos"
-        data-over={touchOver === "objetivos" || undefined}
-        aria-label="Metas y logros"
-        {...dragProps("objetivos").dropProps}
-        className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-80" : "h-[70dvh]", dragging === "objetivos" && "opacity-40")}
-      >
-        <TasksPanel className="h-full" onCollapse={() => toggle("objetivos")} onHeaderDragStart={dragProps("objetivos").onHeaderDragStart} />
-      </section>
-    ) : (
-      <Collapsed key="objetivos" tour="objetivos" over={touchOver === "objetivos"} title="Metas y logros" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
-    ),
-  };
-
-
+  const weekGrid = (h: number, fit?: boolean) => (
+    <WeekTemplateGrid
+      template={routine}
+      sleep={usePlanner.getState().sleep}
+      range={RANGE}
+      showSleep
+      height={h}
+      fit={fit}
+      onChange={save}
+      onCreateAt={(day, start, minutes) => setEditing({ day, start, minutes })}
+      onOpen={(block, day) => setEditing({ block, day, start: block.start })}
+      onDelete={(block, day) => (block.days.length > 1 ? setAskDelete({ block, day }) : remove(block, day, true))}
+      onTrash={(block, day) => setAskDelete({ block, day })}
+      onMove={(block, day, next) => change({ block, day, toDay: next.day, patch: { start: next.start, minutes: next.minutes }, verb: next.minutes !== block.minutes ? "cambiar" : "mover" })}
+    />
+  );
+  const semanaPanel = (
+    <Panel id="semana" title="Tu semana tipo" subtitle={weekRangeLabel(monday)} actions={clearButton}>
+      <FitHeight>{(h) => weekGrid(h, phone)}</FitHeight>
+    </Panel>
+  );
+  const metasPanel = (
+    <section data-tour="objetivos" aria-label="Metas" className="card flex h-full min-h-0 flex-col overflow-hidden">
+      <TasksPanel className="h-full" />
+    </section>
+  );
   const phoneSections: Record<Section, React.ReactNode> = {
-    semana: (
-      <Panel id="semana" title="Semana" subtitle={weekRangeLabel(monday)} icon={CalendarDays} open onToggle={() => {}} desktop={false} fixed actions={clearButton}>
-        <FitHeight>
-          {(h) => (
-            <WeekTemplateGrid
-              template={routine}
-              sleep={usePlanner.getState().sleep}
-              range={RANGE}
-              showSleep
-              height={h}
-              fit
-              onChange={save}
-              onCreateAt={(day, start, minutes) => setEditing({ day, start, minutes })}
-              onOpen={(block, day) => setEditing({ block, day, start: block.start })}
-              onDelete={(block, day) => (block.days.length > 1 ? setAskDelete({ block, day }) : remove(block, day, true))}
-              onTrash={(block, day) => setAskDelete({ block, day })}
-              onMove={(block, day, next) => change({ block, day, toDay: next.day, patch: { start: next.start, minutes: next.minutes }, verb: next.minutes !== block.minutes ? "cambiar" : "mover" })}
-            />
-          )}
-        </FitHeight>
-      </Panel>
+    semana: semanaPanel,
+    logros: (
+      <div data-tour="logros" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
+        <BucketCard showReport={false} />
+        <LogrosPanel className="min-h-[420px] shrink-0" />
+      </div>
     ),
-    momentos: (
-      <section data-tour="momentos" aria-label="Momentos del mes" className="flex h-full min-h-0 flex-col">
-        <MomentsPanel className="h-full" />
-      </section>
-    ),
-    objetivos: (
-      <section data-tour="objetivos" aria-label="Metas y logros" className="card flex h-full min-h-0 flex-col overflow-hidden">
-        <TasksPanel className="h-full" />
-      </section>
-    ),
+    objetivos: metasPanel,
     tablero: (
-      <Panel id="tablero" title="Resultados" icon={BarChart3} open onToggle={() => {}} desktop={false} fixed scroll>
+      <Panel id="tablero" title="Reporte" scroll>
         <Dashboard />
       </Panel>
     ),
@@ -532,20 +314,16 @@ export function SimpleApp() {
           </nav>
         </>
       ) : (
-      <main
-        id="contenido"
-        onClick={(e) => {
-          // Tocar el encabezado de una sección la comprime (los botones de adentro hacen lo suyo).
-          const t = e.target as HTMLElement;
-          const header = t.closest("[data-section-header]");
-          if (!header || t.closest("button, input, select, textarea, a, label")) return;
-          if (suppressClick.current) return;
-          const id = header.closest<HTMLElement>("[data-section]")?.dataset.section as Section | undefined;
-          if (id && open[id]) toggle(id);
-        }}
-        className={cn("flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6", desktop ? "flex-row" : "flex-col")}
-      >
-        {order.map((s) => sections[s])}
+      <main id="contenido" className="flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6">
+        {/* Izquierda: cómo llenás tu balde y tus logros. */}
+        <aside className="flex w-[340px] shrink-0 flex-col gap-3 xl:w-[360px]">
+          <BucketCard className="shrink-0" />
+          <LogrosPanel className="min-h-0 flex-1" />
+        </aside>
+        {/* Centro: la semana tipo. */}
+        <div className="flex min-w-0 flex-1 flex-col">{semanaPanel}</div>
+        {/* Derecha: tus metas (un organizador personal). */}
+        <div className="flex w-72 shrink-0 flex-col xl:w-80">{metasPanel}</div>
       </main>
       )}
 
@@ -631,7 +409,8 @@ export function SimpleApp() {
         />
       )}
 
-      {intro === "none" && <AssistantFab raised={phone && tab === "momentos"} />}
+      {/* En Logros y Metas hay campos para escribir abajo: ahí el asistente no aparece (taparía el botón de sumar). */}
+      {intro === "none" && (!phone || tab === "semana" || tab === "tablero") && <AssistantFab />}
 
       {sleepOpen && <SleepDialog isMobile={!desktop} onClose={() => setSleepOpen(false)} />}
 
@@ -658,7 +437,7 @@ export function SimpleApp() {
           }}
           onModify={() => {
             setWeekSeen(monday);
-            if (!open.semana) toggle("semana");
+            setTab("semana");
           }}
         />
       )}
@@ -761,199 +540,68 @@ function Ask({
   );
 }
 
-/** Una sección que se comprime: abierta es una tarjeta con su título (de donde se arrastra para reordenar). */
-function Panel({
-  id,
-  title,
-  subtitle,
-  icon,
-  open,
-  onToggle,
-  desktop,
-  grow,
-  width,
-  scroll,
-  actions,
-  dimmed,
-  over,
-  fixed,
-  onHeaderDragStart,
-  dropProps,
-  children,
-}: {
-  id: string;
-  title: string;
-  subtitle?: string;
-  icon: LucideIcon;
-  open: boolean;
-  onToggle: () => void;
-  desktop: boolean;
-  grow?: boolean;
-  width?: string;
-  scroll?: boolean;
-  actions?: React.ReactNode;
-  dimmed?: boolean;
-  /** Otra sección se está soltando acá (reordenar con el dedo). */
-  over?: boolean;
-  /** Pestaña del celular: ocupa todo y no se comprime ni se arrastra. */
-  fixed?: boolean;
-  onHeaderDragStart?: (e: DragEvent) => void;
-  dropProps?: { onDragOver: (e: DragEvent) => void; onDrop: (e: DragEvent) => void; onDragEnd: () => void };
-  children: React.ReactNode;
-}) {
-  if (fixed) {
-    return (
-      <section data-tour={id} aria-labelledby={`panel-${id}`} className="card flex h-full min-h-0 flex-col overflow-hidden">
-        <header data-tour={`${id}-header`} className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            <h2 id={`panel-${id}`} className="type-title">
-              {title}
-            </h2>
-            {subtitle && <span className="hidden truncate text-[12px] text-ink-muted tabular-nums min-[380px]:inline">{subtitle}</span>}
-          </span>
-          {actions && <span className="flex shrink-0 items-center gap-1">{actions}</span>}
-        </header>
-        <div className={cn("min-h-0 flex-1 p-3", scroll && "overflow-y-auto p-4")}>{children}</div>
-      </section>
-    );
-  }
-  if (!open) return <Collapsed tour={id} over={over} title={title} icon={icon} onOpen={onToggle} desktop={desktop} />;
+/** Una sección: una tarjeta con su título, siempre abierta. */
+function Panel({ id, title, subtitle, actions, scroll, children }: { id: string; title: string; subtitle?: string; actions?: React.ReactNode; scroll?: boolean; children: React.ReactNode }) {
   return (
-    <section
-      data-tour={id}
-      data-section={id}
-      data-over={over || undefined}
-      aria-labelledby={`panel-${id}`}
-      {...dropProps}
-      className={cn("card flex min-w-0 flex-col overflow-hidden transition-opacity", desktop && (grow ? "flex-1" : cn("shrink-0", width)), dimmed && "opacity-40")}
-    >
-      <header
-        data-tour={`${id}-header`}
-        data-section-header
-        draggable
-        onDragStart={onHeaderDragStart}
-        title="Tocá para comprimir · arrastrá para reordenar"
-        className="flex shrink-0 cursor-grab items-center justify-between gap-2 border-b border-line px-4 py-2 select-none [-webkit-touch-callout:none] active:cursor-grabbing"
-      >
-        <span className="flex items-center gap-1.5">
-          <GripVertical aria-hidden className="size-4 text-ink-faint" />
+    <section data-tour={id} aria-labelledby={`panel-${id}`} className="card flex h-full min-h-0 flex-col overflow-hidden">
+      <header data-tour={`${id}-header`} className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
+        <span className="flex min-w-0 items-baseline gap-1.5">
           <h2 id={`panel-${id}`} className="type-title">
             {title}
           </h2>
-          {subtitle && <span className="text-[12px] text-ink-muted tabular-nums">{subtitle}</span>}
+          {subtitle && <span className="hidden truncate text-[12px] text-ink-muted tabular-nums min-[380px]:inline">{subtitle}</span>}
         </span>
-        <span className="flex items-center gap-1">
-          {actions}
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-label={`Comprimir ${title.toLowerCase()}`}
-            title="Comprimir"
-            className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
-          >
-            {desktop ? <PanelLeftOpen aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
-          </button>
-        </span>
+        {actions && <span className="flex shrink-0 items-center gap-1">{actions}</span>}
       </header>
       <div className={cn("min-h-0 flex-1 p-3", scroll && "overflow-y-auto p-4")}>{children}</div>
     </section>
   );
 }
 
-/** Sección comprimida: una pestañita con su nombre para volver a abrirla. */
-function Collapsed({ tour, over, title, icon: Icon, onOpen, desktop }: { tour: string; over?: boolean; title: string; icon: LucideIcon; onOpen: () => void; desktop: boolean }) {
-  return (
-    <button
-      type="button"
-      data-tour={tour}
-      data-section={tour}
-      data-over={over || undefined}
-      onClick={onOpen}
-      aria-label={`Abrir ${title.toLowerCase()}`}
-      className={cn("card pressable flex shrink-0 items-center gap-3 text-ink-muted hover:text-ink", desktop ? "w-11 flex-col py-4" : "h-11 px-4")}
-    >
-      <Icon aria-hidden className="size-4" />
-      <span className={cn("text-[12.5px] font-semibold", desktop && "[writing-mode:vertical-rl]")}>{title}</span>
-    </button>
-  );
-}
-
-/** Qué incluye cada parte (la leyenda que aparece al pasar el mouse). */
-const MEANING: Record<string, string> = {
-  trabajo: "Tu empleo y tus proyectos.",
-  cuerpo: "Entrenamiento, salud y todo lo que tenga que ver con lo físico.",
-  mente: "La parte intelectual: estudiar, leer, aprender, meditar.",
-  alma: "Ocio y lo que te gusta: hobbies, salir a hacer algo, música, series. Suma también tus planes de Momentos.",
-  vinculos: "Tu gente: amor, familia y amigos. Suma con los momentos que cargás en Momentos.",
-  libre: "Descanso, comidas, traslados y lo que no tiene nada agendado.",
-  sueno: "Lo que dormís, según tu horario de sueño. Se configura tocando la lunita de arriba.",
+/** Qué incluye cada grupo (lo que aparece al tocarlo o pasar el mouse). */
+const MEANING = {
+  trabajo: "Tu empleo y tus proyectos: la base de tu semana.",
+  bien: "Lo que se trabaja y se juega: Deporte, Mente y Alma, Hobbies y disfrute, Habilidades y Vínculos. Suma tu semana tipo y tus logros de esta semana.",
+  espacio: "Lo que queda por llenar: el tiempo sin agendar (comidas, descanso, traslados) y lo que dormís.",
 };
-type PartId = QuadrantId | "sueno";
-const BOND_LABEL: Record<string, string> = { amor: "Amor", familia: "Familia", amigos: "Amigos" };
+type GroupId = "trabajo" | "bien" | "espacio";
 
 /**
- * Tu semana entera (168 h) en una barra que se llena: Trabajo y Cuerpo-Mente-Alma la van ocupando y lo que
- * queda es espacio libre (Libre y Sueño). Abajo, los tres grupos con su %; tocando cada uno, el detalle.
- * Alma junta Disfrute y Vínculos (los momentos del mes se pasan a horas por semana).
+ * Tu semana entera (168 h) en una barra que se llena: el Trabajo y lo que te hace bien (Deporte, Mente y
+ * Alma, Hobbies, Habilidades, Vínculos) la van ocupando y lo que queda es Libre y sueño. Suma la semana tipo
+ * y los logros de esta semana. Abajo, los tres grupos con su %; tocando cada uno, el detalle.
  */
 function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean }) {
-  const moments = usePlanner((s) => s.moments);
+  const logros = usePlanner((s) => s.logros);
   const sleep = usePlanner((s) => s.sleep);
   const [picked, setPicked] = useState<GroupId | null>(null);
-  const inQuadrant = (q: PartId) => routine.filter((b) => b.quadrant === q);
-  const minutes = weekMinutes(routine, moments, sleep);
-  const fun = funWeekMinutes(moments);
-  const funMin = Math.min(fun.minutes, minutes.alma);
+  const monday = thisMonday();
+  const minutes = weekMinutes(routine, logros, sleep, monday);
+  const weekLogros = logros.filter((l) => l.date >= monday && l.date <= toKey(addDays(fromKey(monday), 6)));
   const pct = (m: number) => Math.round((m / WEEK_MINUTES) * 100);
+  const h = (min: number) => `${(Math.round((min / 60) * 10) / 10).toLocaleString("es-AR")} h`;
+  const label = (p: Part) => PARTS.find((x) => x.id === p)!.label;
 
-  /** Qué forma el % de cada parte, de lo que más pesa a lo que menos. */
-  const breakdown = (q: PartId, value: number): [string, number][] => {
-    if (q === "sueno") return [[`${hoursLabel(sleepStats(sleep).perNight)} por noche en promedio`, value]];
-    if (q === "vinculos") {
-      return bondBreakdown(moments)
-        .filter((b) => b.count)
-        .map((b) => [`${BOND_LABEL[b.kind]} · ${b.count} ${b.count === 1 ? "momento" : "momentos"}`, b.minutes] as [string, number])
-        .sort((a, b) => b[1] - a[1]);
-    }
-    const byName = new Map<string, number>();
-    for (const b of inQuadrant(q)) byName.set(b.name, (byName.get(b.name) ?? 0) + b.minutes * b.days.length);
-    const list = [...byName.entries()];
-    if (q === "alma" && fun.count) list.push([`Planes del mes · ${fun.count}`, funMin]);
-    if (q === "libre") {
-      const rest = value - list.reduce((acc, [, m]) => acc + m, 0);
+  const groups: { id: GroupId; label: string; short: string; members: Part[] }[] = [
+    { id: "trabajo", label: "Trabajo", short: "Trabajo", members: ["trabajo"] },
+    { id: "bien", label: "Lo que te hace bien", short: "Para vos", members: ACTIVE_PARTS },
+    { id: "espacio", label: "Libre y sueño", short: "Libre y sueño", members: ["libre", "sueno"] },
+  ];
+  const total = (g: (typeof groups)[number]) => g.members.reduce((acc, m) => acc + minutes[m], 0);
+
+  /** De qué está hecha cada parte: los bloques de la semana (por nombre) y los logros de esta semana. */
+  const items = (p: Part): [string, number][] => {
+    if (p === "sueno") return [[`${hoursLabel(sleepStats(sleep).perNight)} por noche`, minutes.sueno]];
+    const by = new Map<string, number>();
+    for (const b of routine) if (b.quadrant === p) by.set(b.name, (by.get(b.name) ?? 0) + b.minutes * b.days.length);
+    for (const l of weekLogros) if (l.category === p) by.set(l.text, (by.get(l.text) ?? 0) + l.minutes);
+    const list = [...by.entries()];
+    if (p === "libre") {
+      const rest = minutes.libre - list.reduce((acc, [, m]) => acc + m, 0);
       if (rest > 0) list.push(["Sin agendar", rest]);
     }
     return list.sort((a, b) => b[1] - a[1]);
   };
-
-  // Tres grupos: lo que llena tu semana (Trabajo; Cuerpo, Mente y Alma) y lo que queda (espacio libre: Libre y Sueño).
-  // Alma junta Disfrute y Vínculos: lo que disfrutás y tu gente.
-  const alma = minutes.alma + minutes.vinculos;
-  const value: Record<Member, number> = { trabajo: minutes.trabajo, cuerpo: minutes.cuerpo, mente: minutes.mente, alma, libre: minutes.libre, sueno: minutes.sueno };
-  const groups: { id: GroupId; label: string; short: string; members: Member[]; meaning: string }[] = [
-    { id: "trabajo", label: "Trabajo", short: "Trabajo", members: ["trabajo"], meaning: MEANING.trabajo },
-    {
-      id: "cma",
-      label: "Cuerpo, Mente y Alma",
-      short: "Cuerpo · Mente · Alma",
-      members: ["cuerpo", "mente", "alma"],
-      meaning: "Lo que te hace bien: tu cuerpo, tu cabeza y tu alma (lo que disfrutás y tu gente: amor, familia, amigos).",
-    },
-    {
-      id: "espacio",
-      label: "Libre y sueño",
-      short: "Libre y sueño",
-      members: ["libre", "sueno"],
-      meaning: "Lo que queda por llenar: el tiempo sin agendar (comidas, descanso, traslados) y lo que dormís.",
-    },
-  ];
-  const total = (g: (typeof groups)[number]) => g.members.reduce((acc, m) => acc + value[m], 0);
-  const name: Record<Member, string> = { trabajo: "Trabajo", cuerpo: "Cuerpo", mente: "Mente", alma: "Alma", libre: "Libre", sueno: "Sueño" };
-  const sub: Record<Member, string> = { trabajo: "", cuerpo: "", mente: "", alma: "disfrute y vínculos", libre: "sin agendar, comidas, descanso", sueno: `${hoursLabel(sleepStats(sleep).perNight)} por noche` };
-  /** De qué está hecho cada parte (los nombres de los bloques o los momentos). */
-  const items = (m: Member): [string, number][] =>
-    m === "alma" ? [...breakdown("alma", minutes.alma), ...breakdown("vinculos", minutes.vinculos)].sort((a, b) => b[1] - a[1]) : m === "sueno" ? [] : breakdown(m, value[m]);
-  const h = (min: number) => `${(Math.round((min / 60) * 10) / 10).toLocaleString("es-AR")} h`;
 
   /** El detalle de un grupo: qué es, y cada parte con sus horas y de qué está hecha. */
   const detail = (g: (typeof groups)[number]) => (
@@ -964,50 +612,48 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
           {h(total(g))} · {pct(total(g))}% de la semana
         </span>
       </p>
-      <p className="mt-1 mb-3 text-[11.5px] leading-snug text-ink-muted">{g.meaning}</p>
+      <p className="mt-1 mb-3 text-[11.5px] leading-snug text-ink-muted">{MEANING[g.id]}</p>
       <ul className="flex flex-col gap-2.5">
         {g.members.map((m) => {
           const list = items(m).slice(0, 4);
           return (
-            <li key={m} className="flex flex-col gap-1">
+            <li key={m} className={cn("flex flex-col gap-1", minutes[m] === 0 && "opacity-50")}>
               <span className="flex items-center gap-1.5 text-[12.5px]">
-                <span aria-hidden className="size-2 rounded-full" style={{ background: memberColor(m) }} />
-                <span className="font-medium">{name[m]}</span>
-                {sub[m] && <span className="truncate text-[11px] text-ink-faint">{sub[m]}</span>}
-                <span className="ml-auto shrink-0 font-semibold tabular-nums">{pct(value[m])}%</span>
+                <span aria-hidden className="size-2 rounded-full" style={{ background: partColor(m) }} />
+                <span className="font-medium">{label(m)}</span>
+                <span className="ml-auto shrink-0 text-ink-muted tabular-nums">{h(minutes[m])}</span>
+                <span className="w-8 shrink-0 text-right font-semibold tabular-nums">{pct(minutes[m])}%</span>
               </span>
-              {list.length > 0 && (
+              {list.length > 0 && m !== "sueno" && (
                 <span className="pl-3.5 text-[11px] leading-snug text-ink-muted">{list.map(([n, mm]) => `${n} ${h(mm)}`).join(" · ")}</span>
               )}
             </li>
           );
         })}
       </ul>
-      {g.id === "cma" && minutes.vinculos === 0 && (
-        <p className="mt-2.5 border-t border-line pt-2 text-[10.5px] leading-snug text-ink-faint">Las citas y salidas con tu gente se cargan en Momentos y suman a Alma.</p>
-      )}
     </>
   );
 
-  /** La barra de la semana: Trabajo y Cuerpo-Mente-Alma la van llenando; lo que queda es espacio libre. */
+  /** La barra de la semana: Trabajo y lo que te hace bien la van llenando; lo que queda es libre y sueño. */
   const bar = (
     <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" aria-hidden>
-      {(["trabajo", "cuerpo", "mente", "alma"] as Member[]).map((m) =>
-        value[m] > 0 ? <span key={m} className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(value[m] / WEEK_MINUTES) * 100}%`, background: memberColor(m) }} /> : null,
+      {(["trabajo", ...ACTIVE_PARTS] as Part[]).map((m) =>
+        minutes[m] > 0 ? <span key={m} className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(minutes[m] / WEEK_MINUTES) * 100}%`, background: partColor(m) }} /> : null,
       )}
-      {/* Lo que queda: libre y sueño, un solo espacio. */}
       <span className="h-full min-w-0 flex-1 transition-[width] duration-500" style={FREE_FILL} />
     </div>
   );
 
-  /** Cómo se ve cada grupo en la leyenda (Cuerpo, Mente y Alma con sus tres colores). */
+  /** Cómo se ve cada grupo en la leyenda (lo que te hace bien, con sus colores). */
   const swatch = (g: (typeof groups)[number]) =>
     g.id === "espacio" ? (
       <span aria-hidden className="h-2 w-3.5 shrink-0 rounded-full" style={FREE_FILL} />
+    ) : g.id === "bien" && mobile ? (
+      <span aria-hidden className="h-2 w-4 shrink-0 rounded-full" style={{ background: `linear-gradient(90deg, ${ACTIVE_PARTS.map((p) => partColor(p)).join(", ")})` }} />
     ) : (
       <span aria-hidden className="flex shrink-0 gap-[2px]">
         {g.members.map((m) => (
-          <span key={m} className="size-2 rounded-full" style={{ background: memberColor(m) }} />
+          <span key={m} className="size-2 rounded-full" style={{ background: partColor(m) }} />
         ))}
       </span>
     );
@@ -1019,7 +665,7 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
         {bar}
         <ul aria-label="Tu semana en tres grupos" className="grid grid-cols-[auto_1fr_auto] items-center gap-1">
           {groups.map((g) => (
-            <li key={g.id} className={cn(g.id === "cma" && "justify-self-center", g.id === "espacio" && "justify-self-end")}>
+            <li key={g.id} className={cn(g.id === "bien" && "justify-self-center", g.id === "espacio" && "justify-self-end")}>
               <button
                 type="button"
                 aria-expanded={picked === g.id}
@@ -1027,7 +673,7 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
                 className={cn("flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11.5px] whitespace-nowrap tabular-nums", picked === g.id && "bg-surface-sunken")}
               >
                 {swatch(g)}
-                <span className="text-ink-muted">{g.id === "cma" ? "C·M·A" : g.short}</span>
+                <span className="text-ink-muted">{g.short}</span>
                 <span className="font-semibold">{pct(total(g))}%</span>
               </button>
             </li>
@@ -1045,13 +691,13 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
         {groups.map((g) => (
           <li key={g.id} tabIndex={0} className="group relative flex cursor-default items-center gap-1.5 rounded-full text-[12.5px] whitespace-nowrap tabular-nums outline-offset-4">
             {swatch(g)}
-            <span className="text-ink-muted">{g.short}</span>
+            <span className="text-ink-muted">{g.label}</span>
             <span className="font-semibold">{pct(total(g))}%</span>
             {/* Al pasar el mouse: qué es y de qué está hecho. */}
             <div
               role="tooltip"
               className={cn(
-                "pointer-events-none absolute top-full z-40 mt-3 hidden w-72 rounded-xl bg-surface p-3.5 text-left whitespace-normal shadow-[var(--shadow-popover)] group-hover:block group-focus:block",
+                "pointer-events-none absolute top-full z-40 mt-3 hidden w-80 rounded-xl bg-surface p-3.5 text-left whitespace-normal shadow-[var(--shadow-popover)] group-hover:block group-focus:block",
                 g.id === "trabajo" ? "left-0" : g.id === "espacio" ? "right-0" : "left-1/2 -translate-x-1/2",
               )}
             >
@@ -1064,10 +710,6 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
   );
 }
 
-type Member = "trabajo" | "cuerpo" | "mente" | "alma" | "libre" | "sueno";
-type GroupId = "trabajo" | "cma" | "espacio";
-/** El color de cada parte en la barra (Alma toma el de Disfrute). */
-const memberColor = (m: Member) => (m === "libre" ? "#c3c9d4" : m === "sueno" ? "var(--color-sleep)" : `var(--color-${m})`);
 /** Libre y sueño: gris rayado (como el sueño en el calendario), un solo espacio por llenar. */
 const FREE_FILL: React.CSSProperties = {
   backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--color-ink) 16%, transparent) 0 3px, color-mix(in oklab, var(--color-ink) 7%, transparent) 3px 6px)",

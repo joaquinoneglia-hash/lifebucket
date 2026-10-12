@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, CalendarPlus, Check, Heart, ListChecks, Loader2, Mic, Pencil, Sparkles, Square, Trash2, type LucideIcon } from "lucide-react";
+import { ArrowUp, CalendarPlus, Check, ListChecks, Loader2, Mic, Pencil, Sparkles, Square, Trash2, Trophy, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
@@ -28,14 +28,14 @@ const recognitionCtor = (): (new () => Recognition) | null => {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 };
 
-const EXAMPLES = ["Gimnasio lunes, miércoles y viernes de 7 a 8", "Pasá el almuerzo del viernes a las 14", "Ayer cené con amigos, fueron 3 horas", "Sacá el descanso del sábado"];
+const EXAMPLES = ["Gimnasio lunes, miércoles y viernes de 7 a 8", "Pasá el almuerzo del viernes a las 14", "Hoy medité 20 minutos y cené con amigos", "Sacá el descanso del sábado"];
 
 const ICON: Record<WeekAction["kind"], LucideIcon> = {
   add_block: CalendarPlus,
   update_block: Pencil,
   remove_block: Trash2,
   clear_week: Trash2,
-  add_moment: Heart,
+  add_logro: Trophy,
   add_task: ListChecks,
 };
 
@@ -72,7 +72,7 @@ export function AssistantFab({ raised }: { raised?: boolean }) {
 function AssistantSheet({ isMobile, onClose }: { isMobile: boolean; onClose: () => void }) {
   const routine = usePlanner((s) => s.routine);
   const setRoutine = usePlanner((s) => s.setRoutine);
-  const addMoment = usePlanner((s) => s.addMoment);
+  const addLogro = usePlanner((s) => s.addLogro);
   const addTask = usePlanner((s) => s.addTask);
   const [text, setText] = useState("");
   const [listening, setListening] = useState(false);
@@ -164,7 +164,7 @@ function AssistantSheet({ isMobile, onClose }: { isMobile: boolean; onClose: () 
 
   const apply = () => {
     if (!plan) return;
-    const next = applyWeekActions(usePlanner.getState().routine, plan.actions, { addMoment, addTask });
+    const next = applyWeekActions(usePlanner.getState().routine, plan.actions, { addLogro, addTask });
     setRoutine(next, []);
     setApplied(true);
     play("complete");

@@ -27,10 +27,19 @@ export function setMuted(v: boolean) {
   } catch {}
 }
 
+/** El audio del navegador (o null si no hay: entonces la app sigue, sin sonido). */
 function audio() {
   if (typeof window === "undefined") return null;
-  ctx ??= new (window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-  if (ctx.state === "suspended") void ctx.resume();
+  if (!ctx) {
+    const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) return null;
+    try {
+      ctx = new Ctor();
+    } catch {
+      return null;
+    }
+  }
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {});
   return ctx;
 }
 

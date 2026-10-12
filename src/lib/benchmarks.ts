@@ -17,6 +17,7 @@ export const AVERAGE_WEEK: QuadrantRecord<number> & { dormir: number } = {
   dormir: 63, // ~9 h por día (ATUS, incluye siestas)
   trabajo: 41, // 8,1–8,5 h por día trabajado, cinco días
   cuerpo: 2, // aproximado: la mayoría no llega a lo recomendado
+  interior: 1, // aproximado: meditación, terapia, prácticas espirituales
   mente: 2, // aproximado: lectura y estudio por interés propio
   alma: 1, // aproximado: prácticas espirituales, arte, hobbies creativos
   vinculos: 4, // 35 min por día socializando (ATUS)

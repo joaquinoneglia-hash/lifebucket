@@ -5,7 +5,7 @@ import { fromKey, startOfWeek, toKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { partStyle as quadrantStyle } from "@/lib/mode";
 import { usePlanner, type RoutineBlock } from "@/lib/store";
-import { DAY_MINUTES, PARTS, weekMinutes, weekRangeLabel, WEEK_MINUTES, type Part } from "@/lib/week-shares";
+import { DAY_MINUTES, partColor, PARTS, weekMinutes, weekRangeLabel, WEEK_MINUTES, type Part } from "@/lib/week-shares";
 import { SleepCard } from "./SleepMeter";
 import { isLate, kindColor, TASK_KINDS } from "./TasksPanel";
 
@@ -18,13 +18,12 @@ const DAYS: { dow: number; short: string; name: string }[] = [
   { dow: 6, short: "S", name: "Sábado" },
   { dow: 0, short: "D", name: "Domingo" },
 ];
-/** Lo que va en el calendario día por día (Vínculos no: son momentos del mes; Libre tampoco, aplastaría al resto). */
-const DAILY: Part[] = ["trabajo", "cuerpo", "mente", "alma"];
+/** Lo que va en el calendario día por día (Libre no: aplastaría al resto). */
+const DAILY: Part[] = ["trabajo", "cuerpo", "interior", "alma", "mente", "vinculos"];
 
-const partOf = (b: RoutineBlock): Part | null =>
-  b.quadrant === "vinculos" ? "alma" : b.quadrant === "trabajo" || b.quadrant === "cuerpo" || b.quadrant === "mente" || b.quadrant === "alma" ? b.quadrant : null;
+const partOf = (b: RoutineBlock): Part | null => (b.quadrant === "libre" ? null : b.quadrant);
 const h = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-AR")} h`;
-const color = (p: Part) => (p === "libre" ? "#aab1be" : p === "sueno" ? "var(--color-sleep)" : `var(--color-${p})`);
+const color = partColor;
 
 /**
  * Resultados: tu semana en una torta (las seis partes), el sueño, la carga de cada día en líneas,
@@ -32,21 +31,21 @@ const color = (p: Part) => (p === "libre" ? "#aab1be" : p === "sueno" ? "var(--c
  */
 export function Dashboard() {
   const routine = usePlanner((s) => s.routine);
-  const moments = usePlanner((s) => s.moments);
+  const logros = usePlanner((s) => s.logros);
   const history = usePlanner((s) => s.routineHistory);
   const tasks = usePlanner((s) => s.tasks);
 
   const sleep = usePlanner((s) => s.sleep);
-  const minutes = weekMinutes(routine, moments, sleep);
+  const minutes = weekMinutes(routine, logros, sleep);
 
   // Cada día: cuánto de cada parte (Libre: lo que queda de las 19 h).
   const byDay = DAYS.map((d) => {
-    const parts = { trabajo: 0, cuerpo: 0, mente: 0, alma: 0, vinculos: 0, libre: 0, sueno: 0 } as Record<Part, number>;
+    const parts = { trabajo: 0, cuerpo: 0, interior: 0, alma: 0, mente: 0, vinculos: 0, libre: 0, sueno: 0 } as Record<Part, number>;
     for (const b of routine) {
       const p = partOf(b);
       if (p && b.days.includes(d.dow)) parts[p] += b.minutes;
     }
-    parts.libre = Math.max(0, DAY_MINUTES - parts.trabajo - parts.cuerpo - parts.mente - parts.alma);
+    parts.libre = Math.max(0, DAY_MINUTES - DAILY.reduce((acc, p) => acc + parts[p], 0));
     return { ...d, parts };
   });
 
@@ -131,7 +130,7 @@ export function Dashboard() {
         )}
       </Card>
 
-      <Card title={`Metas y logros ${year}`}>
+      <Card title={`Metas ${year}`}>
         {yearTasks.length ? (
           <>
             <p className="text-[13px] text-ink-muted">

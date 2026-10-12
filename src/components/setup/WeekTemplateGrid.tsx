@@ -241,7 +241,7 @@ export function WeekTemplateGrid({
                   )}
                 >
                   {compact ? (
-                    <CompactLabel name={drag.block.name} start={drag.start} minutes={drag.minutes} height={(drag.minutes / 30) * row - 2} />
+                    <CompactLabel name={drag.block.name} minutes={drag.minutes} height={(drag.minutes / 30) * row - 2} />
                   ) : (
                     <>
                       <span className="truncate text-[11px] font-semibold">{drag.block.name}</span>
@@ -379,7 +379,7 @@ export function WeekTemplateGrid({
                       )}
                     >
                       {compact ? (
-                        <CompactLabel name={b.name} start={b.start} minutes={b.minutes} height={h} muted={b.quadrant === "libre"} />
+                        <CompactLabel name={b.name} minutes={b.minutes} height={h} muted={b.quadrant === "libre"} />
                       ) : (
                         <span className={cn("truncate text-[11px] leading-tight font-semibold", b.quadrant === "libre" ? "text-ink-muted" : "text-[color-mix(in_oklab,var(--q)_70%,var(--color-ink))]")}>
                           {b.name}
@@ -387,7 +387,7 @@ export function WeekTemplateGrid({
                       )}
                       {!compact && h >= 30 && (
                         <span className="truncate text-[10px] leading-tight text-ink-muted tabular-nums">
-                          {formatTime(b.start)}–{formatTime(b.start + b.minutes)}
+                          {formatTime(b.start)}–{formatTime(b.start + b.minutes)} · <b className="font-semibold">{formatMinutes(b.minutes)}</b>
                         </span>
                       )}
                     </button>
@@ -498,17 +498,12 @@ function hourLines(row: number): CSSProperties {
 }
 
 const LINE = 10;
-/** "13" o "13:30" (para el rango corto de los bloques en el celular). */
-const shortTime = (m: number) => {
-  const h = Math.floor(m / 60) % 24;
-  return m % 60 ? `${h}:${String(m % 60).padStart(2, "0")}` : String(h);
-};
 
 /**
  * El texto de un bloque en una columna angosta: el nombre en todas las líneas que entren (cortando
- * palabras si hace falta) y, si sobra lugar, el horario corto abajo.
+ * palabras si hace falta) y, si sobra lugar, el total de horas abajo (el horario se lee en la columna de horas).
  */
-function CompactLabel({ name, start, minutes, height, muted }: { name: string; start: number; minutes: number; height: number; muted?: boolean }) {
+function CompactLabel({ name, minutes, height, muted }: { name: string; minutes: number; height: number; muted?: boolean }) {
   const room = Math.max(1, Math.floor((height - 2) / LINE));
   const showTime = room >= 3;
   const lines = Math.max(1, showTime ? room - 1 : room);
@@ -521,11 +516,7 @@ function CompactLabel({ name, start, minutes, height, muted }: { name: string; s
       >
         {name}
       </span>
-      {showTime && (
-        <span className="mt-auto text-[9px] leading-[10px] text-ink-muted tabular-nums">
-          {shortTime(start)}–{shortTime(start + minutes)}
-        </span>
-      )}
+      {showTime && <span className="mt-auto text-[9.5px] leading-[10px] font-semibold text-ink-muted tabular-nums">{formatMinutes(minutes)}</span>}
     </>
   );
 }

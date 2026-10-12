@@ -90,7 +90,8 @@ export async function recommendTargets(answers: TargetsAnswers): Promise<Targets
     });
     if (res.ok) {
       const data = (await res.json()) as TargetsProposal;
-      const targets = sumsTo100(data.targets) ? data.targets : roundTo5(data.targets);
+      const t = { interior: 0, ...data.targets };
+      const targets = sumsTo100(t) ? t : roundTo5(t);
       return { targets, explanation: data.explanation, source: "ai" };
     }
   } catch {

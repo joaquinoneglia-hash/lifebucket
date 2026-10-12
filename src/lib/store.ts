@@ -156,8 +156,21 @@ export interface Moment {
   month: string;
 }
 
-/** De qué parte de tu vida es un objetivo. */
-export type TaskKind = "trabajo" | "cuerpo" | "mente" | "alma" | "otro";
+/**
+ * Un logro del día ("salí a comer con amigos", "medité 20 minutos"): lo que hiciste, con su fecha,
+ * su categoría y cuánto duró. No se repite (eso es la semana): es el diario de cada noche.
+ */
+export type LogroCat = "cuerpo" | "interior" | "alma" | "mente" | "vinculos" | "trabajo";
+export interface Logro {
+  id: string;
+  date: DateKey;
+  text: string;
+  category: LogroCat;
+  minutes: number;
+}
+
+/** De qué parte de tu vida es una meta. */
+export type TaskKind = "trabajo" | "cuerpo" | "interior" | "mente" | "alma" | "vinculos" | "otro";
 
 /** Un objetivo del año ("hacer un viaje"): por mes, con fecha opcional y sin horario. */
 export interface YearTask {
@@ -243,6 +256,8 @@ interface PlannerState {
   tasks: YearTask[];
   /** Momentos con otros (vínculos), por mes. */
   moments: Moment[];
+  /** El diario de logros: lo que hiciste cada día (suma a la semana y al mes). */
+  logros: Logro[];
   /** Semana a semana: el % de cada parte (la clave es el lunes de cada semana). */
   routineHistory: { date: DateKey; shares: Partial<Record<string, number>> }[];
   /** El lunes de la última semana que confirmaste (para preguntar al empezar una nueva). */
@@ -269,6 +284,9 @@ interface PlannerState {
   logRoutine: (shares: Partial<Record<string, number>>, week: DateKey) => void;
   setWeekSeen: (week: DateKey) => void;
   toggleTask: (id: string) => void;
+  addLogro: (l: Omit<Logro, "id">) => void;
+  removeLogro: (id: string) => void;
+  updateLogro: (id: string, patch: Partial<Omit<Logro, "id">>) => void;
   addMoment: (m: Omit<Moment, "id">) => void;
   removeMoment: (id: string) => void;
   updateMoment: (id: string, patch: Partial<Omit<Moment, "id">>) => void;
@@ -297,6 +315,8 @@ interface PlannerState {
 
 /** Dónde se guardan los datos en el navegador. Antes se llamaba "lifeplan:v1". */
 const STORAGE_KEY = "lifebucket:v1";
+/** Versión del formato de los datos (la usa también la nube). */
+export const STORE_VERSION = 6;
 const LEGACY_STORAGE_KEY = "lifeplan:v1";
 
 // Migración del nombre: si hay datos con la clave vieja y todavía no con la nueva, se copian
@@ -339,6 +359,7 @@ export const usePlanner = create<PlannerState>()(
       routineSeries: [],
       tasks: [],
       moments: [],
+      logros: [],
       routineHistory: [],
       weekSeen: "",
 
@@ -395,6 +416,9 @@ export const usePlanner = create<PlannerState>()(
         }),
       setWeekSeen: (weekSeen) => set({ weekSeen }),
       addTask: (task) => set((s) => ({ tasks: [...s.tasks, { ...task, id: newId(), done: false }] })),
+      addLogro: (l) => set((s) => ({ logros: [...s.logros, { ...l, id: newId() }] })),
+      removeLogro: (id) => set((s) => ({ logros: s.logros.filter((l) => l.id !== id) })),
+      updateLogro: (id, patch) => set((s) => ({ logros: s.logros.map((l) => (l.id === id ? { ...l, ...patch } : l)) })),
       addMoment: (m) => set((s) => ({ moments: [...s.moments, { ...m, id: newId() }] })),
       removeMoment: (id) => set((s) => ({ moments: s.moments.filter((m) => m.id !== id) })),
       updateMoment: (id, patch) => set((s) => ({ moments: s.moments.map((m) => (m.id === id ? { ...m, ...patch } : m)) })),
@@ -608,65 +632,95 @@ export const usePlanner = create<PlannerState>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 5,
-      migrate: (persisted, version) => {
-        type Legacy<T> = Omit<T, "start" | "days"> & {
-          start?: number;
-          slot?: SlotId;
-          days?: RepeatDays;
-          repeat?: "daily" | "weekdays";
-        };
-        const state = persisted as Omit<Partial<PlannerState>, "blocks" | "series"> & {
-          blocks?: Legacy<Block>[];
-          series?: Legacy<Series>[];
-        };
-        if (version < 5) {
-          // Llega Libre: reservamos 15% para el tiempo libre y escalamos el resto, y sumamos actividades de base.
-          const old = (state.targets ?? DEFAULT_TARGETS) as Partial<QuadrantRecord<number>>;
-          if (old.libre === undefined) {
-            const raw = { ...DEFAULT_TARGETS };
-            for (const id of ["cuerpo", "mente", "alma", "vinculos", "trabajo"] as const) raw[id] = ((old[id] ?? 0) * 85) / 100;
-            raw.libre = 15;
-            state.targets = roundTargets(raw);
-          }
-          if (!(state.activities ?? []).some((a) => a.quadrant === "libre")) {
-            state.activities = [
-              ...(state.activities ?? []),
-              ...["Descanso", "Traslados", "Casa"].map((name) => ({ id: newId(), quadrant: "libre" as const, name })),
-            ];
-          }
-        }
-        if (version < 4) {
-          // "Todos los días" / "lun a vie" pasan a ser listas de días elegidos.
-          state.series = (state.series ?? []).map(({ repeat, ...x }) => ({
-            ...x,
-            days: x.days ?? (repeat === "weekdays" ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6]),
-          }));
-        }
-        if (version < 2) {
-          Object.assign(state, { onboarded: false, userName: "", activities: [], series: [] });
-        }
-        if (version < 3) {
-          // De "momentos" a horarios: apilamos los bloques de cada momento desde una hora fija.
-          const cursor: Record<string, number> = {};
-          const blocks = [...(state.blocks ?? [])]
-            .sort((a, b) => a.order - b.order)
-            .map(({ slot, ...b }) => {
-              if (typeof b.start === "number") return b as Block;
-              const s = slot ?? "manana";
-              const key = `${b.date}|${s}`;
-              const start = clampStart(cursor[key] ?? SLOT_DEFAULT_START[s], b.minutes);
-              cursor[key] = start + Math.ceil(b.minutes / STEP) * STEP;
-              return { ...b, start } as Block;
-            });
-          const series = (state.series ?? []).map(({ slot, ...x }) => ({
-            ...x,
-            start: x.start ?? SLOT_DEFAULT_START[slot ?? "manana"],
-          })) as Series[];
-          return { ...state, blocks, series, seenRecaps: [], lastCheckInPrompt: "" };
-        }
-        return state as unknown as PlannerState;
-      },
+      version: STORE_VERSION,
+      migrate: (persisted, version) => migratePlanner(persisted, version),
     },
   ),
 );
+
+/** Lleva datos guardados con una versión vieja al formato actual (del navegador o de la nube). */
+export function migratePlanner(persisted: unknown, version: number): PlannerState {
+  const state = migrateLegacy(persisted, version);
+  return version < 6 ? toV6(state) : state;
+}
+
+/**
+ * v6: los Momentos pasan a ser logros (con fecha: el primero de su mes) y lo que era meditar o terapia
+ * en Mente pasa a Mente y Alma (Mente ahora es Habilidades: aprender algo nuevo).
+ */
+function toV6(state: PlannerState): PlannerState {
+  const HOURS: Record<MomentKind, number> = { amor: 3, familia: 3, amigos: 2.5, disfrute: 3 };
+  const fromMoments: Logro[] = (state.moments ?? []).map((m) => ({
+    id: newId(),
+    date: `${m.month}-01` as DateKey,
+    text: m.text,
+    category: m.kind === "disfrute" ? "alma" : "vinculos",
+    minutes: Math.round((m.hours ?? HOURS[m.kind]) * 60),
+  }));
+  const inner = /medit|terapia|psico|respir|reza|rezo|mindful/i;
+  return {
+    ...state,
+    logros: [...(state.logros ?? []), ...fromMoments],
+    moments: [],
+    routine: (state.routine ?? []).map((b) => (b.quadrant === "mente" && inner.test(b.name) ? { ...b, quadrant: "interior" } : b)),
+  };
+}
+
+function migrateLegacy(persisted: unknown, version: number): PlannerState {
+  type Legacy<T> = Omit<T, "start" | "days"> & {
+    start?: number;
+    slot?: SlotId;
+    days?: RepeatDays;
+    repeat?: "daily" | "weekdays";
+  };
+  const state = persisted as Omit<Partial<PlannerState>, "blocks" | "series"> & {
+    blocks?: Legacy<Block>[];
+    series?: Legacy<Series>[];
+  };
+  if (version < 5) {
+    // Llega Libre: reservamos 15% para el tiempo libre y escalamos el resto, y sumamos actividades de base.
+    const old = (state.targets ?? DEFAULT_TARGETS) as Partial<QuadrantRecord<number>>;
+    if (old.libre === undefined) {
+      const raw = { ...DEFAULT_TARGETS };
+      for (const id of ["cuerpo", "mente", "alma", "vinculos", "trabajo"] as const) raw[id] = ((old[id] ?? 0) * 85) / 100;
+      raw.libre = 15;
+      state.targets = roundTargets(raw);
+    }
+    if (!(state.activities ?? []).some((a) => a.quadrant === "libre")) {
+      state.activities = [
+        ...(state.activities ?? []),
+        ...["Descanso", "Traslados", "Casa"].map((name) => ({ id: newId(), quadrant: "libre" as const, name })),
+      ];
+    }
+  }
+  if (version < 4) {
+    // "Todos los días" / "lun a vie" pasan a ser listas de días elegidos.
+    state.series = (state.series ?? []).map(({ repeat, ...x }) => ({
+      ...x,
+      days: x.days ?? (repeat === "weekdays" ? [1, 2, 3, 4, 5] : [0, 1, 2, 3, 4, 5, 6]),
+    }));
+  }
+  if (version < 2) {
+    Object.assign(state, { onboarded: false, userName: "", activities: [], series: [] });
+  }
+  if (version < 3) {
+    // De "momentos" a horarios: apilamos los bloques de cada momento desde una hora fija.
+    const cursor: Record<string, number> = {};
+    const blocks = [...(state.blocks ?? [])]
+      .sort((a, b) => a.order - b.order)
+      .map(({ slot, ...b }) => {
+        if (typeof b.start === "number") return b as Block;
+        const s = slot ?? "manana";
+        const key = `${b.date}|${s}`;
+        const start = clampStart(cursor[key] ?? SLOT_DEFAULT_START[s], b.minutes);
+        cursor[key] = start + Math.ceil(b.minutes / STEP) * STEP;
+        return { ...b, start } as Block;
+      });
+    const series = (state.series ?? []).map(({ slot, ...x }) => ({
+      ...x,
+      start: x.start ?? SLOT_DEFAULT_START[slot ?? "manana"],
+    })) as Series[];
+    return { ...state, blocks, series, seenRecaps: [], lastCheckInPrompt: "" } as unknown as PlannerState;
+  }
+  return state as unknown as PlannerState;
+}
