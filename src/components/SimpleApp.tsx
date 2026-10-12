@@ -53,7 +53,7 @@ const TAB_KEY = "lb:tab";
 const TABS: { id: Section; label: string; icon: LucideIcon }[] = [
   { id: "semana", label: "Semana", icon: CalendarDays },
   { id: "momentos", label: "Momentos", icon: PartyPopper },
-  { id: "objetivos", label: "Objetivos", icon: ListChecks },
+  { id: "objetivos", label: "Metas", icon: ListChecks },
   { id: "tablero", label: "Resultados", icon: BarChart3 },
 ];
 // v2: Objetivos pasó a ir antes que Resultados (se arranca de nuevo con ese orden).
@@ -393,14 +393,14 @@ export function SimpleApp() {
         data-tour="objetivos"
         data-section="objetivos"
         data-over={touchOver === "objetivos" || undefined}
-        aria-label="Objetivos del año"
+        aria-label="Metas y logros"
         {...dragProps("objetivos").dropProps}
         className={cn("card flex shrink-0 flex-col overflow-hidden transition-opacity", desktop ? "w-80" : "h-[70dvh]", dragging === "objetivos" && "opacity-40")}
       >
         <TasksPanel className="h-full" onCollapse={() => toggle("objetivos")} onHeaderDragStart={dragProps("objetivos").onHeaderDragStart} />
       </section>
     ) : (
-      <Collapsed key="objetivos" tour="objetivos" over={touchOver === "objetivos"} title="Objetivos" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
+      <Collapsed key="objetivos" tour="objetivos" over={touchOver === "objetivos"} title="Metas y logros" icon={ListChecks} onOpen={() => toggle("objetivos")} desktop={desktop} />
     ),
   };
 
@@ -434,7 +434,7 @@ export function SimpleApp() {
       </section>
     ),
     objetivos: (
-      <section data-tour="objetivos" aria-label="Objetivos del año" className="card flex h-full min-h-0 flex-col overflow-hidden">
+      <section data-tour="objetivos" aria-label="Metas y logros" className="card flex h-full min-h-0 flex-col overflow-hidden">
         <TasksPanel className="h-full" />
       </section>
     ),
@@ -617,7 +617,7 @@ export function SimpleApp() {
       {askClear && (
         <Ask
           title="¿Limpiar toda la semana?"
-          text="Se borran todos los bloques de tu semana tipo. Tus momentos, tus objetivos y tu sueño quedan como están."
+          text="Se borran todos los bloques de tu semana tipo. Tus momentos, tus metas y tu sueño quedan como están."
           all="Limpiar todo"
           danger
           onOne={() => {}}
@@ -941,10 +941,10 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
     },
     {
       id: "espacio",
-      label: "Espacio libre",
-      short: "Espacio libre",
+      label: "Libre y sueño",
+      short: "Libre y sueño",
       members: ["libre", "sueno"],
-      meaning: "Lo que queda por llenar: lo que dormís y el tiempo sin agendar (comidas, descanso, traslados).",
+      meaning: "Lo que queda por llenar: el tiempo sin agendar (comidas, descanso, traslados) y lo que dormís.",
     },
   ];
   const total = (g: (typeof groups)[number]) => g.members.reduce((acc, m) => acc + value[m], 0);
@@ -995,15 +995,15 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
       {(["trabajo", "cuerpo", "mente", "alma"] as Member[]).map((m) =>
         value[m] > 0 ? <span key={m} className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(value[m] / WEEK_MINUTES) * 100}%`, background: memberColor(m) }} /> : null,
       )}
-      <span className="h-full min-w-0 flex-1 bg-[color-mix(in_oklab,var(--color-ink)_9%,transparent)] transition-[width] duration-500" />
-      {value.sueno > 0 && <span className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(value.sueno / WEEK_MINUTES) * 100}%`, ...SLEEP_FILL }} />}
+      {/* Lo que queda: libre y sueño, un solo espacio. */}
+      <span className="h-full min-w-0 flex-1 transition-[width] duration-500" style={FREE_FILL} />
     </div>
   );
 
   /** Cómo se ve cada grupo en la leyenda (Cuerpo, Mente y Alma con sus tres colores). */
   const swatch = (g: (typeof groups)[number]) =>
     g.id === "espacio" ? (
-      <span aria-hidden className="h-2 w-3.5 shrink-0 rounded-full" style={SLEEP_FILL} />
+      <span aria-hidden className="h-2 w-3.5 shrink-0 rounded-full" style={FREE_FILL} />
     ) : (
       <span aria-hidden className="flex shrink-0 gap-[2px]">
         {g.members.map((m) => (
@@ -1068,9 +1068,9 @@ type Member = "trabajo" | "cuerpo" | "mente" | "alma" | "libre" | "sueno";
 type GroupId = "trabajo" | "cma" | "espacio";
 /** El color de cada parte en la barra (Alma toma el de Disfrute). */
 const memberColor = (m: Member) => (m === "libre" ? "#c3c9d4" : m === "sueno" ? "var(--color-sleep)" : `var(--color-${m})`);
-/** El sueño, rayado como en el calendario. */
-const SLEEP_FILL: React.CSSProperties = {
-  backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--color-sleep) 30%, transparent) 0 3px, color-mix(in oklab, var(--color-sleep) 12%, transparent) 3px 6px)",
+/** Libre y sueño: gris rayado (como el sueño en el calendario), un solo espacio por llenar. */
+const FREE_FILL: React.CSSProperties = {
+  backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--color-ink) 16%, transparent) 0 3px, color-mix(in oklab, var(--color-ink) 7%, transparent) 3px 6px)",
 };
 
 /** Mide el alto disponible y se lo pasa al contenido (la grilla de la semana se ajusta a la pantalla). */

@@ -6,7 +6,8 @@ import { SUGGESTED_ACTIVITIES } from "@/lib/activities";
 import { guessQuadrant } from "@/lib/categorize";
 import { cn, formatMinutes } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
-import { QUADRANTS, quadrantStyle, type QuadrantId } from "@/lib/quadrants";
+import { partStyle } from "@/lib/mode";
+import { QUADRANTS, type QuadrantId } from "@/lib/quadrants";
 import { WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
 import { newId, usePlanner } from "@/lib/store";
 import { formatTime } from "@/lib/time";
@@ -50,7 +51,7 @@ export function BlockEditor({
   onClose: () => void;
 }) {
   const isMobile = !useMediaQuery("(min-width: 640px)");
-  const pickable = quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id)) : PICKABLE;
+  const pickable = quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id) || q.id === block?.quadrant) : PICKABLE;
   const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? pickable[0]?.id ?? "cuerpo");
   const [name, setName] = useState(block?.name ?? "");
   // La categoría se elige sola según lo que escribís, hasta que la elijas vos a mano.
@@ -116,7 +117,7 @@ export function BlockEditor({
                       setQuadrant(it.quadrant);
                       setSuggested(it.quadrant);
                     }}
-                    style={quadrantStyle(it.quadrant)}
+                    style={partStyle(it.quadrant)}
                     className="pressable inline-flex h-7 items-center gap-1.5 rounded-full bg-surface-sunken pr-2.5 pl-2 text-[12px] text-ink-muted hover:text-ink"
                   >
                     <span aria-hidden className="size-1.5 rounded-full bg-[var(--q)]" />
@@ -148,7 +149,7 @@ export function BlockEditor({
                   setQuadrant(q.id);
                   setManual(true);
                 }}
-                style={quadrantStyle(q.id)}
+                style={partStyle(q.id)}
                 className={cn(
                   "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors",
                   quadrant === q.id ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line hover:bg-surface-sunken",

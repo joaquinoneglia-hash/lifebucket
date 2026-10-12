@@ -18,7 +18,8 @@ export function partStyle(id: QuadrantId | "sueno"): CSSProperties {
 }
 
 /** En modo simple solo hay estas categorías. */
-export const SIMPLE_QUADRANTS: QuadrantId[] = ["trabajo", "cuerpo", "mente", "alma", "libre"];
+// Disfrute no va en el calendario: se carga en Momentos (junto con Vínculos, forman Alma).
+export const SIMPLE_QUADRANTS: QuadrantId[] = ["trabajo", "cuerpo", "mente", "libre"];
 
 /** Actividades de arranque en modo simple (se crean si no hay ninguna). */
 export const SIMPLE_ACTIVITIES: { quadrant: QuadrantId; name: string }[] = [

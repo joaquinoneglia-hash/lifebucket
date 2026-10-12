@@ -2,6 +2,12 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-12 · Menos divisiones: Libre y sueño juntos, Disfrute solo en Momentos, Metas y logros
+
+- En la barra de arriba, Libre y Sueño son un solo espacio por llenar ("Libre y sueño", gris rayado).
+- Al agregar un evento ya no está Disfrute: quedan Trabajo, Cuerpo, Mente y Libre (en gris). Lo que disfrutás se carga en Momentos y suma a Alma. Los bloques viejos de Disfrute siguen y se pueden editar.
+- Objetivos pasa a llamarse "Metas y logros" (en la pestaña, "Metas").
+
 ## 2026-10-12 · Los datos se guardan en la nube
 
 - Antes todo quedaba solo en el navegador: borrar la caché lo perdía y cada dispositivo tenía lo suyo. Ahora cada cuenta tiene una fila en Supabase (tabla `datos`, con RLS: cada uno ve y modifica solo lo suyo). SQL en `supabase/migrations/20261012_datos_en_la_nube.sql`.

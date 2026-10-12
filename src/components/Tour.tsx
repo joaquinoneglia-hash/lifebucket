@@ -221,10 +221,10 @@ export const MAIN_TOUR: TourStep[] = [
   },
   {
     target: "objetivos",
-    title: "Objetivos del año",
+    title: "Metas y logros",
     body: "Anotá metas por mes y elegí de qué tipo son (se sugiere solo). Marcalas cuando las cumplas; si se pasan de fecha quedan en rojo y las podés arrastrar a otro mes.",
     phoneBody:
-      "Tus metas del año, mes por mes. Tocá “Agregar objetivo”: el tipo se sugiere solo y la fecha es opcional. Si se pasan de fecha quedan en rojo; tocalas para pasarlas a otro mes.",
+      "Tus metas del año, mes por mes (no cambian tu balance: son para organizarte). Escribila y dale Enter o +: el tipo se sugiere solo y la fecha es opcional. Si se pasan de fecha quedan en rojo; tocalas para pasarlas a otro mes.",
   },
   {
     target: "tablero",
@@ -237,7 +237,7 @@ export const MAIN_TOUR: TourStep[] = [
     title: "Armalo a tu gusto",
     body: "Tocá el encabezado de una sección para comprimirla y arrastralo para cambiarla de lugar. LifeBucket se acuerda de cómo lo dejaste.",
     phoneTarget: "tabs",
-    phoneBody: "Con estas pestañas vas de tu Semana a Momentos, Objetivos y Resultados. LifeBucket se acuerda de dónde quedaste.",
+    phoneBody: "Con estas pestañas vas de tu Semana a Momentos, Metas y Resultados. LifeBucket se acuerda de dónde quedaste.",
   },
   {
     target: "asistente",

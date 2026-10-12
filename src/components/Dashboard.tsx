@@ -131,11 +131,11 @@ export function Dashboard() {
         )}
       </Card>
 
-      <Card title={`Objetivos ${year}`}>
+      <Card title={`Metas y logros ${year}`}>
         {yearTasks.length ? (
           <>
             <p className="text-[13px] text-ink-muted">
-              <span className="text-[22px] leading-none font-semibold text-ink tabular-nums">{done}</span> de {yearTasks.length} propuestos cumplidos
+              <span className="text-[22px] leading-none font-semibold text-ink tabular-nums">{done}</span> de {yearTasks.length} propuestas cumplidas
             </p>
             {/* Una sola barra: cumplidos, no cumplidos (vencidos) y los que todavía están en camino. */}
             <div className="flex h-2.5 gap-[2px] overflow-hidden rounded-full bg-surface-sunken" aria-hidden>
@@ -144,17 +144,17 @@ export function Dashboard() {
               {pending > 0 && <span className="h-full rounded-full bg-ink-faint/45" style={{ width: `${(pending / yearTasks.length) * 100}%` }} />}
             </div>
             <ul className="grid grid-cols-3 gap-2">
-              <Legend color="var(--color-success)" label="Cumplidos" value={done} />
-              <Legend color="var(--color-danger)" label="No cumplidos" value={late} />
+              <Legend color="var(--color-success)" label="Cumplidas" value={done} />
+              <Legend color="var(--color-danger)" label="No cumplidas" value={late} />
               <Legend color="color-mix(in oklab, var(--color-ink-faint) 60%, transparent)" label="En camino" value={pending} />
             </ul>
           </>
         ) : (
-          <Empty>Cuando cargues objetivos, acá ves cuántos cumpliste de los que te propusiste.</Empty>
+          <Empty>Cuando cargues metas, acá ves cuántas cumpliste de las que te propusiste.</Empty>
         )}
       </Card>
 
-      <Card title="Objetivos por tipo">
+      <Card title="Metas por tipo">
         {byKind.length ? (
           <ul className="flex flex-col gap-1.5">
             {byKind.map((k) => (
@@ -175,7 +175,7 @@ export function Dashboard() {
             ))}
           </ul>
         ) : (
-          <Empty>Cuando cargues objetivos, acá ves cómo van por tipo.</Empty>
+          <Empty>Cuando cargues metas, acá ves cómo van por tipo.</Empty>
         )}
       </Card>
     </div>

@@ -67,7 +67,7 @@ export function TasksPanel({
         <div className="flex items-center gap-1.5">
           {onHeaderDragStart && <GripVertical aria-hidden className="size-4 text-ink-faint" />}
           <div>
-            <h2 className="type-title">Objetivos</h2>
+            <h2 className="type-title">Metas y logros</h2>
             <p className="text-[11.5px] text-ink-muted tabular-nums">
               {yearTasks.length ? `${done} de ${yearTasks.length} hechos en ${current}` : "Lo que querés lograr"}
             </p>
@@ -76,7 +76,7 @@ export function TasksPanel({
         {onCollapse && (
           <button
             type="button"
-            aria-label="Comprimir objetivos"
+            aria-label="Comprimir metas y logros"
             title="Comprimir"
             onClick={onCollapse}
             className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
@@ -313,15 +313,15 @@ function MonthTasks({ month, list, today }: { month: string; list: YearTask[]; t
               setTitle(e.target.value);
               if (!manualKind) setKind(kindFor(e.target.value));
             }}
-            placeholder="Nuevo objetivo…"
-            aria-label="Nuevo objetivo"
+            placeholder="Nueva meta…"
+            aria-label="Nueva meta"
             enterKeyHint="done"
             className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2 text-[13px] placeholder:text-ink-faint focus:border-ink focus:outline-none"
           />
           <button
             type="submit"
             disabled={!title.trim()}
-            aria-label="Agregar objetivo"
+            aria-label="Agregar meta"
             title="Agregar (Enter)"
             className="pressable grid size-8 shrink-0 place-items-center rounded-md bg-ink text-surface hover:bg-ink/90 disabled:opacity-30"
           >
@@ -400,7 +400,7 @@ function TaskSheet({ month, task, isMobile, onClose }: { month: string; task?: Y
         className="flex flex-col gap-4 p-5"
       >
         <h2 id="task-sheet-title" className="type-headline">
-          {task ? "Cambiar objetivo" : "Nuevo objetivo"}
+          {task ? "Cambiar meta" : "Nueva meta"}
         </h2>
 
         <label className="flex flex-col gap-1.5">
@@ -420,7 +420,7 @@ function TaskSheet({ month, task, isMobile, onClose }: { month: string; task?: Y
 
         <div className="flex flex-col gap-1.5">
           <span className="text-[12px] text-ink-muted">Tipo{!manualKind && kind !== "otro" ? " · sugerido, lo podés cambiar" : ""}</span>
-          <div role="radiogroup" aria-label="Tipo de objetivo" className="flex flex-wrap gap-1.5">
+          <div role="radiogroup" aria-label="Tipo de meta" className="flex flex-wrap gap-1.5">
             {TASK_KINDS.map((k) => (
               <button
                 key={k.id}
@@ -518,7 +518,7 @@ function KindPicker({ value, onChange }: { value: TaskKind; onChange: (k: TaskKi
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Tipo: ${current.label}`}
-        title="Tipo de objetivo"
+        title="Tipo de meta"
         className="flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-2 text-[12px] text-ink-muted hover:bg-surface-sunken"
       >
         <span aria-hidden className="size-2 rounded-full" style={{ background: kindColor(value) }} />
@@ -526,7 +526,7 @@ function KindPicker({ value, onChange }: { value: TaskKind; onChange: (k: TaskKi
         <ChevronDown aria-hidden className="size-3" />
       </button>
       {open && (
-        <ul role="listbox" aria-label="Tipo de objetivo" className="animate-fade-up absolute top-full right-0 z-30 mt-1 w-36 rounded-lg bg-surface p-1 shadow-[var(--shadow-popover)]">
+        <ul role="listbox" aria-label="Tipo de meta" className="animate-fade-up absolute top-full right-0 z-30 mt-1 w-36 rounded-lg bg-surface p-1 shadow-[var(--shadow-popover)]">
           {TASK_KINDS.map((k) => (
             <li key={k.id}>
               <button
@@ -571,7 +571,7 @@ function BalanceNote() {
     <li className="mx-1 mb-2 flex items-start gap-2 rounded-xl bg-surface-sunken px-3 py-2.5">
       <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" />
       <p className="flex-1 text-[12.5px] leading-snug text-ink-muted">
-        <span className="font-semibold text-ink">Tus objetivos no cambian tu balance de vida.</span> Están para que te organices: el balance sale solo de tu
+        <span className="font-semibold text-ink">Tus metas no cambian tu balance de vida.</span> Están para que te organices: el balance sale solo de tu
         semana y tus momentos.
       </p>
       <button
