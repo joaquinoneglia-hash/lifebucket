@@ -3,7 +3,7 @@ import { addDays, fromKey, startOfWeek, toKey, type DateKey } from "./dates";
 import { QUADRANT_BY_ID } from "./quadrants";
 import { sleepStats } from "./sleep-stats";
 import { goalsFor, type Logro, type PlannerState, type YearTask } from "./store";
-import { ACTIVE_PARTS, fill, monthMinutes, weekMinutes, WEEK_MINUTES, type Part } from "./week-shares";
+import { ACTIVE_PARTS, bucketTotal, fill, monthMinutes, weekMinutes, WEEK_MINUTES, type Part } from "./week-shares";
 
 /**
  * "Cómo viene tu balde": junta el balde, los logros diarios, las cosas que hiciste, las metas y el sueño de
@@ -71,6 +71,8 @@ export function buildRecap(d: Data, range: Range, now = new Date()) {
     minutes = fill(d.routine, so, sleep.weekHours * 60 * (days / 7), total, days / 7);
     elapsedEnd = today;
   }
+  // El balde se reparte entre sueño, trabajo y lo tuyo (lo "libre" no cuenta).
+  total = bucketTotal(minutes);
   const pct = (m: number) => Math.round((m / total) * 100);
   const title = range === "semana" ? "Cómo fue tu semana" : range === "mes" ? `Cómo fue tu ${MONTHS[now.getMonth()]}` : `Cómo viene tu ${year}`;
   const period = range === "anio" ? `Del ${fmt.format(fromKey(start))} al 31 de diciembre, si seguís igual` : `Del ${fmt.format(fromKey(start))} al ${fmt.format(fromKey(end))}`;

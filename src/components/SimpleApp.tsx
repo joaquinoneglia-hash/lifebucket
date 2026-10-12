@@ -194,6 +194,15 @@ export function SimpleApp() {
     window.history.replaceState(null, "", window.location.pathname);
   }, [ready]);
   const showSetup = ready && !setupDone && sync !== "loading";
+  // Desde el balde desbordado (o cualquier botón que pida sumar un bloque): el editor, ya cargado.
+  useEffect(() => {
+    const open = (e: Event) => {
+      const d = (e as CustomEvent<{ name: string; quadrant: QuadrantId; days: number[]; start: number; minutes: number }>).detail;
+      setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days } });
+    };
+    window.addEventListener("lb:add-block", open);
+    return () => window.removeEventListener("lb:add-block", open);
+  }, []);
   const [justSetUp, setJustSetUp] = useState(false);
   /** Desde el recordatorio: ir a cada parte (en la compu se destaca un momento; en el celular, su pestaña). */
   const goTo = (where: NudgeTarget, nudge?: Nudge) => {

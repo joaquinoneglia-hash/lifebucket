@@ -19,7 +19,8 @@ export function partStyle(id: QuadrantId | "sueno"): CSSProperties {
 
 /** En modo simple solo hay estas categorías. */
 /** Lo que se puede poner en la semana tipo: lo que se trabaja y se juega, y la base (Trabajo, Libre). */
-export const SIMPLE_QUADRANTS: QuadrantId[] = ["cuerpo", "interior", "alma", "mente", "vinculos", "trabajo", "libre"];
+// Libre ya no se elige: el balde es sueño, trabajo y lo que hacés para vos.
+export const SIMPLE_QUADRANTS: QuadrantId[] = ["cuerpo", "interior", "alma", "mente", "vinculos", "trabajo"];
 
 /** Actividades de arranque en modo simple (se crean si no hay ninguna). */
 export const SIMPLE_ACTIVITIES: { quadrant: QuadrantId; name: string }[] = [

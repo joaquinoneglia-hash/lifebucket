@@ -7,7 +7,7 @@ import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { QUADRANT_BY_ID } from "@/lib/quadrants";
 import { usePlanner } from "@/lib/store";
-import { ACTIVE_PARTS, monthMinutes, partColor, weekMinutes, WEEK_MINUTES, type Part } from "@/lib/week-shares";
+import { ACTIVE_PARTS, bucketTotal, monthMinutes, partColor, weekMinutes, type Part } from "@/lib/week-shares";
 import { ModuleControls } from "./Modules";
 import { QuadrantIcon } from "./QuadrantIcon";
 import { RecapBook } from "./RecapBook";
@@ -35,14 +35,17 @@ export function BucketCard({ className, showReport = true }: { className?: strin
   const month = new Date().toISOString().slice(0, 7);
   // El mes cuenta desde que empezaste a usar la app hasta hoy (no te suma días que no estabas).
   const monthly = monthMinutes(routine, logros, sleep, month, startedAt);
-  const { minutes, total } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep), total: WEEK_MINUTES } : monthly;
+  const { minutes } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep) } : monthly;
+  const total = bucketTotal(minutes);
   const partial = range === "mes" && monthly.start > `${month}-01`;
   const pct = (m: number) => Math.round((m / total) * 100);
   const mine = ACTIVE_PARTS.reduce((acc, p) => acc + minutes[p], 0);
   const byHours = (list: Part[]) => [...list].sort((a, b) => minutes[b] - minutes[a]);
-  const BASE = byHours(["trabajo", "libre", "sueno"]);
+  const BASE = byHours(["trabajo", "sueno"]);
   const MINE = byHours(ACTIVE_PARTS);
   const missing = MINE.filter((p) => minutes[p] === 0);
+  // Sin nada para vos, el balde se desborda de trabajo y sueño.
+  const overflow = mine === 0;
   const tip = missing.length
     ? `A tu balde le falta ${label(missing[0])}. ¿Le hacés un lugar esta semana?`
     : pct(mine) >= 20
@@ -82,9 +85,9 @@ export function BucketCard({ className, showReport = true }: { className?: strin
       </header>
 
       <div className="flex min-h-0 flex-1 items-center gap-4">
-        <Pail minutes={minutes} total={total} order={[...BASE.slice().reverse(), ...MINE.slice().reverse()]} center={h(mine)} pct={pct} />
+        <Pail minutes={minutes} total={total} order={[...BASE.slice().reverse(), ...MINE.slice().reverse()]} center={h(mine)} pct={pct} overflow={overflow} />
         <ul className="flex max-h-full min-w-0 flex-1 flex-col gap-[3px] overflow-y-auto">
-          {/* Lo que es para vos, con su total; abajo, la base (Trabajo, Libre y Sueño), de mayor a menor. */}
+          {/* Lo que es para vos, con su total; abajo, la base (Trabajo y Sueño), de mayor a menor. */}
           <GroupTotal label="Tiempo para vos" value={h(mine)} pct={pct(mine)} />
           {MINE.map(row)}
           <li aria-hidden className="my-0.5 border-t border-line" />
@@ -92,7 +95,21 @@ export function BucketCard({ className, showReport = true }: { className?: strin
         </ul>
       </div>
 
-      <div className="flex items-center justify-between gap-2 border-t border-line pt-2.5">
+      {overflow && (
+        <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-[color-mix(in_oklab,var(--color-danger)_9%,transparent)] px-3 py-2">
+          <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]">
+            <b className="font-semibold">Tu balde está desbordado:</b> todo es trabajo y sueño. Sumá algo para vos a tu semana.
+          </p>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "cuerpo", days: [2, 4], start: 1140, minutes: 60 } }))}
+            className="pressable h-8 shrink-0 rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90"
+          >
+            Sumar algo para vos
+          </button>
+        </div>
+      )}
+      <div className={cn("flex items-center justify-between gap-2 border-t border-line pt-2.5", overflow && "hidden")}>
         <p className="min-w-0 text-[12px] leading-snug text-ink-muted" title={partial ? `Desde que empezaste: ${fmtDay.format(fromKey(monthly.start))}` : undefined}>
           {tip}
         </p>
@@ -113,7 +130,7 @@ export function BucketCard({ className, showReport = true }: { className?: strin
  * El balde: capas de colores apiladas de abajo hacia arriba (`order`), cada una con su parte del tiempo. La
  * de arriba tiene una ola suave. Al centro, las horas para vos.
  */
-function Pail({ minutes, total, order, center, pct }: { minutes: Record<Part, number>; total: number; order: Part[]; center: string; pct: (m: number) => number }) {
+function Pail({ minutes, total, order, center, pct, overflow }: { minutes: Record<Part, number>; total: number; order: Part[]; center: string; pct: (m: number) => number; overflow: boolean }) {
   const id = useId().replace(/:/g, "");
   const TOP = 34;
   const BOTTOM = 150;
@@ -160,6 +177,17 @@ function Pail({ minutes, total, order, center, pct }: { minutes: Record<Part, nu
           {top && <path d={`M0 ${top.y + 1.5} q 15 -5 30 0 t 30 0 t 30 0 t 30 0 t 30 0 V ${top.y + 8} H 0 Z`} fill={partColor(top.p)} className="animate-wave" />}
           <rect x="0" y="0" width="120" height="160" fill={`url(#shine-${id})`} />
         </g>
+        {/* Desbordado: lo de arriba se sale del balde y gotea por los costados. */}
+        {overflow && top && (
+          <g fill={partColor(top.p)}>
+            <path d="M12 36 C 20 22, 34 30, 44 24 C 56 17, 66 28, 78 22 C 90 16, 100 28, 108 36 Z" className="animate-wave" />
+            <path d="M14 34 C 8 40, 7 52, 9 60 C 11 52, 12 44, 18 36 Z" />
+            <path d="M106 34 C 112 42, 113 56, 110 66 C 108 56, 107 46, 102 36 Z" />
+            <circle cx="9" cy="70" r="2.6" className="animate-drip" />
+            <circle cx="110" cy="76" r="2.6" className="animate-drip [animation-delay:700ms]" />
+            <circle cx="60" cy="20" r="2" className="animate-drip [animation-delay:350ms]" />
+          </g>
+        )}
         <path d={body} fill="none" stroke="var(--color-ink)" strokeOpacity="0.55" strokeWidth="2.5" strokeLinejoin="round" />
         <path d="M10 34 L110 34" stroke="var(--color-ink)" strokeOpacity="0.55" strokeWidth="3" strokeLinecap="round" />
       </svg>

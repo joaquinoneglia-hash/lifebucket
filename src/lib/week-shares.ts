@@ -77,6 +77,12 @@ export function weekShares(routine: RoutineBlock[], logros: Logro[], sleep?: Sle
   return Object.fromEntries(PARTS.map((p) => [p.id, Math.round((m[p.id] / WEEK_MINUTES) * 100)])) as Record<Part, number>;
 }
 
+/**
+ * El balde se reparte entre Sueño, Trabajo y lo que hacés para vos (el tiempo "libre" no cuenta): si no
+ * hay nada para vos, el 100% es sueño y trabajo.
+ */
+export const bucketTotal = (m: Record<Part, number>) => Math.max(1, m.sueno + m.trabajo + ACTIVE_PARTS.reduce((acc, p) => acc + m[p], 0));
+
 /** El color de cada parte (Libre en gris, Sueño en azul noche). */
 export const partColor = (p: Part) => (p === "libre" ? "#aab1be" : p === "sueno" ? "var(--color-sleep)" : `var(--color-${p})`);
 

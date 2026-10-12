@@ -177,3 +177,10 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - La rutina en cuatro subpasos: sueño, trabajo, emprendimiento (o «No tengo») y «lo importante» (Deporte, Mente y Alma, Hobbies, Habilidades, cada uno con su explicación y un ejemplo). Vínculos no va en la rutina: los encuentros se anotan en el diario.
 - Los pasos de no negociables, metas y diario se completan en el panel del tablero; el cartel solo guía («qué tocar», paso a paso).
 - Editor de bloques: lo que ya tenés aparece como sugerencia solo mientras escribís; si venís de una categoría, ideas de esa categoría. Cada categoría muestra qué entra en ella.
+
+## 2026-10-12 · Sin «Libre»: el balde es sueño, trabajo y lo tuyo
+
+- El tiempo libre deja de contar: el balde se reparte entre Sueño, Trabajo y lo que hacés para vos (`bucketTotal()` en `week-shares.ts`). Si no hay nada para vos, el 100% es sueño y trabajo.
+- Sin nada para vos, el balde se ve desbordado (se sale por arriba y gotea) con un aviso y el botón «Sumar algo para vos», que abre el editor.
+- «Libre» ya no se elige como categoría; los bloques viejos así (por ejemplo el almuerzo) se siguen viendo en el calendario, pero no cuentan.
+- Arranque: cartel a los 30 s de terminar («¿Te olvidaste de agregar algo?»). Arriba vuelven dos botones: música (nota, tachada si está apagada) y sonidos (parlante).

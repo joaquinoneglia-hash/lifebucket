@@ -241,7 +241,7 @@ export function Book({ initial = "mes", onClose, className }: { initial?: Range;
 function Visual({ id, recap }: { id: Recap["chapters"][number]["id"]; recap: Recap }) {
   const { minutes, total } = recap;
   const pct = (m: number) => Math.round((m / total) * 100);
-  const parts: Part[] = [...ACTIVE_PARTS, "trabajo", "libre", "sueno"];
+  const parts: Part[] = [...ACTIVE_PARTS, "trabajo", "sueno"];
   const sorted = [...parts].sort((a, b) => minutes[b] - minutes[a]);
 
   if (id === "portada")
