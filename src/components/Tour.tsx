@@ -183,10 +183,10 @@ export function Tour({ steps: all, phone = false, onClose }: { steps: TourStep[]
 export const MAIN_TOUR: TourStep[] = [
   {
     target: "shares",
-    title: "Tu balde, en porcentajes",
-    body: "Cada color es una parte de tu vida: Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre. El número es cuánto de tu semana despierta se lleva cada una. Pasá el mouse para ver qué incluye y el detalle.",
+    title: "Tu semana, en una barra",
+    body: "La barra es tu semana entera. La van llenando el Trabajo (rojo) y lo que te hace bien: Cuerpo, Mente y Alma (lo que disfrutás y tu gente). Lo que queda es espacio libre: tu tiempo sin agendar y lo que dormís. Pasá el mouse por cada grupo para ver el detalle.",
     phoneBody:
-      "Cada color es una parte de tu vida: Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre. El número es cuánto de tu semana despierta se lleva cada una. Tocá una para ver qué incluye y el detalle.",
+      "La barra es tu semana entera. La van llenando el Trabajo (rojo) y lo que te hace bien: Cuerpo, Mente y Alma (lo que disfrutás y tu gente). Lo que queda es espacio libre: tu tiempo sin agendar y lo que dormís. Tocá cada grupo para ver el detalle.",
   },
   {
     target: "semana",

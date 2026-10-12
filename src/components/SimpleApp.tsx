@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type DragEvent } from "react";
 import { cn } from "@/lib/format";
 import { formatTime } from "@/lib/time";
 import { useMediaQuery, useViewportHeight } from "@/lib/hooks";
-import { BOND_HOURS, bondBreakdown, funWeekMinutes } from "@/lib/bonds";
+import { bondBreakdown, funWeekMinutes } from "@/lib/bonds";
 import { partStyle, SIMPLE_QUADRANTS } from "@/lib/mode";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import type { QuadrantId } from "@/lib/quadrants";
@@ -886,22 +886,19 @@ type PartId = QuadrantId | "sueno";
 const BOND_LABEL: Record<string, string> = { amor: "Amor", familia: "Familia", amigos: "Amigos" };
 
 /**
- * Los % de la semana entera (168 h): Sueño, Trabajo, Cuerpo, Mente, Disfrute, Vínculos y Libre.
- * Vínculos no está en el calendario: sus momentos del mes se pasan a horas por semana y se descuentan
- * de Libre (pasan en tu tiempo libre).
+ * Tu semana entera (168 h) en una barra que se llena: Trabajo y Cuerpo-Mente-Alma la van ocupando y lo que
+ * queda es espacio libre (Libre y Sueño). Abajo, los tres grupos con su %; tocando cada uno, el detalle.
+ * Alma junta Disfrute y Vínculos (los momentos del mes se pasan a horas por semana).
  */
 function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean }) {
   const moments = usePlanner((s) => s.moments);
   const sleep = usePlanner((s) => s.sleep);
-  const [picked, setPicked] = useState<PartId | null>(null);
+  const [picked, setPicked] = useState<GroupId | null>(null);
   const inQuadrant = (q: PartId) => routine.filter((b) => b.quadrant === q);
   const minutes = weekMinutes(routine, moments, sleep);
   const fun = funWeekMinutes(moments);
   const funMin = Math.min(fun.minutes, minutes.alma);
-  // De mayor a menor: lo que más tiempo te lleva, primero.
-  const items = PARTS.map((p) => ({ id: p.id as PartId, value: minutes[p.id] })).sort((a, b) => b.value - a.value);
   const pct = (m: number) => Math.round((m / WEEK_MINUTES) * 100);
-  const label: Record<string, string> = { trabajo: "Trabajo", cuerpo: "Cuerpo", mente: "Mente", alma: "Disfrute", vinculos: "Vínculos", libre: "Libre", sueno: "Sueño" };
 
   /** Qué forma el % de cada parte, de lo que más pesa a lo que menos. */
   const breakdown = (q: PartId, value: number): [string, number][] => {
@@ -923,105 +920,152 @@ function Shares({ routine, mobile }: { routine: RoutineBlock[]; mobile?: boolean
     return list.sort((a, b) => b[1] - a[1]);
   };
 
-  /** Qué significa la parte y de qué está hecho su %. */
-  const detail = (it: (typeof items)[number]) => {
-    const parts = breakdown(it.id, it.value);
-    return (
-      <>
-      <p className="flex items-baseline justify-between text-[12px]">
-        <span className="font-semibold">{label[it.id]}</span>
-        <span className="text-ink-muted">
-          {(Math.round((it.value / 60) * 10) / 10).toLocaleString("es-AR")} h · {pct(it.value)}% de la semana
+  // Tres grupos: lo que llena tu semana (Trabajo; Cuerpo, Mente y Alma) y lo que queda (espacio libre: Libre y Sueño).
+  // Alma junta Disfrute y Vínculos: lo que disfrutás y tu gente.
+  const alma = minutes.alma + minutes.vinculos;
+  const value: Record<Member, number> = { trabajo: minutes.trabajo, cuerpo: minutes.cuerpo, mente: minutes.mente, alma, libre: minutes.libre, sueno: minutes.sueno };
+  const groups: { id: GroupId; label: string; short: string; members: Member[]; meaning: string }[] = [
+    { id: "trabajo", label: "Trabajo", short: "Trabajo", members: ["trabajo"], meaning: MEANING.trabajo },
+    {
+      id: "cma",
+      label: "Cuerpo, Mente y Alma",
+      short: "Cuerpo · Mente · Alma",
+      members: ["cuerpo", "mente", "alma"],
+      meaning: "Lo que te hace bien: tu cuerpo, tu cabeza y tu alma (lo que disfrutás y tu gente: amor, familia, amigos).",
+    },
+    {
+      id: "espacio",
+      label: "Espacio libre",
+      short: "Espacio libre",
+      members: ["libre", "sueno"],
+      meaning: "Lo que queda por llenar: lo que dormís y el tiempo sin agendar (comidas, descanso, traslados).",
+    },
+  ];
+  const total = (g: (typeof groups)[number]) => g.members.reduce((acc, m) => acc + value[m], 0);
+  const name: Record<Member, string> = { trabajo: "Trabajo", cuerpo: "Cuerpo", mente: "Mente", alma: "Alma", libre: "Libre", sueno: "Sueño" };
+  const sub: Record<Member, string> = { trabajo: "", cuerpo: "", mente: "", alma: "disfrute y vínculos", libre: "sin agendar, comidas, descanso", sueno: `${hoursLabel(sleepStats(sleep).perNight)} por noche` };
+  /** De qué está hecho cada parte (los nombres de los bloques o los momentos). */
+  const items = (m: Member): [string, number][] =>
+    m === "alma" ? [...breakdown("alma", minutes.alma), ...breakdown("vinculos", minutes.vinculos)].sort((a, b) => b[1] - a[1]) : m === "sueno" ? [] : breakdown(m, value[m]);
+  const h = (min: number) => `${(Math.round((min / 60) * 10) / 10).toLocaleString("es-AR")} h`;
+
+  /** El detalle de un grupo: qué es, y cada parte con sus horas y de qué está hecha. */
+  const detail = (g: (typeof groups)[number]) => (
+    <>
+      <p className="flex items-baseline justify-between gap-2 text-[12.5px]">
+        <span className="font-semibold">{g.label}</span>
+        <span className="shrink-0 text-ink-muted tabular-nums">
+          {h(total(g))} · {pct(total(g))}% de la semana
         </span>
       </p>
-      <p className="mt-1 mb-2.5 text-[11.5px] leading-snug text-ink-muted">{MEANING[it.id]}</p>
-      {parts.length ? (
-        <ul className="flex flex-col gap-1.5">
-          {parts.map(([name, m]) => (
-            <li key={name} className="flex flex-col gap-0.5">
-              <span className="flex justify-between gap-2 text-[12px]">
-                <span className="truncate">{name}</span>
-                <span className="shrink-0 font-semibold">{pct(m)}%</span>
+      <p className="mt-1 mb-3 text-[11.5px] leading-snug text-ink-muted">{g.meaning}</p>
+      <ul className="flex flex-col gap-2.5">
+        {g.members.map((m) => {
+          const list = items(m).slice(0, 4);
+          return (
+            <li key={m} className="flex flex-col gap-1">
+              <span className="flex items-center gap-1.5 text-[12.5px]">
+                <span aria-hidden className="size-2 rounded-full" style={{ background: memberColor(m) }} />
+                <span className="font-medium">{name[m]}</span>
+                {sub[m] && <span className="truncate text-[11px] text-ink-faint">{sub[m]}</span>}
+                <span className="ml-auto shrink-0 font-semibold tabular-nums">{pct(value[m])}%</span>
               </span>
-              <span className="h-1 overflow-hidden rounded-full bg-surface-sunken">
-                <span className="block h-full rounded-full bg-[var(--q)]" style={{ width: `${it.value ? (m / it.value) * 100 : 0}%` }} />
-              </span>
+              {list.length > 0 && (
+                <span className="pl-3.5 text-[11px] leading-snug text-ink-muted">{list.map(([n, mm]) => `${n} ${h(mm)}`).join(" · ")}</span>
+              )}
             </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-[12px] text-ink-faint">
-          {it.id === "vinculos" ? "Todavía no cargaste momentos este mes." : `Todavía no hay bloques de ${label[it.id].toLowerCase()}.`}
-        </p>
+          );
+        })}
+      </ul>
+      {g.id === "cma" && minutes.vinculos === 0 && (
+        <p className="mt-2.5 border-t border-line pt-2 text-[10.5px] leading-snug text-ink-faint">Las citas y salidas con tu gente se cargan en Momentos y suman a Alma.</p>
       )}
-      {it.id === "vinculos" && (
-        <p className="mt-2 border-t border-line pt-2 text-[10.5px] leading-snug text-ink-faint">
-          Cada cita suma ~{BOND_HOURS.amor} h, cada salida con la familia ~{BOND_HOURS.familia} h y con amigos ~
-          {String(BOND_HOURS.amigos).replace(".", ",")} h. El total del mes se reparte en sus semanas.
-        </p>
+    </>
+  );
+
+  /** La barra de la semana: Trabajo y Cuerpo-Mente-Alma la van llenando; lo que queda es espacio libre. */
+  const bar = (
+    <div className="flex h-3 w-full gap-[2px] overflow-hidden rounded-full" aria-hidden>
+      {(["trabajo", "cuerpo", "mente", "alma"] as Member[]).map((m) =>
+        value[m] > 0 ? <span key={m} className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(value[m] / WEEK_MINUTES) * 100}%`, background: memberColor(m) }} /> : null,
       )}
-      </>
+      <span className="h-full min-w-0 flex-1 bg-[color-mix(in_oklab,var(--color-ink)_9%,transparent)] transition-[width] duration-500" />
+      {value.sueno > 0 && <span className="h-full shrink-0 transition-[width] duration-500" style={{ width: `${(value.sueno / WEEK_MINUTES) * 100}%`, ...SLEEP_FILL }} />}
+    </div>
+  );
+
+  /** Cómo se ve cada grupo en la leyenda (Cuerpo, Mente y Alma con sus tres colores). */
+  const swatch = (g: (typeof groups)[number]) =>
+    g.id === "espacio" ? (
+      <span aria-hidden className="h-2 w-3.5 shrink-0 rounded-full" style={SLEEP_FILL} />
+    ) : (
+      <span aria-hidden className="flex shrink-0 gap-[2px]">
+        {g.members.map((m) => (
+          <span key={m} className="size-2 rounded-full" style={{ background: memberColor(m) }} />
+        ))}
+      </span>
     );
-  };
 
   if (mobile) {
-    const open = items.find((it) => it.id === picked);
+    const open = groups.find((g) => g.id === picked);
     return (
-      <div data-tour="shares" className="flex flex-col gap-2">
-        <ul aria-label="Tu semana en porcentajes" className="flex flex-wrap justify-center gap-1">
-          {items.map((it) => (
-            <li key={it.id} style={partStyle(it.id)}>
+      <div data-tour="shares" className="flex flex-col gap-2 rounded-2xl bg-surface/80 px-3 py-2.5 shadow-[var(--shadow-card)]">
+        {bar}
+        <ul aria-label="Tu semana en tres grupos" className="grid grid-cols-[auto_1fr_auto] items-center gap-1">
+          {groups.map((g) => (
+            <li key={g.id} className={cn(g.id === "cma" && "justify-self-center", g.id === "espacio" && "justify-self-end")}>
               <button
                 type="button"
-                aria-expanded={picked === it.id}
-                onClick={() => setPicked(picked === it.id ? null : it.id)}
-                className={cn(
-                  "flex items-center gap-[3px] rounded-full bg-surface/80 px-1.5 py-1 text-[11px] whitespace-nowrap tabular-nums shadow-[var(--shadow-card)] transition-shadow",
-                  picked === it.id && "ring-2 ring-[var(--q)]",
-                )}
+                aria-expanded={picked === g.id}
+                onClick={() => setPicked(picked === g.id ? null : g.id)}
+                className={cn("flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[11.5px] whitespace-nowrap tabular-nums", picked === g.id && "bg-surface-sunken")}
               >
-                <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-[var(--q)]" />
-                <span className="text-ink-muted">{label[it.id]}</span>
-                <span className="font-semibold">{pct(it.value)}%</span>
+                {swatch(g)}
+                <span className="text-ink-muted">{g.id === "cma" ? "C·M·A" : g.short}</span>
+                <span className="font-semibold">{pct(total(g))}%</span>
               </button>
             </li>
           ))}
         </ul>
-        {open && (
-          <div style={partStyle(open.id)} className="animate-fade-up rounded-xl bg-surface p-3 shadow-[var(--shadow-card)]">
-            {detail(open)}
-          </div>
-        )}
+        {open && <div className="animate-fade-up border-t border-line pt-2.5">{detail(open)}</div>}
       </div>
     );
   }
 
   return (
-    <ul data-tour="shares" aria-label="Tu semana en porcentajes" className="flex items-center gap-4 rounded-full bg-surface/80 px-4 py-2 shadow-[var(--shadow-card)]">
-      {items.map((it) => (
-        <li
-          key={it.id}
-          tabIndex={0}
-          style={partStyle(it.id)}
-          className={cn(
-            "group relative flex cursor-default items-center gap-1.5 rounded-full text-[13px] tabular-nums outline-offset-4",
-          )}
-        >
-          <span aria-hidden className="size-2 rounded-full bg-[var(--q)]" />
-          <span className="text-ink-muted">{label[it.id]}</span>
-          <span className="font-semibold">{pct(it.value)}%</span>
-          {/* Al pasar el mouse: qué significa y de qué está hecho ese %. */}
-          <div
-            role="tooltip"
-            className="pointer-events-none absolute top-full left-1/2 z-40 mt-3 hidden w-64 -translate-x-1/2 rounded-xl bg-surface p-3 text-left shadow-[var(--shadow-popover)] group-hover:block group-focus:block"
-          >
-            {detail(it)}
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div data-tour="shares" className="flex w-[min(560px,100%)] flex-col gap-2 rounded-2xl bg-surface/80 px-4 py-2.5 shadow-[var(--shadow-card)]">
+      {bar}
+      <ul aria-label="Tu semana en tres grupos" className="flex items-center justify-between gap-3">
+        {groups.map((g) => (
+          <li key={g.id} tabIndex={0} className="group relative flex cursor-default items-center gap-1.5 rounded-full text-[12.5px] whitespace-nowrap tabular-nums outline-offset-4">
+            {swatch(g)}
+            <span className="text-ink-muted">{g.short}</span>
+            <span className="font-semibold">{pct(total(g))}%</span>
+            {/* Al pasar el mouse: qué es y de qué está hecho. */}
+            <div
+              role="tooltip"
+              className={cn(
+                "pointer-events-none absolute top-full z-40 mt-3 hidden w-72 rounded-xl bg-surface p-3.5 text-left whitespace-normal shadow-[var(--shadow-popover)] group-hover:block group-focus:block",
+                g.id === "trabajo" ? "left-0" : g.id === "espacio" ? "right-0" : "left-1/2 -translate-x-1/2",
+              )}
+            >
+              {detail(g)}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
+
+type Member = "trabajo" | "cuerpo" | "mente" | "alma" | "libre" | "sueno";
+type GroupId = "trabajo" | "cma" | "espacio";
+/** El color de cada parte en la barra (Alma toma el de Disfrute). */
+const memberColor = (m: Member) => (m === "libre" ? "#c3c9d4" : m === "sueno" ? "var(--color-sleep)" : `var(--color-${m})`);
+/** El sueño, rayado como en el calendario. */
+const SLEEP_FILL: React.CSSProperties = {
+  backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--color-sleep) 30%, transparent) 0 3px, color-mix(in oklab, var(--color-sleep) 12%, transparent) 3px 6px)",
+};
 
 /** Mide el alto disponible y se lo pasa al contenido (la grilla de la semana se ajusta a la pantalla). */
 function FitHeight({ children }: { children: (height: number) => React.ReactNode }) {

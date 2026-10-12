@@ -2,6 +2,11 @@
 
 Registro de decisiones de producto, diseño y técnicas. Una entrada por decisión, la más nueva arriba: fecha, qué se decidió y por qué.
 
+## 2026-10-12 · La barra de arriba en tres grupos
+
+- En vez de siete porcentajes sueltos, una barra con la semana entera (168 h) que se va llenando: Trabajo (rojo) y Cuerpo, Mente y Alma (tres colores). Lo que queda es el espacio libre (Libre y Sueño, rayado como en el calendario).
+- Alma junta Disfrute y Vínculos (lo que disfrutás y tu gente) en esta vista. Debajo, tres resúmenes con su %; tocando o pasando el mouse, el detalle de cada parte.
+
 ## 2026-10-11 · Versión en pasos (beta, oculta)
 
 - Prueba de un formato tipo formulario/encuesta, en `/pasos`, que solo ven las cuentas de `BETA_EMAILS` (por defecto, la de Joaco; el chequeo es en el servidor, `src/lib/beta.ts`). La app actual no cambia; el acceso aparece en el menú de la cuenta solo para esas cuentas.
