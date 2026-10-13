@@ -53,3 +53,12 @@ export function formatWeekRange(start: Date): string {
     ? `${start.getDate()} – ${end.getDate()} ${em}`
     : `${start.getDate()} ${sm} – ${end.getDate()} ${em}`;
 }
+
+/** El número de semana del año (ISO: la semana 1 es la que tiene el primer jueves). */
+export function weekNumber(d: Date): number {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}

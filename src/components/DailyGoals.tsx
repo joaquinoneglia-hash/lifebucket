@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronLeft, ChevronRight, Maximize2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChartColumnBig } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BASE_GOALS, dayScore, monthDays, monthStats, rangeStats } from "@/lib/daily-goals";
 import { useMediaQuery } from "@/lib/hooks";
-import { Sheet } from "./ui";
-import { fromKey, toKey, type DateKey } from "@/lib/dates";
+import { Segmented, Sheet } from "./ui";
+import { addDays, fromKey, startOfWeek, toKey, type DateKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { cheer } from "@/lib/motivation";
 import { play } from "@/lib/sfx";
@@ -68,7 +69,23 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
     else if (list) list.scrollTop = 0;
   }, [anchor, editing]);
 
-  const cols = `46px repeat(${Math.max(goals.length, 1)}, minmax(24px, 1fr)) 32px`;
+  const cols = `44px repeat(${Math.max(goals.length, 1)}, minmax(40px, 56px)) 1fr 34px`;
+  // Tildar arrastrando: apretás en un casillero y pasás por los otros (todos quedan como el primero).
+  const dragMode = useRef<boolean | null>(null);
+  useEffect(() => {
+    const up = () => (dragMode.current = null);
+    window.addEventListener("pointerup", up);
+    return () => window.removeEventListener("pointerup", up);
+  }, []);
+  const setCheck = (date: DateKey, id: string, want: boolean) => {
+    const on = (usePlanner.getState().dailyChecks[date] ?? []).includes(id);
+    if (on === want) return;
+    toggle(date, id);
+    if (want) {
+      const now = dayScore(goals, usePlanner.getState().dailyChecks, date);
+      cheer(now === goals.length ? "allChecks" : "check");
+    }
+  };
 
   return (
     <section data-tour="objetivos" aria-labelledby="daily-title" className={cn("card flex min-h-0 flex-col overflow-hidden", className)}>
@@ -111,7 +128,7 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
             }}
             className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
-            <Maximize2 aria-hidden className="size-3.5" />
+            <ChartColumnBig aria-hidden className="size-3.5" />
           </button>
           <ModuleControls />
         </div>
@@ -158,6 +175,7 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
                     {g.name}
                   </span>
                 ))}
+                <span aria-hidden />
                 <span role="columnheader" className="pr-1 text-right font-semibold">
                   Pts
                 </span>
@@ -168,7 +186,6 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
                 const isToday = date === today;
                 const day = fromKey(date);
                 const score = dayScore(goals, checks, date);
-                const full = score === goals.length && score > 0;
                 const done = new Set(checks[date] ?? []);
                 const weekend = day.getDay() === 0 || day.getDay() === 6;
                 return (
@@ -191,27 +208,62 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
                             disabled={future}
                             aria-pressed={on}
                             aria-label={`${g.name}, ${WEEKDAYS[day.getDay()]} ${day.getDate()}: ${on ? "cumplido" : "sin cumplir"}`}
-                            onClick={() => {
-                              if (!on) cheer(score + 1 === goals.length ? "allChecks" : "check");
-                              toggle(date, g.id);
+                            onPointerDown={(e) => {
+                              if (future || e.button !== 0) return;
+                              e.preventDefault();
+                              (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+                              dragMode.current = !on;
+                              setCheck(date, g.id, !on);
+                            }}
+                            onPointerEnter={() => {
+                              if (dragMode.current !== null && !future) setCheck(date, g.id, dragMode.current);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                setCheck(date, g.id, !on);
+                              }
                             }}
                             className={cn(
-                              "pressable grid place-items-center rounded-md border transition-colors duration-150",
-                              fit ? "aspect-square h-[min(18px,calc(100%-2px))] rounded-[4px]" : "size-[22px]",
-                              on ? "border-ink bg-ink text-surface" : fit ? "border-ink-faint/70 bg-surface hover:border-ink" : "border-line bg-surface hover:border-ink-faint",
+                              "pressable mx-auto grid w-[30px] touch-none place-items-center rounded-md border transition-colors duration-150",
+                              fit ? "h-[min(20px,calc(100%-2px))] rounded-[4px]" : "h-[24px]",
+                              on ? "border-transparent text-white" : fit ? "border-ink-faint/70 bg-surface hover:border-ink" : "border-line bg-surface hover:border-ink-faint",
                             )}
+                            style={on ? { background: scoreColor(score, goals.length) } : undefined}
                           >
                             {on && <Check aria-hidden strokeWidth={3} className="size-3" />}
                           </button>
                         </span>
                       );
                     })}
-                    <span role="gridcell" className={cn("pr-1 text-right text-[11.5px] font-semibold tabular-nums", future ? "text-ink-faint" : full ? "text-success" : score === 0 ? "text-ink-faint" : "text-ink")}>
-                      {future ? "–" : `${score}/${goals.length}`}
+                    <span aria-hidden />
+                    <span role="gridcell" className="flex justify-end pr-0.5">
+                      {future ? (
+                        <span className="text-[11.5px] text-ink-faint">–</span>
+                      ) : (
+                        <span className="rounded-full px-1.5 text-[11px] font-bold text-white tabular-nums" style={{ background: scoreColor(score, goals.length) }}>
+                          {score}/{goals.length}
+                        </span>
+                      )}
                     </span>
                   </div>
                 );
               })}
+              {/* Totales por no negociable (cuántos días del mes) y el total del mes. */}
+              <div role="row" className="sticky bottom-0 z-10 mt-1 grid shrink-0 items-center border-t border-line bg-surface pt-1.5 text-[11px] font-semibold tabular-nums" style={{ gridTemplateColumns: cols }}>
+                <span role="rowheader" className="pl-1.5 text-ink-muted">
+                  Total
+                </span>
+                {stats.perGoal.map((pg) => (
+                  <span key={pg.goal.id} role="gridcell" title={`${pg.goal.name}: ${pg.done} de ${stats.days} días`} className="text-center">
+                    {pg.done}
+                  </span>
+                ))}
+                <span aria-hidden />
+                <span role="gridcell" className="pr-1 text-right">
+                  {stats.pct}%
+                </span>
+              </div>
             </div>
           </>
         )}
@@ -309,6 +361,7 @@ function GoalEditor({ goals, onDone }: { goals: DailyGoal[]; onDone: () => void 
           onClick={() => {
             (document.activeElement as HTMLElement | null)?.blur();
             onDone();
+            window.setTimeout(() => window.dispatchEvent(new Event("lb:noneg-listo")), 50);
           }}
           className="pressable h-8 rounded-full bg-ink px-4 text-[12.5px] font-semibold text-surface hover:bg-ink/90"
         >
@@ -329,6 +382,7 @@ const LINE_COLORS = ["#2f9e64", "#2b8fd6", "#8a5cf0", "#d99a00", "#e0457b", "#0f
  * en un gráfico de líneas, y un resumen corto de cada mes (días perfectos, lo más constante, lo que costó).
  */
 function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () => void }) {
+  const [view, setView] = useState<"semana" | "anio">("semana");
   const allGoals = usePlanner((s) => s.dailyGoals);
   const goalMonths = usePlanner((s) => s.goalMonths);
   const checks = usePlanner((s) => s.dailyChecks);
@@ -380,6 +434,20 @@ function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () =>
           </button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
+          <Segmented
+            label="Período"
+            value={view}
+            onChange={setView}
+            options={[
+              { id: "semana", label: "Esta semana" },
+              { id: "anio", label: "El año" },
+            ]}
+            className="mb-4 w-fit text-[12.5px]"
+          />
+          {view === "semana" ? (
+            <WeekView />
+          ) : (
+          <>
           <p className="text-[13px] text-ink-muted">Cuánto cumpliste cada mes (la línea gruesa) y cada no negociable (las finas).</p>
           <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label="Cumplimiento por mes">
             {[0, 25, 50, 75, 100].map((v) => (
@@ -451,8 +519,80 @@ function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () =>
               </li>
             ))}
           </ol>
+          </>
+          )}
         </div>
       </div>
     </Sheet>
   );
+}
+
+/** Esta semana, día por día: el puntaje de cada día y qué no negociable cumpliste. */
+function WeekView() {
+  const allGoals = usePlanner((s) => s.dailyGoals);
+  const goalMonths = usePlanner((s) => s.goalMonths);
+  const checks = usePlanner((s) => s.dailyChecks);
+  const today = toKey(new Date());
+  const goals = goalsFor({ dailyGoals: allGoals, goalMonths }, today.slice(0, 7));
+  const monday = toKey(startOfWeek(new Date()));
+  const days = Array.from({ length: 7 }, (_, i) => toKey(addDays(fromKey(monday), i)));
+  const st = rangeStats(goals, checks, days, today);
+  if (!goals.length) return <p className="text-[13px] text-ink-muted">Todavía no elegiste tus no negociables.</p>;
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-[13px] text-ink-muted">
+        Esta semana cumpliste el <b className="font-semibold text-ink">{st.pct}%</b> ({st.done} de {st.possible} tildes).
+      </p>
+      {/* El puntaje de cada día. */}
+      <div className="grid grid-cols-7 gap-2">
+        {days.map((d) => {
+          const score = dayScore(goals, checks, d);
+          const future = d > today;
+          const day = fromKey(d);
+          return (
+            <div key={d} className="flex flex-col items-center gap-1.5">
+              <span className="flex h-28 w-full items-end overflow-hidden rounded-lg bg-surface-sunken">
+                {!future && score > 0 && <span className={cn("w-full rounded-lg", score === goals.length ? "bg-success" : "bg-ink/70")} style={{ height: `${(score / goals.length) * 100}%` }} />}
+              </span>
+              <span className={cn("text-[12px] tabular-nums", d === today ? "font-semibold" : "text-ink-muted")}>
+                {WEEKDAYS[day.getDay()]} {day.getDate()}
+              </span>
+              <span className="text-[11.5px] font-semibold tabular-nums">{future ? "–" : `${score}/${goals.length}`}</span>
+            </div>
+          );
+        })}
+      </div>
+      {/* Cada no negociable, día por día. */}
+      <table className="w-full border-collapse text-[12.5px]">
+        <tbody>
+          {goals.map((g) => (
+            <tr key={g.id} className="border-t border-line">
+              <td className="py-2 pr-3">{g.name}</td>
+              {days.map((d) => {
+                const on = (checks[d] ?? []).includes(g.id);
+                return (
+                  <td key={d} className="w-9 py-2 text-center">
+                    <span className={cn("mx-auto grid size-5 place-items-center rounded-md border", on ? "border-ink bg-ink text-surface" : d > today ? "border-line/50" : "border-line")}>{on && <Check aria-hidden strokeWidth={3} className="size-3" />}</span>
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * El color del puntaje del día, como un semáforo: nada en rojo, y va pasando por azul y amarillo hasta el
+ * verde cuando cumpliste todo.
+ */
+export function scoreColor(score: number, total: number) {
+  if (!total || score <= 0) return "#e5484d";
+  if (score >= total) return "#2f9e64";
+  const steps = ["#3b82f6", "#e3a008", "#f97316", "#8b5cf6"];
+  // Con pocos no negociables, los pasos intermedios son azul y amarillo.
+  const i = Math.min(steps.length - 1, Math.floor(((score - 1) / Math.max(1, total - 1)) * Math.min(steps.length, total - 1)));
+  return steps[i];
 }

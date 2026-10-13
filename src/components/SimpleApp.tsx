@@ -1,25 +1,28 @@
 "use client";
 
-import { BookOpen, CalendarDays, Eraser, ListChecks, Music, Pencil, PieChart, Target, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Eraser, ListChecks, Music, Pencil, PieChart, Target, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/format";
+import { addDays, fromKey, toKey, weekNumber } from "@/lib/dates";
+import { cn, formatMinutes } from "@/lib/format";
+import { cheer } from "@/lib/motivation";
 import { formatTime } from "@/lib/time";
 import { useMediaQuery } from "@/lib/hooks";
 import { partStyle, SIMPLE_QUADRANTS } from "@/lib/mode";
 import type { QuadrantId } from "@/lib/quadrants";
 import { isMuted, play, setMuted } from "@/lib/sfx";
-import { carve, WEEK_ORDER } from "@/lib/routine";
+import { carve, emptyMinutes, WEEK_ORDER } from "@/lib/routine";
 import { PARTS, thisMonday, weekRangeLabel, weekShares } from "@/lib/week-shares";
 import { firstDay, newId, usePlanner, type RoutineBlock } from "@/lib/store";
 import { BrandMark } from "./BrandMark";
 import { BucketCard } from "./Bucket";
 import { Book, RecapBook } from "./RecapBook";
-import { DiaryBox, Story } from "./Diary";
+import type { DiaryItem } from "@/lib/diary";
+import { DiaryBox, DiaryComposer, DiaryMini, Story } from "./Diary";
 import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
 import { RoutineSheet } from "./RoutineSheet";
-import { TOUR_EVENT, UserMenu } from "./UserMenu";
+import { PaletteSwitch, TOUR_EVENT, UserMenu } from "./UserMenu";
 import { MAIN_TOUR, Tour } from "./Tour";
 import { Welcome } from "./Welcome";
 import { ScrollLock } from "./ScrollLock";
@@ -29,6 +32,7 @@ import { startCloudSync, useSync } from "@/lib/cloud-sync";
 import { Setup } from "./Setup";
 import { Reminder } from "./Reminder";
 import { RoutineHint } from "./RoutineHint";
+import { ListCard, ListsMenu } from "./Lists";
 import { NudgeCenter, Nudges, type NudgeTarget } from "./Nudges";
 import type { Nudge } from "@/lib/nudges";
 import { CheerToast } from "./Cheer";
@@ -110,11 +114,12 @@ export function SimpleApp() {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, []);
-  const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number; draft?: { name: string; quadrant: QuadrantId; days: number[] } } | null>(null);
+  const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number; draft?: { name: string; quadrant: QuadrantId; days: number[]; lock?: boolean; guided?: boolean } } | null>(null);
   const [askDelete, setAskDelete] = useState<{ block: RoutineBlock; day: number } | null>(null);
   const [askChange, setAskChange] = useState<Change | null>(null);
   const [sleepOpen, setSleepOpen] = useState(false);
-  const [askClear, setAskClear] = useState(false);
+  // Borrar: primero qué (la rutina, los eventos fuera de la rutina de esta semana o todo) y después confirmar.
+  const [askClear, setAskClear] = useState<null | "pick" | "rutina" | "eventos" | "todo">(null);
   const [routineOpen, setRoutineOpen] = useState(false);
   // Editar la rutina: el sueño, el trabajo y cada bloque, en una lista.
   const editButton = (
@@ -128,18 +133,21 @@ export function SimpleApp() {
       className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
     >
       <Pencil aria-hidden className="size-4" />
-      <span className="max-sm:sr-only">Editar rutina</span>
+      <span className="max-2xl:sr-only">Editar rutina</span>
     </button>
   );
+  const weekEventIds = logros
+    .filter((l) => l.start !== undefined && l.date >= thisMonday() && l.date <= toKey(addDays(fromKey(thisMonday()), 6)))
+    .map((l) => l.id);
   const clearButton = (
     <button
       type="button"
-      onClick={() => setAskClear(true)}
-      disabled={!routine.length}
+      onClick={() => setAskClear("pick")}
+      disabled={!routine.length && !weekEventIds.length}
       className="pressable inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-danger disabled:opacity-40"
     >
       <Eraser aria-hidden className="size-4" />
-      <span className="max-sm:sr-only">Limpiar todo</span>
+      <span className="max-2xl:sr-only">Borrar</span>
     </button>
   );
 
@@ -261,12 +269,117 @@ export function SimpleApp() {
   };
   const change = (c: Change) => (c.block.days.length > 1 ? setAskChange(c) : apply(c, true));
 
-  const weekGrid = (h: number, fit?: boolean) => (
+  // Las semanas: numeradas y navegables. La actual se edita; las anteriores se ven como quedaron (y se pueden
+  // volver a usar como rutina).
+  const weekRoutines = usePlanner((s) => s.weekRoutines);
+  const saveWeekRoutine = usePlanner((s) => s.saveWeekRoutine);
+  const [viewWeek, setViewWeek] = useState(monday);
+  const isCurrentWeek = viewWeek === monday;
+  const pastRoutine = weekRoutines[viewWeek] ?? [];
+  useEffect(() => {
+    if (setupDone) saveWeekRoutine(monday, routine);
+  }, [routine, monday, setupDone, saveWeekRoutine]);
+  // Lo que anotaste en tu diario con hora en la semana que mirás: se ve en el calendario.
+  const viewLogros = logros.filter((l) => l.start !== undefined && l.date >= viewWeek && l.date <= toKey(addDays(fromKey(viewWeek), 6)));
+  const [replicating, setReplicating] = useState(false);
+  useEffect(() => setReplicating(false), [viewWeek]);
+  const replicate = (withEvents: boolean) => {
+    save(pastRoutine.map((b) => ({ ...b, id: newId() })));
+    if (withEvents) {
+      // Los eventos fuera de la rutina pasan al mismo día de esta semana (sin repetir los que ya están).
+      const shift = Math.round((fromKey(monday).getTime() - fromKey(viewWeek).getTime()) / 86_400_000);
+      const st = usePlanner.getState();
+      for (const l of viewLogros) {
+        const date = toKey(addDays(fromKey(l.date), shift));
+        if (st.logros.some((x) => x.date === date && x.start === l.start && x.text === l.text)) continue;
+        st.addLogro({ text: l.text, category: l.category, minutes: l.minutes, date, start: l.start });
+      }
+    }
+    setViewWeek(monday);
+    cheer("routine", withEvents ? "Listo: replicaste esa semana, con sus eventos." : "Listo: replicaste la rutina de esa semana.");
+  };
+  // Mientras escribís en "¿Qué hiciste…?", lo que se entiende se dibuja en el calendario.
+  const [preview, setPreview] = useState<DiaryItem[]>([]);
+  useEffect(() => {
+    const on = (e: Event) => setPreview((e as CustomEvent<DiaryItem[]>).detail);
+    window.addEventListener("lb:diary-preview", on);
+    return () => window.removeEventListener("lb:diary-preview", on);
+  }, []);
+  const weekEnd = toKey(addDays(fromKey(monday), 6));
+  const previewThisWeek = isCurrentWeek ? preview.filter((it) => it.date >= monday && it.date <= weekEnd) : [];
+  // Lo que se repite se dibuja en todos sus días.
+  const previewExtras = (isCurrentWeek ? preview : [])
+    .filter((it) => it.start !== undefined && (it.repeat?.length || (it.date >= monday && it.date <= weekEnd)))
+    .flatMap((it, i) =>
+      (it.repeat?.length ? it.repeat : [fromKey(it.date).getDay()]).map((day) => ({
+        id: `preview-${i}-${day}`,
+        day,
+        start: it.start!,
+        minutes: it.minutes || 60,
+        name: it.text,
+        quadrant: it.category ?? "libre",
+        preview: true,
+      })),
+    );
+  const previewDays = previewThisWeek.filter((it) => it.start === undefined).map((it) => fromKey(it.date).getDay());
+  const weekExtras = viewLogros
+    .map((l) => ({ id: l.id, day: fromKey(l.date).getDay(), start: l.start!, minutes: l.minutes || 60, name: l.text, quadrant: l.category ?? "libre" }));
+  const empty = sleepSet ? emptyMinutes(routine, sleepSettings, RANGE[0], RANGE[1]) : 0;
+  const shiftWeek = (by: number) => setViewWeek(toKey(addDays(fromKey(viewWeek), by * 7)));
+  const weekNav = (
+    <span className="flex items-center gap-0.5">
+      <button type="button" aria-label="Semana anterior" onClick={() => shiftWeek(-1)} className="pressable grid size-7 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
+        <ChevronLeft aria-hidden className="size-4" />
+      </button>
+      <span className="min-w-[124px] text-center text-[12px] font-semibold tabular-nums">
+        Semana {weekNumber(fromKey(viewWeek))} · <span className="font-normal text-ink-muted">{weekRangeLabel(viewWeek)}</span>
+      </span>
+      <button
+        type="button"
+        aria-label="Semana siguiente"
+        disabled={isCurrentWeek}
+        onClick={() => shiftWeek(1)}
+        className="pressable grid size-7 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink disabled:opacity-30"
+      >
+        <ChevronRight aria-hidden className="size-4" />
+      </button>
+      {!isCurrentWeek && (
+        <button type="button" onClick={() => setViewWeek(monday)} className="pressable ml-1 h-7 rounded-full bg-surface-sunken px-2.5 text-[11.5px] font-semibold hover:bg-ink/10">
+          Esta semana
+        </button>
+      )}
+    </span>
+  );
+  const weekGrid = (h: number, fit?: boolean) =>
+    !isCurrentWeek ? (
+      <WeekTemplateGrid template={pastRoutine} sleep={usePlanner.getState().sleep} range={RANGE} showSleep={sleepSet} extras={weekExtras} height={h} fit={fit} />
+    ) : (
     <WeekTemplateGrid
       template={routine}
       sleep={usePlanner.getState().sleep}
       range={RANGE}
       showSleep={sleepSet}
+      markToday={viewWeek === monday}
+      extras={[...weekExtras, ...previewExtras]}
+      previewDays={previewDays}
+      onExtraChange={(id, next) => {
+        // El día de la semana pasa a la fecha de esta semana (lunes a domingo).
+        const date = toKey(addDays(fromKey(monday), (next.day + 6) % 7));
+        usePlanner.getState().updateLogro(id, { date, start: next.start, minutes: next.minutes });
+        play("bubble");
+      }}
+      onExtraDelete={(id) => {
+        usePlanner.getState().removeLogro(id);
+        play("pop");
+      }}
+      onSleepClick={() => setSleepOpen(true)}
+      onSleepResize={(dow, edge, minutes) => {
+        // Como en la configuración: levantarse es de finde el sáb y dom; acostarse, el vie y sáb.
+        const s = usePlanner.getState().sleep;
+        const kind = edge === "wake" ? (dow === 0 || dow === 6 ? "weekend" : "weekday") : dow === 5 || dow === 6 ? "weekend" : "weekday";
+        usePlanner.getState().setSleep({ ...s, [kind]: { ...s[kind], [edge]: minutes } });
+        play("bubble");
+      }}
       height={h}
       fit={fit}
       onChange={save}
@@ -282,14 +395,64 @@ export function SimpleApp() {
       id="semana"
       title="Tu rutina semanal"
       hint={RUTINA_HINT}
+      nav={weekNav}
       actions={
-        <>
-          {editButton}
-          {clearButton}
-        </>
+        isCurrentWeek ? (
+          <>
+            {editButton}
+            {clearButton}
+          </>
+        ) : null
       }
     >
+      {/* Siempre visible hasta que la rutina esté completa: no tiene que quedar ningún espacio vacío. */}
+      {isCurrentWeek && setupDone && sleepSet && empty > 0 && (
+        <div role="status" className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-3 py-2 text-[12.5px] text-[#8a6200]">
+          <span aria-hidden className="size-2 animate-pulse rounded-full bg-[#d99a00]" />
+          <span className="min-w-0 flex-1">
+            <b className="font-semibold">Terminá de completar tu rutina:</b> te quedan {formatMinutes(empty)} sin asignar en la semana. Arrastrá sobre los espacios en blanco y sumá qué hacés en ese rato.
+          </span>
+        </div>
+      )}
+      {isCurrentWeek && setupDone && sleepSet && empty === 0 && routine.length > 0 && (
+        <div role="status" className="mb-2 rounded-xl bg-[color-mix(in_oklab,var(--color-success)_10%,transparent)] px-3 py-2 text-[12.5px] font-medium text-[color-mix(in_oklab,var(--color-success)_75%,var(--color-ink))]">
+          ✓ ¡Rutina completa! Cada hora de tu semana tiene su lugar.
+        </div>
+      )}
+      {!isCurrentWeek && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[12.5px]">
+          <span className="text-ink-muted">{pastRoutine.length ? "Así fue tu rutina esa semana (solo para ver)." : "No hay registro de esa semana."}</span>
+          {pastRoutine.length > 0 && !replicating && (
+            <button
+              type="button"
+              onClick={() => (viewLogros.length ? setReplicating(true) : replicate(false))}
+              className="pressable h-8 rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90"
+            >
+              Replicarla en esta semana
+            </button>
+          )}
+          {replicating && (
+            <div className="flex w-full flex-wrap items-center gap-2 border-t border-line pt-2">
+              <span className="min-w-0 flex-1 text-[12.5px] font-medium">
+                Esa semana tuvo {viewLogros.length === 1 ? "1 evento" : `${viewLogros.length} eventos`} fuera de la rutina. ¿Los copiamos también?
+              </span>
+              <button type="button" onClick={() => replicate(false)} className="pressable h-8 rounded-full bg-surface px-3 text-[12px] font-semibold ring-1 ring-line hover:bg-surface-sunken">
+                Solo la rutina
+              </button>
+              <button type="button" onClick={() => replicate(true)} className="pressable h-8 rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90">
+                Rutina y eventos
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <FitHeight>{(h) => weekGrid(h, phone)}</FitHeight>
+      {/* Lo que hiciste hoy fuera de la rutina: se anota acá y se guarda en tu diario. */}
+      {isCurrentWeek && !phone && (
+        <div className="mt-2 shrink-0">
+          <DiaryComposer bar />
+        </div>
+      )}
     </Panel>
   );
   // En el celular, cada cosa en su pestaña: la rutina; Hoy (no negociables y diario); las metas; el balde y
@@ -326,9 +489,10 @@ export function SimpleApp() {
   const zenButton = (
     <button
       type="button"
+      data-zen-toggle
       onClick={(e) => {
         e.stopPropagation();
-        if (isZenPlaying()) stopZen();
+        if (isZenPlaying() || zen) stopZen();
         else void startZen();
       }}
       aria-pressed={zen}
@@ -367,24 +531,26 @@ export function SimpleApp() {
       {wide ? (
         // Arriba: el sueño a la izquierda, LifeBucket al centro y la cuenta a la derecha.
         <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-4 pb-3 sm:px-6">
-          <div />
-          <h1 className="flex items-center gap-2.5">
-            <BrandMark size={30} />
-            <span className="text-[17px] font-semibold tracking-[0.18em]">LIFEBUCKET</span>
-          </h1>
-          <div className="flex items-center gap-2 justify-self-end">
-            {/* Cómo viene tu balde: el libro de tu semana (o tu mes). */}
-            <button
+          <div className="flex items-center gap-2 justify-self-start">
+              <button
               type="button"
               data-tour="libro"
               onClick={() => setBook(true)}
               className="pressable flex items-center gap-2 rounded-full bg-surface/80 px-3.5 py-2 text-[13px] font-medium whitespace-nowrap shadow-[var(--shadow-card)] hover:bg-surface"
             >
-              <BookOpen aria-hidden className="size-4 text-ink-muted" />
+              <BarChart3 aria-hidden className="size-4 text-ink-muted" />
               Resumen general
             </button>
+            <ListsMenu />
+          </div>
+          <h1 className="flex items-center gap-2.5">
+            <BrandMark size={30} />
+            <span className="text-[17px] font-semibold tracking-[0.18em]">LIFEBUCKET</span>
+          </h1>
+          <div className="flex items-center gap-2 justify-self-end">
             <div data-tour="cuenta" className="flex items-center gap-1">
               <NudgeCenter onGo={goTo} />
+              <PaletteSwitch />
               {zenButton}
               {soundButton}
               <UserMenu />
@@ -403,6 +569,7 @@ export function SimpleApp() {
             </h1>
             <div data-tour="cuenta" className="flex items-center gap-0.5 justify-self-end">
               <NudgeCenter onGo={goTo} compact />
+              <PaletteSwitch />
               {zenButton}
               {soundButton}
               <UserMenu />
@@ -454,9 +621,11 @@ export function SimpleApp() {
             <YearGoals />
           ) : id === "diarios" ? (
             <DailyGoals fit />
-          ) : (
-            <DiaryBox />
-          )
+          ) : id === "diario" ? (
+            <DiaryMini />
+          ) : id.startsWith("list:") ? (
+            <ListCard id={id.slice(5)} />
+          ) : null
         }
       />
       )}
@@ -527,19 +696,67 @@ export function SimpleApp() {
         />
       )}
 
-      {askClear && (
+      {askClear === "pick" && (
+        <Sheet isMobile={!desktop} onClose={() => setAskClear(null)} labelledBy="clear-title" width="max-w-[400px]">
+          <div className="flex flex-col gap-4 p-5">
+            <div>
+              <h2 id="clear-title" className="type-headline">
+                ¿Qué querés borrar?
+              </h2>
+              <p className="type-body mt-1 text-ink-muted">Tus no negociables, metas, listas y sueño quedan como están.</p>
+            </div>
+            <div className="flex flex-col gap-2">
+              {(
+                [
+                  { id: "rutina", label: "Borrar la rutina", hint: "Los bloques que se repiten cada semana.", off: !routine.length },
+                  { id: "eventos", label: "Borrar los eventos fuera de la rutina", hint: `Lo que anotaste con hora esta semana (${weekEventIds.length}).`, off: !weekEventIds.length },
+                  { id: "todo", label: "Borrar todo", hint: "La rutina y los eventos de esta semana.", off: !routine.length && !weekEventIds.length },
+                ] as const
+              ).map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  disabled={o.off}
+                  onClick={() => setAskClear(o.id)}
+                  className={cn(
+                    "pressable flex flex-col items-start rounded-xl border px-4 py-3 text-left disabled:opacity-40",
+                    o.id === "todo" ? "border-danger/40 text-danger hover:bg-danger/5" : "border-line hover:bg-surface-sunken",
+                  )}
+                >
+                  <span className="text-[14px] font-semibold">{o.label}</span>
+                  <span className="text-[12.5px] text-ink-muted">{o.hint}</span>
+                </button>
+              ))}
+              <button type="button" onClick={() => setAskClear(null)} className="pressable h-10 rounded-md px-4 font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </Sheet>
+      )}
+      {askClear && askClear !== "pick" && (
         <Ask
-          title="¿Limpiar toda la semana?"
-          text="Se borran todos los bloques de tu semana tipo. Tus momentos, tus metas y tu sueño quedan como están."
-          all="Limpiar todo"
+          title={askClear === "rutina" ? "¿Seguro que borrás tu rutina?" : askClear === "eventos" ? "¿Seguro que borrás los eventos?" : "¿Seguro que borrás todo?"}
+          text={
+            askClear === "rutina"
+              ? "Se borran todos los bloques de tu semana tipo. Los eventos fuera de la rutina quedan. No se puede deshacer."
+              : askClear === "eventos"
+                ? "Se borran los eventos con hora que anotaste esta semana fuera de tu rutina. Tu rutina queda. No se puede deshacer."
+                : "Se borran tu rutina y los eventos de esta semana. No se puede deshacer."
+          }
+          all="Sí, borrar"
           danger
           onOne={() => {}}
           onAll={() => {
-            save([]);
-            setAskClear(false);
+            if (askClear !== "eventos") save([]);
+            if (askClear !== "rutina") {
+              const st = usePlanner.getState();
+              for (const id of weekEventIds) st.removeLogro(id);
+            }
+            setAskClear(null);
             play("delete");
           }}
-          onCancel={() => setAskClear(false)}
+          onCancel={() => setAskClear("pick")}
           isMobile={!desktop}
         />
       )}
@@ -552,7 +769,7 @@ export function SimpleApp() {
           phone={phone}
           onTab={(t) => setTab(t)}
           onSleep={() => setSleepOpen(true)}
-          onAddBlock={(d) => setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days } })}
+          onAddBlock={(d) => setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days, lock: d.lock, guided: true } })}
           onDone={() => {
             setJustSetUp(true);
             markSeen();
@@ -724,7 +941,7 @@ function Ask({
 const RUTINA_HINT =
   "Lo que hacés todas las semanas: trabajo, entrenamientos, clases, comidas. Suma a tu balde de forma rutinaria: no es para cambiarlo día a día, sino para ajustarlo mes a mes. Lo que hacés fuera de la rutina lo sumás en «Cosas que hice hoy».";
 
-function Panel({ id, title, subtitle, hint, actions, scroll, children }: { id: string; title: string; subtitle?: string; hint?: string; actions?: React.ReactNode; scroll?: boolean; children: React.ReactNode }) {
+function Panel({ id, title, subtitle, hint, nav, actions, scroll, children }: { id: string; title: string; subtitle?: string; hint?: string; nav?: React.ReactNode; actions?: React.ReactNode; scroll?: boolean; children: React.ReactNode }) {
   return (
     <section data-tour={id} aria-labelledby={`panel-${id}`} className="card flex h-full min-h-0 flex-col overflow-hidden">
       <header data-tour={`${id}-header`} className="flex shrink-0 items-center justify-between gap-2 border-b border-line px-4 py-2">
@@ -745,13 +962,14 @@ function Panel({ id, title, subtitle, hint, actions, scroll, children }: { id: s
             </h2>
           )}
           {subtitle && <span className="hidden truncate text-[12px] text-ink-muted tabular-nums min-[380px]:inline">{subtitle}</span>}
+          {nav}
         </span>
         <span className="flex shrink-0 items-center gap-1">
           {actions}
           <ModuleControls />
         </span>
       </header>
-      <div className={cn("min-h-0 flex-1 p-3", scroll && "overflow-y-auto p-4")}>{children}</div>
+      <div className={cn("flex min-h-0 flex-1 flex-col p-3", scroll && "overflow-y-auto p-4")}>{children}</div>
     </section>
   );
 }
@@ -768,7 +986,7 @@ function FitHeight({ children }: { children: (height: number) => React.ReactNode
     return () => ro.disconnect();
   }, []);
   return (
-    <div ref={ref} className="h-full min-h-0 overflow-hidden">
+    <div ref={ref} className="min-h-0 flex-1 overflow-hidden">
       {h > 0 && children(h)}
     </div>
   );

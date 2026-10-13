@@ -41,7 +41,7 @@ export function BlockEditor({
   draft,
 }: {
   /** Un bloque nuevo precargado (por ejemplo, desde la configuración guiada: "Trabajo", de lunes a viernes). */
-  draft?: { name: string; quadrant: QuadrantId; days: number[] };
+  draft?: { name: string; quadrant: QuadrantId; days: number[]; lock?: boolean; guided?: boolean };
   /** Duración inicial al crear (p. ej. la franja que arrastraste). */
   minutes?: number;
   /** Qué categorías se pueden elegir (por defecto, todas menos Libre). */
@@ -54,7 +54,7 @@ export function BlockEditor({
   onClose: () => void;
 }) {
   const isMobile = !useMediaQuery("(min-width: 640px)");
-  const pickable = quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id) || q.id === block?.quadrant) : PICKABLE;
+  const pickable = draft?.lock ? QUADRANTS.filter((q) => q.id === draft.quadrant) : quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id) || q.id === block?.quadrant) : PICKABLE;
   const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? draft?.quadrant ?? pickable[0]?.id ?? "cuerpo");
   const [name, setName] = useState(block?.name ?? draft?.name ?? "");
   // La categoría se elige sola según lo que escribís, hasta que la elijas vos a mano.
@@ -138,7 +138,7 @@ export function BlockEditor({
           )}
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className={cn("flex flex-col gap-1.5", draft?.lock && "hidden")}>
           <span className="flex items-center gap-1.5 text-[12px] text-ink-muted">
             Categoría
             {suggested && !manual && (
@@ -148,29 +148,54 @@ export function BlockEditor({
               </span>
             )}
           </span>
-          <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-wrap gap-1.5">
-            {pickable.map((q) => (
-              <button
-                key={q.id}
-                type="button"
-                role="radio"
-                aria-checked={quadrant === q.id}
-                onClick={() => {
-                  setQuadrant(q.id);
-                  setManual(true);
-                }}
-                style={partStyle(q.id)}
-                className={cn(
-                  "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors",
-                  quadrant === q.id ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line hover:bg-surface-sunken",
-                )}
-              >
-                <span className="grid size-6 place-items-center rounded-full bg-[var(--q-soft)] text-[var(--q)]">
-                  <QuadrantIcon id={q.id} className="size-3" />
-                </span>
-                {q.name}
-              </button>
-            ))}
+          {/* Dos grupos: la base (lo estructural, en tonos oscuros) y el tiempo para vos (con color). */}
+          <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-col gap-2">
+            {[
+              { title: "La base", ids: ["trabajo", "libre"] as QuadrantId[] },
+              { title: "Tiempo para vos", ids: ["cuerpo", "interior", "alma", "mente", "vinculos"] as QuadrantId[] },
+            ].map((g) => {
+              const list = pickable.filter((q) => g.ids.includes(q.id));
+              if (!list.length) return null;
+              const base = g.title === "La base";
+              return (
+                <div key={g.title} className={cn("flex flex-col gap-1.5 rounded-xl p-2", base ? "bg-surface-sunken" : "bg-[color-mix(in_oklab,var(--color-success)_6%,transparent)]")}>
+                  <span className="text-[10.5px] font-semibold tracking-wide text-ink-muted uppercase">
+                    {g.title}
+                    {base && <span className="font-normal tracking-normal normal-case"> · el sueño se configura con la luna</span>}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {list.map((q) => (
+                      <button
+                        key={q.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={quadrant === q.id}
+                        onClick={() => {
+                          setQuadrant(q.id);
+                          setManual(true);
+                        }}
+                        style={partStyle(q.id)}
+                        className={cn(
+                          "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors",
+                          base
+                            ? quadrant === q.id
+                              ? "border-[var(--q)] bg-[var(--q)] text-white"
+                              : "border-line bg-surface hover:bg-surface-sunken"
+                            : quadrant === q.id
+                              ? "border-[var(--q)] bg-[var(--q-soft)]"
+                              : "border-line bg-surface hover:bg-surface-sunken",
+                        )}
+                      >
+                        <span className={cn("grid size-6 place-items-center rounded-full", base ? "bg-[var(--q)] text-white" : "bg-[var(--q-soft)] text-[var(--q)]")}>
+                          <QuadrantIcon id={q.id} className="size-3" />
+                        </span>
+                        {q.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
           <p className="text-[11.5px] leading-snug text-ink-muted">
             <b className="font-semibold text-ink">{QUADRANT_BY_ID[quadrant].name}:</b> {QUADRANT_HINT[quadrant].charAt(0).toLowerCase() + QUADRANT_HINT[quadrant].slice(1)}
@@ -178,6 +203,7 @@ export function BlockEditor({
         </div>
 
         <div className="flex flex-col gap-1.5">
+          {draft?.guided && <p className="rounded-lg bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-2.5 py-1.5 text-[11.5px] leading-snug text-[#8a6200]">👉 Tocá los días en que se repite (podés elegir varios, o «L a V» de un toque). Se repite todas las semanas.</p>}
           <span className="flex items-center justify-between text-[12px] text-ink-muted">
             ¿Qué días?
             <span className="flex gap-1">
@@ -219,6 +245,7 @@ export function BlockEditor({
           </div>
         </div>
 
+        {draft?.guided && <p className="-mb-1 rounded-lg bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-2.5 py-1.5 text-[11.5px] leading-snug text-[#8a6200]">👉 Elegí a qué hora empieza («Desde») y a qué hora termina («Hasta»).</p>}
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-[12px] text-ink-muted">Desde</span>

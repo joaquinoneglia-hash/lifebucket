@@ -23,10 +23,10 @@
   --color-interior-soft: #efe8fd;
   --color-vinculos: #e5508a;
   --color-vinculos-soft: #fce8f0;
-  --color-trabajo: #d42a3c;
-  --color-trabajo-soft: #fbe3e6;
-  --color-libre: #8e96a3;
-  --color-libre-soft: #eceff3;
+  --color-trabajo: #1f2329;
+  --color-trabajo-soft: #e7e8eb;
+  --color-libre: #5b6472;
+  --color-libre-soft: #eceef1;
   /* El sueño: el marco del día, fuera del balance. */
   --color-sleep: #2c3044;
   --color-sleep-soft: #eceef4;
@@ -472,4 +472,77 @@ html.lb-locked dialog {
   .animate-drip {
     animation: none;
   }
+}
+
+/* Los huecos sin completar de la rutina: titilan suave. */
+@keyframes gap {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-gap {
+  animation: gap 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-gap {
+    animation: none;
+    opacity: 0.7;
+  }
+}
+
+/* Paletas: pastel (la de siempre), neutra (blancos, negros y grises, minimalista) e intensa (colores fuertes). */
+html[data-palette="neutro"] {
+  --color-cuerpo: #2b2b2b;
+  --color-cuerpo-soft: #ececec;
+  --color-interior: #4a4a4a;
+  --color-interior-soft: #efefef;
+  --color-alma: #6b6b6b;
+  --color-alma-soft: #f1f1f1;
+  --color-mente: #8a8a8a;
+  --color-mente-soft: #f3f3f3;
+  --color-vinculos: #3a3a3a;
+  --color-vinculos-soft: #eeeeee;
+  --color-trabajo: #111111;
+  --color-trabajo-soft: #e6e6e6;
+  --color-libre: #a3a3a3;
+  --color-libre-soft: #f4f4f4;
+  --color-sleep: #1f1f1f;
+  --color-canvas: #f4f4f4;
+  --color-surface-sunken: #f2f2f2;
+}
+html[data-palette="neutro"] body {
+  background-image: none;
+  background-color: #f2f2f2;
+}
+html[data-palette="neutro"] body::before {
+  display: none;
+}
+html[data-palette="intenso"] {
+  /* La base siempre en tonos oscuros (también en la paleta intensa). */
+  --color-cuerpo: #00a651;
+  --color-cuerpo-soft: #ccf2dd;
+  --color-interior: #7c3aed;
+  --color-interior-soft: #e7dcfd;
+  --color-alma: #f59e0b;
+  --color-alma-soft: #fde8b8;
+  --color-mente: #0070f3;
+  --color-mente-soft: #cfe2fe;
+  --color-vinculos: #ec1c6e;
+  --color-vinculos-soft: #fcd3e3;
+  --color-trabajo: #0f1115;
+  --color-trabajo-soft: #e2e3e6;
+  --color-libre: #475063;
+  --color-libre-soft: #e2e8f0;
+  --color-sleep: #1e1b4b;
+}
+html[data-palette="intenso"] body {
+  background-image:
+    radial-gradient(60vw 55vh at 0% 0%, rgba(80, 140, 255, 0.55), transparent 70%),
+    radial-gradient(50vw 50vh at 100% 8%, rgba(150, 90, 255, 0.5), transparent 70%),
+    radial-gradient(55vw 50vh at 85% 100%, rgba(255, 70, 140, 0.45), transparent 70%),
+    linear-gradient(160deg, #dbe6fb 0%, #e9defb 50%, #fbdfe9 100%);
 }

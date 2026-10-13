@@ -184,3 +184,58 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - Sin nada para vos, el balde se ve desbordado (se sale por arriba y gotea) con un aviso y el botón «Sumar algo para vos», que abre el editor.
 - «Libre» ya no se elige como categoría; los bloques viejos así (por ejemplo el almuerzo) se siguen viendo en el calendario, pero no cuentan.
 - Arranque: cartel a los 30 s de terminar («¿Te olvidaste de agregar algo?»). Arriba vuelven dos botones: música (nota, tachada si está apagada) y sonidos (parlante).
+
+## 2026-10-13 · Diario en el encabezado, semanas navegables y recordatorio para completar
+
+- Mi diario personal sale del tablero: arriba a la derecha queda un librito (abre el diario completo) y la barra «Contame lo que hiciste hoy». «Resumen general» pasa arriba a la izquierda.
+- Rutina semanal: semanas numeradas y navegables. Cada semana guarda cómo quedó la rutina (`weekRoutines`); las anteriores se ven y se pueden replicar en la actual. Hoy queda resaltado y los días que ya pasaron, atenuados.
+- Recordatorio al entrar: se completa ahí mismo (1. tildar no negociables, 2. escribir en el diario), con «Saltear por hoy» y «Recordarme más tarde».
+- La historia del mes se cuenta como texto, con cada cosa en su color y los hitos (2 h o más) subrayados.
+- Vistas ampliadas: no negociables con «Esta semana» (día por día) y «El año»; diario con «Este mes» (día por día) y «El año» (mes por mes).
+- Guía: Trabajo y emprendimiento con categoría fija y explicaciones de días y horario; los pasos que se completan solos avanzan solos.
+- Música: se arregló el botón (no arrancaba si el navegador no había recibido un toque, y el arranque automático lo volvía a prender).
+
+## 2026-10-13 · Categorías nuevas, huecos que titilan y no negociables más cómodos
+
+- Categorías: Habilidades pasa a «Intelecto y Cognitivo» y Mente y Alma a «Mente y Espíritu». Libre pasa a ser «Tareas cotidianas» (cocinar, desayunar, barrer, ordenar): se agenda y suma al balde como base, con Trabajo y Sueño (el tiempo sin agendar no cuenta).
+- Rutina: los huecos de una hora o más entre que te levantás y te acostás titilan suave (la idea es completarla).
+- Balde: dos grupos bien separados, «Tiempo para vos» (con su total) y «La base».
+- Metas: entran todos los meses que quedan sin scroll; volver una meta para atrás deshace la postergación.
+- Los botones que abren un reporte usan un ícono de gráfico (no el de expandir).
+- No negociables: casilleros juntos y más grandes, tildar arrastrando, colores tipo semáforo por puntaje del día (rojo, azul, amarillo… verde al completar), totales por columna abajo y un sonido de festejo al completar el día.
+
+## 2026-10-13 · Tu balde ideal, tablero de logros y avisos espaciados
+
+- Meta: un «balde ideal» realista de tiempo para vos (~18 h por semana, 2,5 h por día, dentro de las 2–5 h diarias que más bienestar dan según Sharif et al. 2021), repartido por categoría con valores de referencia: Deporte 3 h (OMS: 150–300 min y fuerza 2 días), Mente y Espíritu 2 h (10–20 min por día), Vínculos 6 h (verse ~2 veces por semana), Hobbies 4 h, Intelecto y Cognitivo 3 h (sin estándar; punto de partida). Cada persona los puede ajustar (`idealHours`, `src/lib/balance-goals.ts`). No se usa "superar la base" porque sueño + trabajo + tareas pasan las 100 h semanales.
+- Tablero de logros dentro de Tu Balde: cada categoría con su barra hacia la meta, ordenadas por avance y animadas al cambiar de puesto, con sonido. Hitos (mitad, meta, balde ideal completo) se festejan una vez por semana.
+- Avisos: recomendaciones de balance según cómo viene la semana (por ejemplo, Vínculos atrasado el miércoles), con un toque para sumarlo a la rutina. Como mucho 3 por día, uno cada 3,5 h, nunca entre las 22 y las 8.
+- Rutina: aviso fijo «Terminá de completar tu rutina» con las horas sin asignar, hasta que no quede ningún hueco; línea punteada en la hora actual y lo que ya pasó de hoy atenuado; la luna (azul) abre la configuración del sueño.
+- Colores: selector en el menú de la cuenta con tres paletas (Neutro, Pastel, Intenso).
+- Tu Balde sin el dibujo del balde (ocupaba mucho lugar). La barra del diario dice «¿Qué hiciste hoy fuera de tu rutina?».
+
+## 2026-10-13 · La base, en oscuro; lo tuyo, con color
+
+- La base (lo estructural que se configura al principio: Trabajo, Tareas cotidianas y Sueño) va en tonos oscuros: Trabajo casi negro y Tareas cotidianas gris oscuro, con su ícono en el calendario (como la luna del sueño). Los colores quedan para el tiempo para vos.
+- Al sumar o cambiar un bloque, las categorías se agrupan en «La base» y «Tiempo para vos».
+- El sueño se estira desde el calendario (los bordes de la franja de la luna): cambia la hora de levantarte o acostarte de ese tipo de día (de semana o de finde).
+
+## 2026-10-13 · Tablero modular, listas y diario debajo de la rutina
+
+- Tablero modular en tres columnas (la del centro, la más ancha): cada panel se mueve de columna o de lugar (⠿ o ···), se comprime y se estira desde el borde con el siguiente. Si una columna queda con un panel, ocupa todo el alto.
+- Listas personales (botón arriba a la izquierda): Súper (agrupada por sección), Pendientes (con prioridad), Checklist para repetir (se reinicia), ¿Dónde está? (dónde guardaste cada cosa) y Notas. Se pueden ocultar (ojito) y volver a mostrar.
+- «¿Qué hiciste hoy fuera de tu rutina?» va abajo del calendario; «Mi diario» es un panel chico con lo de hoy contado en una frase, que abre el diario completo. Si escribís la hora («de 18 a 20», «a las 7 de la mañana»), aparece en el calendario de esa semana como algo puntual.
+- El calendario llega hasta las 24:00. Los huecos ya no titilan: quedan en blanco con el aviso fijo arriba.
+- Tareas cotidianas suma ideas: desayuno, almuerzo, cena, pasear al perro.
+
+## 2026-10-13 — Paneles, listas y eventos fuera de la rutina
+
+- **Ocultar paneles:** cada panel tiene un ojito a la derecha (aparece al pasar el mouse). Lo oculto se vuelve a mostrar desde «Mis listas», arriba.
+- **Mis listas:** menú que se abre con hover, a la derecha de «Resumen general». Una sola lista por tipo (Súper, Pendientes, Checklist, ¿Dónde está?, Notas); mostrarla la crea si no existe. No hay un panel general de listas: cada lista es su panel. Si había listas repetidas, sus ítems se juntan en una (v10 del estado).
+- **Menú de cuenta:** sin «Ver la guía otra vez» ni «Versión en pasos». Queda «Empezar de cero».
+- **Colores:** un botón arriba que va pasando pastel → intenso → neutro con cada clic, en vez de elegir dentro del menú.
+- **Eventos fuera de la rutina (con hora):** se mueven, se estiran y se borran en el calendario. Si pisan un bloque de la rutina, lo reemplazan ese día (el bloque se corta, no se superponen).
+- **Lector de texto (sin IA):** entiende fechas futuras ("mañana", "pasado mañana", "el viernes que viene", "en dos días"), horas con parte del día ("10 de la noche", "9 am", "y media", "menos cuarto", "al mediodía"), rangos ("de 9 a 12", "entre las 7 y las 8", "hasta las 12") y repeticiones ("todos los días", "de lunes a viernes", "lunes, miércoles y viernes", "los findes"). El tiempo del verbo decide el día suelto: "el sábado tengo" es el que viene; "el sábado tuve / salí" es el que pasó. Reconoce tus propias actividades de la rutina para la categoría.
+- **Barra de abajo del calendario:** «Pedime algo para agregar a tu rutina o sumá algo que hiciste fuera de tu rutina para esta semana». Mientras escribís, se dibuja en el calendario dónde va a quedar. El título se puede editar y, si solo dijiste cuándo, queda vacío hasta que digas qué es. Cada cosa puede pasar a la rutina eligiendo los días («¿Lo hacés rutina?»); si se dijo una repetición, ya viene marcado.
+- **Replicar una semana:** si tenía eventos fuera de la rutina, pregunta si se copian también o solo la rutina.
+- **Borrar (rutina semanal):** pregunta qué borrar (la rutina, los eventos fuera de la rutina de esta semana o todo) y pide confirmar.
+- **Duración visible:** al crear o arrastrar un bloque o evento se ve cuánto dura, y la tarjeta muestra la duración primero.

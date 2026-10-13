@@ -168,12 +168,32 @@ export interface Logro {
   text: string;
   category: LogroCat | null;
   minutes: number;
+  /** A qué hora fue (si se dijo): se muestra en el calendario de esa semana. */
+  start?: number;
 }
 
 /** De qué parte de tu vida es una meta. */
 export type TaskKind = "trabajo" | "cuerpo" | "interior" | "mente" | "alma" | "vinculos" | "otro";
 
 /** Un objetivo del año ("hacer un viaje"): por mes, con fecha opcional y sin horario. */
+/** Listas personales: súper, notas, pendientes, checklists para repetir y dónde guardé las cosas. */
+export type ListType = "super" | "notas" | "pendientes" | "checklist" | "lugares";
+export interface ListItem {
+  id: string;
+  text: string;
+  done?: boolean;
+  /** Súper: la sección; pendientes: la prioridad; lugares: dónde está. */
+  meta?: string;
+}
+export interface UserList {
+  id: string;
+  type: ListType;
+  title: string;
+  items: ListItem[];
+  /** Oculta: no se ve en el tablero (se vuelve a mostrar desde «ocultas»). */
+  hidden?: boolean;
+}
+
 /** Un objetivo de todos los días ("meditar", "no tomar alcohol"): se tilda cada día que se cumple. */
 export interface DailyGoal {
   id: string;
@@ -199,7 +219,9 @@ export interface YearTask {
 /** Pasar una meta a otro mes: si es a uno posterior, cuenta como postergada (queda el mes de antes). */
 function withMonth(t: YearTask, month: string): YearTask {
   if (t.month === month) return t;
-  return { ...t, month, history: month > t.month && !t.done ? [...(t.history ?? []), t.month] : t.history };
+  // Para atrás: se deshace la postergación (se borran los meses desde ese en adelante).
+  if (month < t.month) return { ...t, month, history: (t.history ?? []).filter((h) => h < month) };
+  return { ...t, month, history: !t.done ? [...(t.history ?? []), t.month] : t.history };
 }
 
 export interface TargetsChange {
@@ -277,6 +299,18 @@ export interface PlannerState {
   moments: Moment[];
   /** El diario de logros: lo que hiciste cada día (suma a la semana y al mes). */
   logros: Logro[];
+  lists: UserList[];
+  addList: (type: ListType, title: string) => string;
+  removeList: (id: string) => void;
+  renameList: (id: string, title: string) => void;
+  setListItems: (id: string, items: ListItem[]) => void;
+  setListHidden: (id: string, hidden: boolean) => void;
+  /** Tu balde ideal: horas por semana para cada cosa que es para vos (si no se ajustó, los valores recomendados). */
+  idealHours: Partial<Record<string, number>>;
+  setIdealHours: (h: Partial<Record<string, number>>) => void;
+  /** Cómo quedó la rutina de cada semana (la clave es el lunes): para volver a verla o replicarla. */
+  weekRoutines: Record<string, RoutineBlock[]>;
+  saveWeekRoutine: (monday: DateKey, routine: RoutineBlock[]) => void;
   /** Ya configuraste tu horario de sueño (hasta entonces el calendario no lo muestra). */
   sleepSet: boolean;
   setSleepSet: (v: boolean) => void;
@@ -361,7 +395,7 @@ export interface PlannerState {
 /** Dónde se guardan los datos en el navegador. Antes se llamaba "lifeplan:v1". */
 const STORAGE_KEY = "lifebucket:v1";
 /** Versión del formato de los datos (la usa también la nube). */
-export const STORE_VERSION = 9;
+export const STORE_VERSION = 10;
 const LEGACY_STORAGE_KEY = "lifeplan:v1";
 
 // Migración del nombre: si hay datos con la clave vieja y todavía no con la nueva, se copian
@@ -405,6 +439,31 @@ export const usePlanner = create<PlannerState>()(
       tasks: [],
       moments: [],
       logros: [],
+      lists: [],
+      addList: (type, title) => {
+        // Una sola lista por tipo: si ya está, se vuelve a mostrar.
+        const had = get().lists.find((l) => l.type === type);
+        if (had) {
+          set((s) => ({ lists: s.lists.map((l) => (l.id === had.id ? { ...l, hidden: false } : l)) }));
+          return had.id;
+        }
+        const id = newId();
+        set((s) => ({ lists: [...s.lists, { id, type, title, items: [] }] }));
+        return id;
+      },
+      removeList: (id) => set((s) => ({ lists: s.lists.filter((l) => l.id !== id) })),
+      renameList: (id, title) => set((s) => ({ lists: s.lists.map((l) => (l.id === id ? { ...l, title } : l)) })),
+      setListHidden: (id, hidden) => set((s) => ({ lists: s.lists.map((l) => (l.id === id ? { ...l, hidden } : l)) })),
+      setListItems: (id, items) => set((s) => ({ lists: s.lists.map((l) => (l.id === id ? { ...l, items } : l)) })),
+      idealHours: {},
+      setIdealHours: (idealHours) => set({ idealHours }),
+      weekRoutines: {},
+      saveWeekRoutine: (monday, routine) =>
+        set((s) => {
+          // Se guardan las últimas 60 semanas.
+          const keys = Object.keys(s.weekRoutines).filter((k) => k !== monday).sort().slice(-59);
+          return { weekRoutines: { ...Object.fromEntries(keys.map((k) => [k, s.weekRoutines[k]])), [monday]: routine } };
+        }),
       sleepSet: false,
       setSleepSet: (sleepSet) => set({ sleepSet }),
       setupDone: false,
@@ -749,7 +808,19 @@ export function migratePlanner(persisted: unknown, version: number): PlannerStat
   if (version < 8) state = { ...state, setupDone: state.setupDone || (state.routine ?? []).length > 0 };
   // v9: el sueño se muestra recién cuando lo configurás; quien ya venía usando la app, ya lo tiene.
   if (version < 9) state = { ...state, sleepSet: state.sleepSet || state.setupDone || (state.routine ?? []).length > 0 };
+  // v10: una sola lista por tipo; si había repetidas, sus ítems se juntan en la primera.
+  if (version < 10) state = { ...state, lists: mergeListsByType(state.lists ?? []) };
   return state;
+}
+
+function mergeListsByType(lists: UserList[]): UserList[] {
+  const out: UserList[] = [];
+  for (const l of lists) {
+    const first = out.find((x) => x.type === l.type);
+    if (first) first.items = [...first.items, ...l.items];
+    else out.push({ ...l, items: [...l.items] });
+  }
+  return out;
 }
 
 /**
@@ -783,7 +854,7 @@ export function firstDay(state: Partial<PlannerState>): DateKey {
 
 /**
  * v6: los Momentos pasan a ser logros (con fecha: el primero de su mes) y lo que era meditar o terapia
- * en Mente pasa a Mente y Alma (Mente ahora es Habilidades: aprender algo nuevo).
+ * en Mente pasa a Mente y Alma (Mente ahora es Intelecto y Cognitivo: aprender algo nuevo).
  */
 function toV6(state: PlannerState): PlannerState {
   const HOURS: Record<MomentKind, number> = { amor: 3, familia: 3, amigos: 2.5, disfrute: 3 };

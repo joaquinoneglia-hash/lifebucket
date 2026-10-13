@@ -1,6 +1,7 @@
 "use client";
 
-import { ArrowRight, Check, ChevronLeft, ChevronRight, GripVertical, Maximize2, Plus, Trash2, X } from "lucide-react";
+import { ArrowRight, Check, ChevronLeft, ChevronRight, GripVertical, Plus, Trash2, X } from "lucide-react";
+import { ChartColumnBig } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import { guessQuadrant } from "@/lib/categorize";
 import { fromKey, toKey } from "@/lib/dates";
@@ -101,13 +102,13 @@ export function YearGoals({ className }: { className?: string }) {
             }}
             className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
-            <Maximize2 aria-hidden className="size-4" />
+            <ChartColumnBig aria-hidden className="size-4" />
           </button>
           <ModuleControls />
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-2 p-2.5">
         {/* Los meses que ya pasaron: comprimidos y atenuados (tocando uno, se ven sus metas). */}
         {months.some((m) => m.gone) && (
           <ol aria-label="Meses que ya pasaron" className="flex flex-wrap gap-1">
@@ -146,7 +147,8 @@ export function YearGoals({ className }: { className?: string }) {
             dropProps={dropProps(past)}
           />
         )}
-        <ol aria-label="Meses que quedan" className="grid min-h-0 flex-1 auto-rows-[minmax(118px,1fr)] grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5">
+        {/* Todos los meses que quedan entran en el panel, sin scroll (cada mes scrollea sus metas si hace falta). */}
+        <ol aria-label="Meses que quedan" className={cn("grid min-h-0 flex-1 auto-rows-[minmax(0,1fr)] gap-1.5", months.filter((m) => !m.gone).length > 6 ? "grid-cols-4" : months.filter((m) => !m.gone).length > 2 ? "grid-cols-3" : "grid-cols-2")}>
           {months
             .filter((m) => !m.gone)
             .map((m) => (
@@ -202,7 +204,7 @@ function MonthBlock({
     <div
       {...dropProps}
       className={cn(
-        "flex h-full min-h-0 flex-col rounded-xl border px-2 py-1.5 transition-colors duration-150",
+        "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border px-2 py-1.5 transition-colors duration-150",
         over ? "border-ink bg-surface-sunken" : isNow ? "border-ink/35 bg-surface-sunken/40" : "border-line",
         muted && "opacity-80",
       )}
@@ -307,7 +309,7 @@ function MonthBlock({
           className="pressable mt-1 inline-flex h-6 items-center gap-1 self-start rounded-md px-1 text-[11.5px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
         >
           <Plus aria-hidden className="size-3.5" />
-          {list.length ? "Sumar" : "Sumar una meta"}
+          Sumar
         </button>
       )}
     </div>

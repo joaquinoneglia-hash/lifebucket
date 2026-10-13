@@ -11,7 +11,7 @@ import { usePlanner } from "@/lib/store";
 export type { NudgeTarget };
 export type GoNudge = (where: NudgeTarget, nudge?: Nudge) => void;
 const ICONS: Record<NudgeIcon, LucideIcon> = { rutina: CalendarDays, noneg: ListChecks, metas: Target, diario: BookOpen, balde: PieChart, sueno: Moon };
-const SESSION = "lb:nudged";
+const LOG = "lb:nudge-log";
 const dismissKey = (id: string) => `lb:nudge:${id}`;
 
 /** Los avisos de ahora (se recalculan con cada cambio). */
@@ -24,7 +24,8 @@ function useNudges() {
   const logros = usePlanner((s) => s.logros);
   const sleep = usePlanner((s) => s.sleep);
   const startedAt = usePlanner((s) => s.startedAt);
-  return computeNudges({ routine, dailyGoals, goalMonths, dailyChecks, tasks, logros, sleep, startedAt });
+  const idealHours = usePlanner((s) => s.idealHours);
+  return computeNudges({ routine, dailyGoals, goalMonths, dailyChecks, tasks, logros, sleep, startedAt, idealHours });
 }
 
 /**
@@ -35,13 +36,21 @@ export function Nudges({ onGo }: { onGo: GoNudge }) {
   const [nudge, setNudge] = useState<Nudge | null>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
+    const tryShow = () => {
+      const now = new Date();
+      const hour = now.getHours();
+      if (hour < 8 || hour >= 22) return;
+      if (document.querySelector("dialog[open], [aria-labelledby='reminder-title'], [aria-labelledby='setup-title'], [aria-labelledby='nudge-title']")) return;
+      const today = toKey(now);
+      let log: { day: string; times: number[]; ids: string[] } = { day: today, times: [], ids: [] };
       try {
-        if (sessionStorage.getItem(SESSION)) return;
+        const raw = JSON.parse(localStorage.getItem(LOG) ?? "null");
+        if (raw?.day === today) log = raw;
       } catch {}
-      if (document.querySelector("dialog[open], [aria-labelledby='reminder-title'], [aria-labelledby='setup-title']")) return;
-      const today = toKey(new Date());
+      if (log.times.length >= 3) return;
+      if (log.times.length && Date.now() - log.times[log.times.length - 1] < 3.5 * 60 * 60 * 1000) return;
       const pick = computeNudges(usePlanner.getState()).find((n) => {
+        if (log.ids.includes(n.id)) return false;
         try {
           return localStorage.getItem(dismissKey(n.id)) !== today;
         } catch {
@@ -49,13 +58,19 @@ export function Nudges({ onGo }: { onGo: GoNudge }) {
         }
       });
       if (!pick) return;
+      log = { day: today, times: [...log.times, Date.now()], ids: [...log.ids, pick.id] };
       try {
-        sessionStorage.setItem(SESSION, "1");
+        localStorage.setItem(LOG, JSON.stringify(log));
       } catch {}
       play("pop");
       setNudge(pick);
-    }, 4500);
-    return () => window.clearTimeout(t);
+    };
+    const first = window.setTimeout(tryShow, 6000);
+    const every = window.setInterval(tryShow, 10 * 60 * 1000);
+    return () => {
+      window.clearTimeout(first);
+      window.clearInterval(every);
+    };
   }, []);
 
   if (!nudge) return null;

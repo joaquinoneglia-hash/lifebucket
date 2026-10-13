@@ -1,4 +1,5 @@
 import { guessQuadrant } from "./categorize";
+import type { QuadrantId } from "./quadrants";
 import { fromKey, toKey, type DateKey } from "./dates";
 import { parseLogro } from "./logro-parse";
 import type { Logro, LogroCat } from "./store";
@@ -9,23 +10,34 @@ import type { Logro, LogroCat } from "./store";
  * mes se arma una historia por días, con tarjetas de color e hitos.
  */
 export const DIARY_CATS: LogroCat[] = ["cuerpo", "interior", "alma", "mente", "vinculos", "trabajo"];
-export type DiaryItem = { text: string; category: LogroCat | null; minutes: number; date: DateKey };
+export type DiaryItem = {
+  text: string;
+  category: LogroCat | null;
+  minutes: number;
+  date: DateKey;
+  start?: number;
+  /** Si lo hacés rutina: los días de la semana en que se repite (0 = domingo). */
+  repeat?: number[];
+};
 
 /** ¿Arranca con un verbo en pasado ("corrí", "fui", "hice")? Así se sabe que es otra cosa y no parte de la anterior. */
-const PAST = /^(?:hoy\s+|ayer\s+|despu[eé]s\s+|tambi[eé]n\s+|luego\s+|a\s+la\s+(?:mañana|tarde|noche)\s+)?(?:\p{L}+[éí]|fui|hice|tuve|estuve|pude|vi|di|puse|dije|vine|anduve|traje|me\s+\p{L}+|le\s+\p{L}+|la\s+\p{L}+)(?=[\s,.;]|$)/iu;
+const PAST =
+  /^(?:(?:hoy|ayer|anoche|anteayer|mañana|pasado\s+mañana|despu[eé]s|tambi[eé]n|luego|el\s+\p{L}+|este\s+\p{L}+|a\s+la\s+(?:mañana|tarde|noche)|a\s+las?\s+\S+(?:\s+de\s+la\s+\p{L}+)?)\s+)*(?:\p{L}+[éí]|fui|hice|tuve|estuve|pude|vi|di|puse|dije|vine|anduve|traje|voy|vamos|tengo|tenemos|quiero|hay\s+que|\p{L}+(?:ré|rá|remos)|me\s+\p{L}+|le\s+\p{L}+|la\s+\p{L}+)(?=[\s,.;]|$)/iu;
 
-const suggest = (text: string): LogroCat | null => {
-  const q = guessQuadrant(text);
+const suggest = (text: string, known: { name: string; quadrant: QuadrantId }[] = []): LogroCat | null => {
+  const q = guessQuadrant(text, known);
   return q && (DIARY_CATS as string[]).includes(q) ? (q as LogroCat) : null;
 };
 
-export function parseDiary(input: string, now = new Date()): DiaryItem[] {
+/** `known`: tus bloques de la rutina, para reconocer tus propias actividades ("Brandtag" → Trabajo). */
+export function parseDiary(input: string, now = new Date(), known: { name: string; quadrant: QuadrantId }[] = []): DiaryItem[] {
   const text = input.trim();
   if (!text) return [];
   const today = toKey(now);
   // Primero por oraciones; después, dentro de cada una, por ", " / " y " cuando lo que sigue es otra acción.
   const pieces: string[] = [];
-  for (const raw of text.split(/(?:[.;!?\n]+\s*)/).filter((x) => x.trim())) {
+  // "9 a.m.": los puntos de a.m. / p.m. no cortan la oración.
+  for (const raw of text.replace(/\b([ap])\.\s?m\.?/gi, "$1m").split(/(?:[.;!?\n]+\s*)/).filter((x) => x.trim())) {
     // "hora y media", "y cuarto": no son dos cosas.
     const sentence = raw.replace(/\s+y\s+(media|cuarto)\b/gi, "~$1");
     // Los separadores quedan en la lista (posiciones impares) para volver a armar el texto como estaba.
@@ -46,10 +58,11 @@ export function parseDiary(input: string, now = new Date()): DiaryItem[] {
   const whole = parseLogro(text, now);
   return pieces.map((p) => {
     const parsed = parseLogro(p, now);
-    const clean = parsed.text || p.trim();
-    const category = suggest(clean);
+    // Si solo se escribió cuándo ("de lunes a viernes"), el título queda vacío hasta que digas qué es.
+    const clean = parsed.text;
+    const category = clean ? suggest(clean, known) : null;
     const minutes = parsed.minutes ?? (category ? 60 : 0);
-    return { text: clean, category, minutes: category ? minutes : 0, date: parsed.date ?? whole.date ?? today };
+    return { text: clean, category, minutes: category ? minutes : 0, date: parsed.date ?? whole.date ?? today, start: parsed.start ?? (parsed.repeat ? 18 * 60 : undefined), repeat: parsed.repeat ?? undefined };
   });
 }
 
@@ -73,15 +86,11 @@ export function monthStory(logros: Logro[], month: string) {
     const lead = top ? INTROS[top]! : "Un día para recordar";
     return { date, title: WEEKDAY.format(fromKey(date)).replace(/^./, (c) => c.toUpperCase()), lead, items };
   });
-  // Hitos: lo que más tiempo te llevó y la primera vez de cada categoría en el mes.
-  const seen = new Set<string>();
-  const milestones = new Set<string>();
-  for (const l of list) {
-    if (l.category && l.minutes > 0 && !seen.has(l.category)) {
-      seen.add(l.category);
-      milestones.add(l.id);
-    }
-    if (l.minutes >= 120) milestones.add(l.id);
+  // Hitos: lo grande del mes (2 h o más) y, si no hay, lo más largo.
+  const milestones = new Set<string>(list.filter((l) => l.category && l.minutes >= 120).map((l) => l.id));
+  if (!milestones.size) {
+    const top = [...list].filter((l) => l.category && l.minutes > 0).sort((a, b) => b.minutes - a.minutes)[0];
+    if (top) milestones.add(top.id);
   }
   const counted = list.filter((l) => l.category && l.minutes > 0);
   const total = counted.reduce((acc, l) => acc + l.minutes, 0);

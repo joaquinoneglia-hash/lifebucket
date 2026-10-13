@@ -33,7 +33,7 @@ const PHRASES: Record<CheerKind, string[]> = {
 
 const SOUNDS: Record<CheerKind, Sfx | null> = {
   check: "pop",
-  allChecks: "complete",
+  allChecks: "fanfare",
   uncheck: null,
   diary: "paper",
   diaryNote: "paper",

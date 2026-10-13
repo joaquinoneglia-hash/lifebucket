@@ -83,8 +83,14 @@ function bell(a: AudioContext, out: AudioNode, t: number) {
 }
 
 let starting = false;
+/** Si mientras arrancaba la apagaste, no arranca. */
+let cancelled = false;
 export async function startZen() {
   if (playing || starting || typeof window === "undefined") return;
+  // Sin un toque previo el navegador no deja sonar (y el arranque quedaría colgado): se espera al primer toque.
+  const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+  if (ua && !ua.hasBeenActive) return;
+  cancelled = false;
   starting = true;
   try {
     await begin();
@@ -98,11 +104,12 @@ async function begin() {
   if (!Ctor) return;
   try {
     ctx ??= new Ctor();
-    await ctx.resume();
+    // Si el navegador no responde, no se queda esperando para siempre.
+    await Promise.race([ctx.resume(), new Promise((r) => setTimeout(r, 800))]);
   } catch {
     return;
   }
-  if (ctx.state !== "running") return;
+  if (ctx.state !== "running" || cancelled) return;
   const a = ctx;
   playing = true;
   try {
@@ -148,7 +155,13 @@ async function begin() {
 }
 
 export function stopZen(remember = true) {
-  if (!playing) return;
+  if (remember) {
+    try {
+      localStorage.setItem(KEY, "0");
+    } catch {}
+  }
+  if (starting) cancelled = true;
+  if (!playing) return emit();
   playing = false;
   window.clearTimeout(timer);
   if (remember) {

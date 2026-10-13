@@ -8,7 +8,7 @@ import { WeekPlan, type WeekAiRequest } from "@/lib/week-ai-schema";
 const SYSTEM = `Sos el asistente de LifeBucket. LifeBucket ayuda a ver cuánto tiempo le queda a cada persona para lo que le hace bien. Tiene dos cosas:
 - La semana tipo: la estructura que se repite (lunes a domingo, de 05:00 a 24:00, sin fechas), en bloques.
 - Los logros: el diario de cada día, lo que hizo una vez ("hoy medité", "cené con amigos"). Suman horas a la semana y al mes.
-Las categorías: cuerpo (Deporte: entrenar, correr, bici), interior (Mente y Alma: meditar, terapia), alma (Hobbies y disfrute: lo que hace por gusto sin fin económico, ajedrez, música), mente (Habilidades: aprender algo intelectual, un idioma), vinculos (Vínculos: pareja, familia, amigos). La base: trabajo y libre (comidas, descanso, traslados). El sueño es fijo y no se agenda. Además hay metas (por mes, con fecha opcional), que no afectan el balance.
+Las categorías: cuerpo (Deporte: entrenar, correr, bici), interior (Mente y Espíritu: meditar, terapia), alma (Hobbies y disfrute: lo que hace por gusto sin fin económico, ajedrez, música), mente (Intelecto y Cognitivo: aprender algo intelectual, un idioma), vinculos (Vínculos: pareja, familia, amigos). La base: trabajo y libre (comidas, descanso, traslados). El sueño es fijo y no se agenda. Además hay metas (por mes, con fecha opcional), que no afectan el balance.
 
 Tu trabajo: a partir de lo que pide la persona (escrito o dictado, a veces desordenado), proponer cambios concretos. No aplicás nada vos: la persona revisa y confirma.
 
@@ -21,7 +21,7 @@ Reglas:
 - clear_week solo si pide explícitamente borrar toda la semana.
 - No inventes cambios que no pidió. Si el pedido es ambiguo y no podés armar algo razonable, no propongas nada: hacé una sola pregunta concreta en reply.
 
-Tono: español rioplatense, cálido y breve. En cada cambio, summary es una línea clara, por ejemplo "Gimnasio · lun, mié y vie · 07:00 a 08:00" o "Logro de hoy: meditar 20 min (Mente y Alma)".`;
+Tono: español rioplatense, cálido y breve. En cada cambio, summary es una línea clara, por ejemplo "Gimnasio · lun, mié y vie · 07:00 a 08:00" o "Logro de hoy: meditar 20 min (Mente y Espíritu)".`;
 
 export async function POST(request: Request) {
   const noKey = missingKeyResponse();

@@ -12,11 +12,11 @@ export type Part = "trabajo" | "cuerpo" | "interior" | "alma" | "mente" | "vincu
 export const PARTS: { id: Part; label: string }[] = [
   { id: "trabajo", label: "Trabajo" },
   { id: "cuerpo", label: "Deporte" },
-  { id: "interior", label: "Mente y Alma" },
+  { id: "interior", label: "Mente y Espíritu" },
   { id: "alma", label: "Hobbies y disfrute" },
-  { id: "mente", label: "Habilidades" },
+  { id: "mente", label: "Intelecto y Cognitivo" },
   { id: "vinculos", label: "Vínculos" },
-  { id: "libre", label: "Libre" },
+  { id: "libre", label: "Tareas cotidianas" },
   { id: "sueno", label: "Sueño" },
 ];
 /** Lo que se trabaja y se juega (la base es Trabajo, Libre y Sueño). */
@@ -28,10 +28,12 @@ const empty = (): Record<Part, number> => ({ trabajo: 0, cuerpo: 0, interior: 0,
 export function fill(routine: RoutineBlock[], logros: Logro[], sleepMinutes: number, total: number, factor: number): Record<Part, number> {
   const out = empty();
   out.sueno = sleepMinutes;
-  for (const b of routine) if (b.quadrant !== "libre") out[b.quadrant] += b.minutes * b.days.length * factor;
+  for (const b of routine) out[b.quadrant] += b.minutes * b.days.length * factor;
   for (const l of logros) if (l.category && l.minutes > 0) out[l.category] += l.minutes;
   const used = out.trabajo + ACTIVE_PARTS.reduce((acc, p) => acc + out[p], 0);
-  out.libre = Math.max(0, total - out.sueno - used);
+  // Tareas cotidianas: lo que agendaste (el tiempo sin agendar ya no cuenta).
+  void used;
+  void total;
   for (const p of Object.keys(out) as Part[]) out[p] = Math.round(out[p]);
   return out;
 }
@@ -81,10 +83,10 @@ export function weekShares(routine: RoutineBlock[], logros: Logro[], sleep?: Sle
  * El balde se reparte entre Sueño, Trabajo y lo que hacés para vos (el tiempo "libre" no cuenta): si no
  * hay nada para vos, el 100% es sueño y trabajo.
  */
-export const bucketTotal = (m: Record<Part, number>) => Math.max(1, m.sueno + m.trabajo + ACTIVE_PARTS.reduce((acc, p) => acc + m[p], 0));
+export const bucketTotal = (m: Record<Part, number>) => Math.max(1, m.sueno + m.trabajo + m.libre + ACTIVE_PARTS.reduce((acc, p) => acc + m[p], 0));
 
 /** El color de cada parte (Libre en gris, Sueño en azul noche). */
-export const partColor = (p: Part) => (p === "libre" ? "#aab1be" : p === "sueno" ? "var(--color-sleep)" : `var(--color-${p})`);
+export const partColor = (p: Part) => (p === "sueno" ? "var(--color-sleep)" : `var(--color-${p})`);
 
 /** El lunes de esta semana (la clave de cada semana en el reporte). */
 export const thisMonday = (d = new Date()): DateKey => toKey(startOfWeek(d));

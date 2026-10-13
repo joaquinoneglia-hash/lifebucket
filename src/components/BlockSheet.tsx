@@ -25,7 +25,7 @@ export type SheetState =
     }
   | { mode: "edit"; id: string };
 
-/** En modo simple, solo Trabajo, Cuerpo, Mente y Alma. */
+/** En modo simple, solo Trabajo, Cuerpo, Mente y Espíritu. */
 const QUADRANTS = SIMPLE_MODE ? ALL_QUADRANTS.filter((q) => SIMPLE_QUADRANTS.includes(q.id)) : ALL_QUADRANTS;
 
 const SCOPE_OPTIONS: { id: Scope; label: string }[] = [

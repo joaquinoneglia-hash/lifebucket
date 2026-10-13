@@ -130,7 +130,7 @@ const STEPS: Step[] = [
   },
   {
     id: "diario",
-    target: "diario",
+    target: "semana",
     phone: "objetivos",
     kicker: "Paso 4 de 4 · Tu diario",
     title: "Tu diario personal",
@@ -170,10 +170,12 @@ export function Setup({
   phone: boolean;
   onTab: (t: Phone) => void;
   onSleep: () => void;
-  onAddBlock: (d: { name: string; quadrant: QuadrantId; days: number[]; start: number; minutes: number }) => void;
+  onAddBlock: (d: { name: string; quadrant: QuadrantId; days: number[]; start: number; minutes: number; lock?: boolean }) => void;
   onDone: () => void;
 }) {
   const [i, setI] = useState(0);
+  const iRef = useRef(0);
+  iRef.current = i;
   const step = STEPS[i];
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -198,6 +200,8 @@ export function Setup({
   const hasBusiness = routine.some((b) => /emprend/i.test(b.name));
   const todayKey = toKey(new Date());
   const goals = goalsFor({ dailyGoals: allGoals, goalMonths }, todayKey.slice(0, 7));
+  const goalsRef = useRef(0);
+  goalsRef.current = goals.length;
   const missing: string | null = (() => {
     switch (step.id) {
       case "sueno":
@@ -278,7 +282,7 @@ export function Setup({
     if (autoOpened.current.has(step.id)) return;
     let t: number | undefined;
     if (step.id === "sueno" && !sleepSet) t = window.setTimeout(onSleep, 500);
-    if (step.id === "trabajo" && !hasWork) t = window.setTimeout(() => onAddBlock({ name: "Trabajo", quadrant: "trabajo", days: [1, 2, 3, 4, 5], start: 540, minutes: 480 }), 500);
+    if (step.id === "trabajo" && !hasWork) t = window.setTimeout(() => onAddBlock({ name: "Trabajo", quadrant: "trabajo", days: [1, 2, 3, 4, 5], start: 540, minutes: 480, lock: true }), 500);
     if (step.id === "noneg") t = window.setTimeout(() => document.querySelector<HTMLInputElement>('input[aria-label^="No negociable"]:placeholder-shown')?.focus(), 600);
     autoOpened.current.add(step.id);
     return () => window.clearTimeout(t);
@@ -286,8 +290,9 @@ export function Setup({
 
   // El resaltado: dónde está el lugar exacto para tocar o escribir (se sigue si se mueve).
   const [spot, setSpot] = useState<DOMRect | null>(null);
+  const spotOff = step.id === "noneg" && goals.length > 0;
   useEffect(() => {
-    if (!step.spot) {
+    if (!step.spot || spotOff) {
       setSpot(null);
       return;
     }
@@ -299,7 +304,25 @@ export function Setup({
     find();
     const t = window.setInterval(find, 300);
     return () => window.clearInterval(t);
-  }, [step.spot]);
+  }, [step.spot, spotOff]);
+
+  // Al completar sueño, trabajo, emprendimiento o el diario, la guía sigue sola; los no negociables, al tocar
+  // «Listo» en el panel.
+  const AUTO = ["sueno", "trabajo", "emprendimiento", "diario"];
+  const advanced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!AUTO.includes(step.id) || missing || advanced.current === step.id) return;
+    advanced.current = step.id;
+    const t = window.setTimeout(() => nextRef.current(), 900);
+    return () => window.clearTimeout(t);
+  }, [step.id, missing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const done = () => {
+      if (STEPS[iRef.current]?.id === "noneg" && goalsRef.current > 0) nextRef.current();
+    };
+    window.addEventListener("lb:noneg-listo", done);
+    return () => window.removeEventListener("lb:noneg-listo", done);
+  }, []);
 
   const next = () => {
     if (step.id === "noneg") {
@@ -323,6 +346,8 @@ export function Setup({
       setI((n) => n + 1);
     }, step.target ? 420 : 200);
   };
+  const nextRef = useRef(next);
+  nextRef.current = next;
 
   const pad = 8;
   const hole = rect && { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
@@ -426,7 +451,7 @@ export function Setup({
                   <button
                     key={c}
                     type="button"
-                    onClick={() => onAddBlock(MINE_EXAMPLE[c])}
+                    onClick={() => onAddBlock({ ...MINE_EXAMPLE[c], lock: true })}
                     style={partStyle(c)}
                     className={cn("pressable flex items-center gap-2 rounded-2xl border px-3 py-2 text-left text-[13px] font-semibold", n ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line hover:bg-[var(--q-soft)]")}
                   >
@@ -461,8 +486,8 @@ export function Setup({
                 step.action === "sleep"
                   ? { icon: Moon, label: sleepSet ? "Cambiar mi horario de sueño" : "Abrir el horario de sueño", done: sleepSet, onClick: onSleep }
                   : step.action === "work"
-                    ? { icon: Briefcase, label: hasWork ? "Sumar otro horario de trabajo" : "Abrir mi horario de trabajo", done: hasWork, onClick: () => onAddBlock({ name: "Trabajo", quadrant: "trabajo", days: [1, 2, 3, 4, 5], start: 540, minutes: 480 }) }
-                    : { icon: Rocket, label: hasBusiness ? "Sumar otro horario" : "Configurar mi emprendimiento", done: hasBusiness, onClick: () => onAddBlock({ name: "Emprendimiento", quadrant: "trabajo", days: [1, 2, 3, 4, 5], start: 1140, minutes: 120 }) };
+                    ? { icon: Briefcase, label: hasWork ? "Sumar otro horario de trabajo" : "Abrir mi horario de trabajo", done: hasWork, onClick: () => onAddBlock({ name: "Trabajo", quadrant: "trabajo", days: [1, 2, 3, 4, 5], start: 540, minutes: 480, lock: true }) }
+                    : { icon: Rocket, label: hasBusiness ? "Sumar otro horario" : "Configurar mi emprendimiento", done: hasBusiness, onClick: () => onAddBlock({ name: "Emprendimiento", quadrant: "trabajo", days: [1, 2, 3, 4, 5], start: 1140, minutes: 120, lock: true }) };
               return (
                 <button
                   type="button"
@@ -568,6 +593,7 @@ export function Setup({
                 else void startZen();
                 setZen(!zen);
               }}
+              data-zen-toggle
               aria-pressed={zen}
               aria-label={zen ? "Apagar la música" : "Prender la música"}
               title={zen ? "Apagar la música" : "Prender la música"}

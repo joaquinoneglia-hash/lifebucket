@@ -251,3 +251,21 @@ export function carve(routine: RoutineBlock[], block: RoutineBlock): RoutineBloc
   }
   return [...out, block];
 }
+
+/** Minutos sin completar en la semana (entre que te levantás y te acostás), contando huecos de 30 min o más. */
+export function emptyMinutes(routine: RoutineBlock[], sleep: SleepSettings, from = 5 * 60, to = 24 * 60): number {
+  let total = 0;
+  for (const d of WEEK_ORDER) {
+    const w = awakeFor(d, sleep);
+    const wake = Math.max(from, w.wake);
+    const bed = Math.min(to, w.bed);
+    const busy = routine.filter((b) => b.days.includes(d)).map((b) => [b.start, b.start + b.minutes] as const).sort((a, b) => a[0] - b[0]);
+    let at = wake;
+    for (const [a, b] of busy) {
+      if (a - at >= 30) total += Math.min(a, bed) - at;
+      at = Math.max(at, b);
+    }
+    if (bed - at >= 30) total += bed - at;
+  }
+  return total;
+}

@@ -1,9 +1,12 @@
 "use client";
 
-import { BookOpen, ChevronLeft, ChevronRight, Maximize2, Plus, Sparkles, Star, Trash2, X } from "lucide-react";
+import { BookOpen, ChevronLeft, ChevronRight, Plus, Sparkles, Star, Trash2, X } from "lucide-react";
+import { ChartColumnBig } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { addDays, toKey, type DateKey } from "@/lib/dates";
+import { addDays, fromKey, toKey, type DateKey } from "@/lib/dates";
+import { formatTime } from "@/lib/time";
+import { carve, type RoutineBlock } from "@/lib/routine";
 import { DIARY_CATS, monthStory, parseDiary, type DiaryItem } from "@/lib/diary";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
@@ -11,10 +14,10 @@ import { cheer } from "@/lib/motivation";
 import { partStyle } from "@/lib/mode";
 import { QUADRANT_BY_ID } from "@/lib/quadrants";
 import { play } from "@/lib/sfx";
-import { usePlanner, type Logro, type LogroCat } from "@/lib/store";
+import { newId, usePlanner, type Logro, type LogroCat } from "@/lib/store";
 import { ModuleControls } from "./Modules";
 import { QuadrantIcon } from "./QuadrantIcon";
-import { Sheet } from "./ui";
+import { Segmented, Sheet } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240];
@@ -54,7 +57,7 @@ export function DiaryBox({ className }: { className?: string }) {
             title="Abrir mi diario: la historia de tu mes"
             className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
-            <Maximize2 aria-hidden className="size-4" />
+            <ChartColumnBig aria-hidden className="size-4" />
           </button>
           <ModuleControls />
         </div>
@@ -74,15 +77,26 @@ export const LogrosPanel = DiaryBox;
  * Escribir en el diario. Mientras escribís, se ve qué se entendió: una o varias cosas, cada una con su
  * categoría y su duración (se pueden cambiar) o como nota. Se guardan todas juntas.
  */
-export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved?: (date: DateKey) => void }) {
+export function DiaryComposer({ compact, bar, onSaved }: { compact?: boolean; bar?: boolean; onSaved?: (date: DateKey) => void }) {
+  if (bar) compact = true;
   const addLogro = usePlanner((s) => s.addLogro);
   const [text, setText] = useState("");
   // Lo que se cambió a mano en lo que se entendió (por posición): categoría, duración o día.
   const [edits, setEdits] = useState<Record<number, Partial<DiaryItem>>>({});
   const today = toKey(new Date());
   const yesterday = toKey(addDays(new Date(), -1));
-  const items = parseDiary(text).map((it, i) => ({ ...it, ...edits[i] }));
+  const tomorrow = toKey(addDays(new Date(), 1));
+  const routine = usePlanner((s) => s.routine);
+  const items = parseDiary(text, new Date(), routine).map((it, i) => ({ ...it, ...edits[i] }));
+  const missingTitle = items.some((it) => !it.text.trim());
   const boxRef = useRef<HTMLDivElement>(null);
+  // La barra de abajo del calendario avisa qué se está escribiendo, para dibujarlo en su día y hora.
+  const previewKey = bar ? JSON.stringify(items) : "";
+  useEffect(() => {
+    if (!bar) return;
+    window.dispatchEvent(new CustomEvent("lb:diary-preview", { detail: JSON.parse(previewKey || "[]") }));
+  }, [bar, previewKey]);
+  useEffect(() => () => void (bar && window.dispatchEvent(new CustomEvent("lb:diary-preview", { detail: [] }))), [bar]);
   // En el recuadro chico del tablero, lo que se entendió se muestra en una tarjeta flotante arriba del campo
   // (así no queda cortado).
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -95,8 +109,20 @@ export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved
   }, [compact, items.length]);
 
   const save = () => {
-    if (!items.length) return;
-    for (const it of items) addLogro({ text: it.text, category: it.category, minutes: it.category ? it.minutes : 0, date: it.date });
+    if (!items.length || missingTitle) return;
+    let madeRoutine = false;
+    for (const it of items) {
+      // Hecho rutina: pasa a la semana tipo (los días elegidos), reemplazando lo que hubiera en ese horario.
+      if (it.repeat?.length && it.category) {
+        const st = usePlanner.getState();
+        const block: RoutineBlock = { id: newId(), quadrant: it.category, name: it.text, days: it.repeat, start: it.start ?? 18 * 60, minutes: it.minutes || 60 };
+        st.setRoutine(carve(st.routine, block), st.routineSeries);
+        madeRoutine = true;
+        continue;
+      }
+      addLogro({ text: it.text, category: it.category, minutes: it.category ? it.minutes : 0, date: it.date, start: it.start });
+    }
+    if (madeRoutine) play("complete");
     const sums = items.some((it) => it.category);
     cheer(sums ? "diary" : "diaryNote");
     onSaved?.(items[0].date);
@@ -114,7 +140,17 @@ export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved
             <span className={cn("grid size-6 shrink-0 place-items-center rounded-full", it.category ? "bg-[var(--q)] text-white" : "bg-surface text-ink-muted")}>
               {it.category ? <QuadrantIcon id={it.category} className="size-3" /> : <Sparkles aria-hidden className="size-3" />}
             </span>
-            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{it.text}</span>
+            {/* El título: se puede tocar y cambiar antes de guardar. */}
+            <input
+              value={it.text}
+              onChange={(e) => set(i, { text: e.target.value })}
+              placeholder="¿Qué es? Escribí el nombre…"
+              aria-label="Título"
+              className={cn(
+                "min-w-0 flex-1 truncate rounded-md border border-transparent bg-transparent px-1 py-0.5 text-[13px] font-semibold placeholder:font-normal placeholder:text-ink-faint hover:border-line focus:border-ink focus:bg-surface focus:outline-none",
+                !it.text.trim() && "border-dashed border-ink/30",
+              )}
+            />
           </span>
           <span className="flex flex-wrap items-center gap-1">
             <select
@@ -148,8 +184,9 @@ export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved
           {/* El día, adentro de la misma tarjeta. */}
           <span className="flex items-center gap-1" role="group" aria-label={`Día de ${it.text}`}>
             {[
-              { d: today, l: "Hoy" },
               { d: yesterday, l: "Ayer" },
+              { d: today, l: "Hoy" },
+              { d: tomorrow, l: "Mañana" },
             ].map((o) => (
               <button
                 key={o.l}
@@ -164,12 +201,59 @@ export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved
             <input
               type="date"
               value={it.date}
-              max={today}
               onChange={(e) => e.target.value && set(i, { date: e.target.value as DateKey })}
               aria-label="Otro día"
-              className={cn("h-7 min-w-0 flex-1 rounded-full border bg-surface px-2 text-[11.5px] focus:border-ink focus:outline-none", it.date !== today && it.date !== yesterday ? "border-ink text-ink" : "border-line text-ink-muted")}
+              className={cn("h-7 min-w-0 flex-1 rounded-full border bg-surface px-2 text-[11.5px] focus:border-ink focus:outline-none", it.date !== today && it.date !== yesterday && it.date !== tomorrow ? "border-ink text-ink" : "border-line text-ink-muted")}
             />
           </span>
+          {/* La hora (si se dijo o si va a la rutina) y la pregunta: ¿lo hacés rutina? ¿qué días? */}
+          {it.category && (
+            <span className="flex flex-wrap items-center gap-1">
+              {(it.start !== undefined || it.repeat) && (
+                <input
+                  type="time"
+                  step={900}
+                  aria-label={`Hora de ${it.text}`}
+                  value={formatTime(it.start ?? 18 * 60)}
+                  onChange={(e) => {
+                    const [h, m] = e.target.value.split(":").map(Number);
+                    if (Number.isFinite(h)) set(i, { start: h * 60 + (m || 0) });
+                  }}
+                  className="h-7 rounded-full border border-line bg-surface px-2 text-[11.5px] tabular-nums focus:border-ink focus:outline-none"
+                />
+              )}
+              <button
+                type="button"
+                aria-pressed={!!it.repeat}
+                onClick={() => set(i, { repeat: it.repeat ? undefined : [fromKey(it.date).getDay()], start: it.start ?? 18 * 60 })}
+                className={cn("pressable h-7 rounded-full px-2.5 text-[11.5px] font-semibold", it.repeat ? "bg-ink text-surface" : "bg-surface text-ink-muted ring-1 ring-line hover:text-ink")}
+              >
+                {it.repeat ? "✓ Va a tu rutina" : "¿Lo hacés rutina?"}
+              </button>
+              {it.repeat && (
+                <span role="group" aria-label="Días que se repite" className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                    const on = it.repeat!.includes(d);
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        aria-pressed={on}
+                        aria-label={["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"][d]}
+                        onClick={() => {
+                          const next = on ? it.repeat!.filter((x) => x !== d) : [...it.repeat!, d];
+                          set(i, { repeat: next.length ? next : undefined });
+                        }}
+                        className={cn("pressable grid size-7 place-items-center rounded-full text-[11px] font-semibold", on ? "bg-[var(--q)] text-white" : "bg-surface text-ink-muted hover:text-ink")}
+                      >
+                        {"DLMMJVS"[d]}
+                      </button>
+                    );
+                  })}
+                </span>
+              )}
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -197,17 +281,20 @@ export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved
               save();
             }
           }}
-          rows={compact ? 2 : 5}
-          placeholder="Hoy corrí 2 horas, cené con amigos y practiqué guitarra…"
-          aria-label="¿Qué hiciste hoy?"
+          rows={bar ? 1 : compact ? 2 : 5}
+          placeholder={bar ? "Pedime algo para agregar a tu rutina o sumá algo que hiciste fuera de tu rutina para esta semana" : "Hoy corrí 2 horas, cené con amigos y practiqué guitarra…"}
+          aria-label={bar ? "Agregar a tu rutina o sumar algo fuera de tu rutina" : "¿Qué hiciste hoy?"}
           enterKeyHint="done"
-          className="w-full resize-none rounded-2xl border border-line bg-surface px-3.5 py-2.5 pr-12 text-[13.5px] leading-relaxed placeholder:text-ink-faint focus:border-ink focus:outline-none"
+          className={cn(
+            "w-full resize-none border border-line bg-surface text-[13.5px] leading-relaxed placeholder:text-ink-faint focus:border-ink focus:outline-none",
+            bar ? "h-10 overflow-hidden rounded-full py-[9px] pr-11 pl-4 whitespace-nowrap placeholder:text-[12px]" : "rounded-2xl px-3.5 py-2.5 pr-12",
+          )}
         />
         <button
           type="submit"
-          disabled={!items.length}
+          disabled={!items.length || missingTitle}
           aria-label="Guardar en mi diario"
-          className="pressable absolute right-2 bottom-2.5 grid size-9 place-items-center rounded-full bg-ink text-surface disabled:opacity-25"
+          className={cn("pressable absolute grid place-items-center rounded-full bg-ink text-surface disabled:opacity-25", bar ? "top-1 right-1 size-8" : "right-2 bottom-2.5 size-9")}
         >
           <Plus aria-hidden className="size-4" />
         </button>
@@ -218,15 +305,22 @@ export function DiaryComposer({ compact, onSaved }: { compact?: boolean; onSaved
         anchor &&
         createPortal(
           <div
-            className="animate-fade-up fixed z-[60] flex max-h-[min(420px,60dvh)] flex-col gap-2 overflow-y-auto rounded-2xl border border-line bg-surface p-2.5 shadow-[var(--shadow-popover)]"
-            style={{ left: anchor.left, width: anchor.width, bottom: window.innerHeight - anchor.top + 8 }}
+            className="animate-fade-up fixed z-[85] flex max-h-[min(420px,60dvh)] flex-col gap-2 overflow-y-auto rounded-2xl border border-line bg-surface p-2.5 shadow-[var(--shadow-popover)]"
+            style={
+              // Al costado de la barra si hay lugar: así no tapa el calendario, donde se dibuja lo que escribís.
+              bar && anchor.left > 400
+                ? { left: anchor.left - 392, width: 380, bottom: window.innerHeight - anchor.bottom }
+                : bar && anchor.bottom < window.innerHeight * 0.6
+                ? { left: anchor.left, width: Math.max(anchor.width, 360), top: anchor.bottom + 8 }
+                : { left: anchor.left, width: bar ? Math.min(anchor.width, 520) : anchor.width, bottom: window.innerHeight - anchor.top + 8 }
+            }
           >
             <p className="px-0.5 text-[11.5px] font-semibold text-ink-muted">Esto se va a guardar (tocá + o Enter):</p>
             {cards}
           </div>,
           document.body,
         )}
-      {!text && !compact && <p className="text-[11.5px] leading-snug text-ink-faint">Escribí como te salga: se reconoce qué suma a tu balde (Deporte, Mente y Alma, Hobbies, Habilidades, Vínculos), cuánto duró y qué día fue.</p>}
+      {!text && !compact && <p className="text-[11.5px] leading-snug text-ink-faint">Escribí como te salga: se reconoce qué suma a tu balde (Deporte, Mente y Espíritu, Hobbies, Intelecto y Cognitivo, Vínculos), cuánto duró y qué día fue.</p>}
     </form>
   );
 }
@@ -291,7 +385,14 @@ export function DiaryBook({ isMobile, onClose }: { isMobile: boolean; onClose: (
 /** Cómo vienen tus meses: una línea por grupo con las horas que anotaste en el diario (los últimos 6 meses). */
 function MonthsChart({ month }: { month: string }) {
   const logros = usePlanner((s) => s.logros);
-  const months = Array.from({ length: 6 }, (_, i) => shiftMonth(month, i - 5));
+  const [view, setView] = useState<"mes" | "anio">("mes");
+  // Los puntos del gráfico: los días del mes elegido, o los meses de su año.
+  const year = month.slice(0, 4);
+  const lastDay = new Date(Number(year), Number(month.slice(5)), 0).getDate();
+  const months =
+    view === "mes"
+      ? Array.from({ length: lastDay }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`)
+      : Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, "0")}`);
   const counted = logros.filter((l) => l.category && l.minutes > 0);
   const series = DIARY_CATS.map((c) => ({ c, vals: months.map((m) => counted.filter((l) => l.category === c && l.date.startsWith(m)).reduce((acc, l) => acc + l.minutes, 0) / 60) })).filter((x) => x.vals.some((v) => v > 0));
   const max = Math.max(2, ...series.flatMap((x) => x.vals));
@@ -303,9 +404,21 @@ function MonthsChart({ month }: { month: string }) {
   const ticks = [0, max / 2, max].map((v) => Math.round(v));
   return (
     <section className="mt-3 flex flex-col gap-2 border-t border-line pt-4" aria-label="Cómo vienen tus meses">
-      <p className="text-[11px] font-semibold tracking-[0.16em] text-ink-faint uppercase">Cómo vienen tus meses</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold tracking-[0.16em] text-ink-faint uppercase">{view === "mes" ? "Tu mes, día por día" : `Tu ${year}, mes por mes`}</p>
+        <Segmented
+          label="Período"
+          value={view}
+          onChange={setView}
+          options={[
+            { id: "mes", label: "Este mes" },
+            { id: "anio", label: "El año" },
+          ]}
+          className="text-[11.5px]"
+        />
+      </div>
       {series.length === 0 ? (
-        <p className="text-[12.5px] text-ink-muted">Cuando anotes cosas que suman a tu balde, acá vas a ver cómo crece cada grupo mes a mes.</p>
+        <p className="text-[12.5px] text-ink-muted">Cuando anotes cosas que suman a tu balde, acá vas a ver cómo crece cada grupo.</p>
       ) : (
         <>
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="Horas por grupo en los últimos meses">
@@ -317,15 +430,23 @@ function MonthsChart({ month }: { month: string }) {
                 </text>
               </g>
             ))}
-            {months.map((m, i) => (
-              <text key={m} x={x(i)} y={H - 7} textAnchor="middle" fontSize="10" fontWeight={m === month ? 700 : 400} fill={m === month ? "var(--color-ink)" : "var(--color-ink-muted)"}>
-                {MONTHS[Number(m.slice(5)) - 1].slice(0, 3)}
-              </text>
-            ))}
+            {months.map((m, i) =>
+              view === "mes" ? (
+                (i === 0 || (i + 1) % 5 === 0) && (
+                  <text key={m} x={x(i)} y={H - 7} textAnchor="middle" fontSize="10" fill="var(--color-ink-muted)">
+                    {i + 1}
+                  </text>
+                )
+              ) : (
+                <text key={m} x={x(i)} y={H - 7} textAnchor="middle" fontSize="10" fontWeight={m === month ? 700 : 400} fill={m === month ? "var(--color-ink)" : "var(--color-ink-muted)"}>
+                  {MONTHS[Number(m.slice(5)) - 1].slice(0, 1).toUpperCase()}
+                </text>
+              ),
+            )}
             {series.map((s) => (
               <g key={s.c} style={partStyle(s.c)}>
                 <path d={s.vals.map((v, i) => `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ")} fill="none" stroke="var(--q)" strokeWidth="2.25" strokeLinejoin="round" strokeLinecap="round" />
-                {s.vals.map((v, i) => v > 0 && <circle key={i} cx={x(i)} cy={y(v)} r="3" fill="var(--color-surface)" stroke="var(--q)" strokeWidth="2" />)}
+                {s.vals.map((v, i) => v > 0 && <circle key={i} cx={x(i)} cy={y(v)} r={view === "mes" ? 2.2 : 3} fill="var(--color-surface)" stroke="var(--q)" strokeWidth="2" />)}
               </g>
             ))}
           </svg>
@@ -333,7 +454,7 @@ function MonthsChart({ month }: { month: string }) {
             {series.map((s) => (
               <li key={s.c} style={partStyle(s.c)} className="flex items-center gap-1.5 text-[12px] text-ink-muted">
                 <span aria-hidden className="h-[3px] w-3.5 rounded-full bg-[var(--q)]" />
-                {catName(s.c)} <b className="font-semibold text-ink tabular-nums">{Math.round(s.vals[s.vals.length - 1] * 10) / 10} h</b>
+                {catName(s.c)} <b className="font-semibold text-ink tabular-nums">{Math.round(s.vals.reduce((a, v) => a + v, 0) * 10) / 10} h</b>
               </li>
             ))}
           </ul>
@@ -389,14 +510,23 @@ export function Story({ month, setMonth, className, nav = true }: { month: strin
             <p className="text-[13px] font-semibold">
               {d.title} <span className="font-normal text-ink-muted">· {d.lead}</span>
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {d.items.map((l) => (
-                <Card key={l.id} logro={l} milestone={story.milestones.has(l.id)} onRemove={() => {
-                  play("delete");
-                  removeLogro(l.id);
-                }} />
+            {/* El día contado como un cuento: lo que hiciste, en el color de su grupo; los hitos, subrayados. */}
+            <p className="text-[15px] leading-[1.9] text-ink/85">
+              {d.items.map((l, k) => (
+                <span key={l.id}>
+                  {k > 0 && (k === d.items.length - 1 ? " y " : ", ")}
+                  <Phrase
+                    logro={l}
+                    milestone={story.milestones.has(l.id)}
+                    onRemove={() => {
+                      play("delete");
+                      removeLogro(l.id);
+                    }}
+                  />
+                </span>
               ))}
-            </div>
+              .
+            </p>
           </li>
         ))}
       </ol>
@@ -404,26 +534,130 @@ export function Story({ month, setMonth, className, nav = true }: { month: strin
   );
 }
 
-/** Una tarjeta del cuento: en el color de su categoría (o en tinta suave si es una nota). Los hitos, con estrella. */
-function Card({ logro: l, milestone, onRemove }: { logro: Logro; milestone: boolean; onRemove: () => void }) {
+/**
+ * Una cosa del cuento, dentro del texto: en el color de su grupo (con sus horas); si es un hito, subrayada y
+ * con estrella; si es una nota, en itálica. Al pasar el mouse, se puede borrar.
+ */
+function Phrase({ logro: l, milestone, onRemove }: { logro: Logro; milestone: boolean; onRemove: () => void }) {
   const cat = l.category && l.minutes > 0 ? l.category : null;
+  const text = l.text.charAt(0).toLowerCase() + l.text.slice(1);
   return (
-    <span
-      style={cat ? partStyle(cat) : undefined}
-      className={cn(
-        "group/card animate-fade-up inline-flex max-w-full items-center gap-1.5 rounded-xl py-1 pr-1 pl-1.5 text-[13px]",
-        cat ? "bg-[var(--q-soft)]" : "bg-surface-sunken",
-        milestone && "ring-2 ring-[color-mix(in_oklab,var(--q,var(--color-ink))_45%,transparent)]",
-      )}
-    >
-      <span className={cn("grid size-6 shrink-0 place-items-center rounded-full", cat ? "bg-[var(--q)] text-white" : "bg-surface text-ink-muted")}>
-        {milestone ? <Star aria-hidden className="size-3" fill="currentColor" /> : cat ? <QuadrantIcon id={cat} className="size-3" /> : <Sparkles aria-hidden className="size-3" />}
+    <span style={cat ? partStyle(cat) : undefined} className="group/p relative">
+      <span
+        className={cn(
+          "rounded-md px-1 py-0.5 box-decoration-clone",
+          cat ? "bg-[var(--q-soft)] font-medium text-[color-mix(in_oklab,var(--q)_70%,var(--color-ink))]" : "italic",
+          milestone && "underline decoration-[var(--q,var(--color-ink))] decoration-2 underline-offset-[5px]",
+        )}
+      >
+        {milestone && <Star aria-label="Hito" className="mr-0.5 inline size-3 -translate-y-px" fill="currentColor" />}
+        {text}
+        {cat && <span className="ml-1 text-[12px] font-normal opacity-80 tabular-nums">({durLabel(l.minutes)})</span>}
       </span>
-      <span className="min-w-0 font-medium break-words">{l.text}</span>
-      {cat && <span className="shrink-0 text-[11px] text-[color-mix(in_oklab,var(--q)_75%,var(--color-ink))] tabular-nums">{durLabel(l.minutes)}</span>}
-      <button type="button" aria-label={`Borrar ${l.text}`} onClick={onRemove} className="grid size-6 shrink-0 place-items-center rounded-full text-ink-faint opacity-0 group-hover/card:opacity-100 hover:text-danger focus-visible:opacity-100 [@media(hover:none)]:opacity-60">
+      <button
+        type="button"
+        aria-label={`Borrar ${l.text}`}
+        onClick={onRemove}
+        className="absolute -top-2 -right-2 hidden size-5 place-items-center rounded-full bg-surface text-ink-faint shadow-sm group-hover/p:grid hover:text-danger focus-visible:grid"
+      >
         <Trash2 aria-hidden className="size-3" />
       </button>
     </span>
+  );
+}
+
+/**
+ * Mi diario personal en el encabezado: un librito (abre el diario completo) y una barra para contar lo que
+ * hiciste hoy. Lo que escribís se archiva en tu diario.
+ */
+export function HeaderDiary() {
+  const [open, setOpen] = useState(false);
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  return (
+    <div data-module="diario" className="flex w-[300px] items-center gap-1.5 xl:w-[360px]">
+      <button
+        type="button"
+        onClick={() => {
+          play("paper");
+          setOpen(true);
+        }}
+        aria-label="Abrir mi diario personal"
+        title="Mi diario personal"
+        className="pressable grid size-10 shrink-0 place-items-center rounded-full bg-surface/80 text-ink shadow-[var(--shadow-card)] hover:bg-surface"
+      >
+        <BookOpen aria-hidden className="size-[18px]" />
+      </button>
+      <div className="min-w-0 flex-1">
+        <DiaryComposer bar />
+      </div>
+      {open && <DiaryBook isMobile={!desktop} onClose={() => setOpen(false)} />}
+    </div>
+  );
+}
+
+/** "Hoy saliste a caminar (1 h), llamaste a tu mamá…": las cosas de un día contadas como una frase. */
+function daySentence(items: Logro[]) {
+  const parts = items.map((l) => {
+    const t = l.text.charAt(0).toLowerCase() + l.text.slice(1);
+    return l.category && l.minutes > 0 ? `${t} (${durLabel(l.minutes)})` : t;
+  });
+  if (!parts.length) return "";
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} y ${parts[parts.length - 1]}`;
+}
+
+/**
+ * Mi diario, como tablero: un librito comprimido con lo de hoy contado en una frase ("Hoy: saliste a
+ * caminar…") y lo de ayer. Al abrirlo, el diario completo con la historia del mes.
+ */
+export function DiaryMini({ className }: { className?: string }) {
+  const logros = usePlanner((s) => s.logros);
+  const [open, setOpen] = useState(false);
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  const today = toKey(new Date());
+  const yesterday = toKey(addDays(new Date(), -1));
+  const hoy = logros.filter((l) => l.date === today);
+  const ayer = logros.filter((l) => l.date === yesterday);
+  const monthCount = logros.filter((l) => l.date.startsWith(today.slice(0, 7))).length;
+  return (
+    <section aria-labelledby="diary-mini-title" className={cn("card flex min-h-0 flex-col overflow-hidden", className)}>
+      <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line py-2 pr-2 pl-4">
+        <h2 id="diary-mini-title" className="flex items-center gap-2 type-title">
+          <BookOpen aria-hidden className="size-4 text-ink-muted" />
+          Mi diario
+        </h2>
+        <div className="flex shrink-0 items-center">
+          <button
+            type="button"
+            onClick={() => {
+              play("paper");
+              setOpen(true);
+            }}
+            className="pressable h-8 rounded-full px-3 text-[12px] font-semibold text-ink-muted hover:bg-surface-sunken hover:text-ink"
+          >
+            Abrir
+          </button>
+          <ModuleControls />
+        </div>
+      </header>
+      <button
+        type="button"
+        onClick={() => {
+          play("paper");
+          setOpen(true);
+        }}
+        className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto bg-[color-mix(in_oklab,#fff7d6_55%,var(--color-surface))] px-4 py-3 text-left"
+      >
+        <p className="text-[13px] leading-relaxed text-ink/85">
+          <b className="font-semibold">Hoy</b> {hoy.length ? `${daySentence(hoy)}.` : "todavía no anotaste nada. Contalo abajo de tu rutina."}
+        </p>
+        {ayer.length > 0 && (
+          <p className="text-[12.5px] leading-relaxed text-ink-muted">
+            <b className="font-semibold">Ayer</b> {daySentence(ayer)}.
+          </p>
+        )}
+        <p className="mt-auto text-[11px] text-ink-faint">{monthCount ? `${monthCount} ${monthCount === 1 ? "cosa anotada" : "cosas anotadas"} este mes · tocá para leer tu historia` : "Tocá para abrir tu diario"}</p>
+      </button>
+      {open && <DiaryBook isMobile={!desktop} onClose={() => setOpen(false)} />}
+    </section>
   );
 }

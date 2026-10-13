@@ -18,9 +18,9 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 export const TASK_KINDS: { id: TaskKind; label: string }[] = [
   { id: "cuerpo", label: "Deporte" },
-  { id: "interior", label: "Mente y Alma" },
+  { id: "interior", label: "Mente y Espíritu" },
   { id: "alma", label: "Hobbies" },
-  { id: "mente", label: "Habilidades" },
+  { id: "mente", label: "Intelecto y Cognitivo" },
   { id: "vinculos", label: "Vínculos" },
   { id: "trabajo", label: "Trabajo" },
   { id: "otro", label: "Otro" },

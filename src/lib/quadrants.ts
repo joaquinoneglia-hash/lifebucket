@@ -1,19 +1,19 @@
 import type { CSSProperties } from "react";
 
 /**
- * Las partes de tu tiempo. Lo que se trabaja y se juega: Deporte, Mente y Alma, Hobbies y disfrute,
- * Habilidades y Vínculos. La base: Trabajo y Libre (más el Sueño, que va aparte).
- * (Los ids son los de siempre para no perder datos: `cuerpo` es Deporte, `mente` es Habilidades,
- * `alma` es Hobbies y disfrute; `interior` es Mente y Alma.)
+ * Las partes de tu tiempo. Lo que se trabaja y se juega: Deporte, Mente y Espíritu, Hobbies y disfrute,
+ * Intelecto y Cognitivo y Vínculos. La base: Trabajo y Libre (más el Sueño, que va aparte).
+ * (Los ids son los de siempre para no perder datos: `cuerpo` es Deporte, `mente` es Intelecto y Cognitivo,
+ * `alma` es Hobbies y disfrute; `interior` es Mente y Espíritu.)
  */
 export const QUADRANTS = [
   { id: "cuerpo", name: "Deporte", hint: "Entrenamiento, correr, bici" },
-  { id: "interior", name: "Mente y Alma", hint: "Meditar, terapia, lo que te ordena por dentro" },
+  { id: "interior", name: "Mente y Espíritu", hint: "Meditar, terapia, lo que te ordena por dentro" },
   { id: "alma", name: "Hobbies y disfrute", hint: "Lo que hacés por gusto, sin fin económico: ajedrez, música" },
-  { id: "mente", name: "Habilidades", hint: "Aprender algo nuevo: un idioma, una habilidad intelectual" },
+  { id: "mente", name: "Intelecto y Cognitivo", hint: "Aprender algo nuevo: un idioma, una habilidad intelectual" },
   { id: "vinculos", name: "Vínculos", hint: "Pareja, amigos, familia" },
   { id: "trabajo", name: "Trabajo", hint: "Lo laboral" },
-  { id: "libre", name: "Libre", hint: "Descanso, comidas, traslados, casa" },
+  { id: "libre", name: "Tareas cotidianas", hint: "Cocinar, desayunar, barrer, ordenar" },
 ] as const;
 
 export type Quadrant = (typeof QUADRANTS)[number];
@@ -66,10 +66,10 @@ export function quadrantStyle(id: QuadrantId): CSSProperties {
 /** Qué entra en cada categoría, en una línea (para que se entienda al elegir). */
 export const QUADRANT_HINT: Record<QuadrantId, string> = {
   cuerpo: "Moverte: entrenar, correr, nadar, yoga, caminar.",
-  interior: "Cuidar tu cabeza y tu alma: meditar, terapia, respirar, rezar.",
+  interior: "Cuidar tu mente y tu espíritu: meditar, terapia, respirar, rezar.",
   alma: "Lo que hacés por gusto, sin fin económico: música, ajedrez, cocinar, dibujar.",
-  mente: "Estudiar o aprender algo nuevo: un idioma, un curso, leer, programar.",
+  mente: "Ejercitar la cabeza: estudiar, aprender un idioma, un curso, leer, programar.",
   vinculos: "Tiempo con los tuyos: pareja, familia, amigos.",
   trabajo: "Tu empleo, tu emprendimiento o tus proyectos pagos.",
-  libre: "Comidas, descanso, traslados y lo de la casa.",
+  libre: "Lo de todos los días: cocinar, desayunar, barrer, ordenar.",
 };

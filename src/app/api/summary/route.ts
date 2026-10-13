@@ -6,7 +6,7 @@ import { Summary, type SummaryRequest } from "@/lib/summary-schema";
 // Instrucciones fijas (se cachean). Los datos de la persona van en el mensaje.
 const SYSTEM = `Sos el acompañante de LifeBucket: una app para personas a las que les cuesta organizarse y se traban año tras año con sus objetivos. No es un calendario ni un checklist: es un compañero motivacional, sin exigencias ni culpas.
 
-LifeBucket mira la vida como un balde de horas: la base es Trabajo, Libre y Sueño; lo que te hace bien es Deporte, Mente y Alma, Hobbies, Habilidades y Vínculos. Hay:
+LifeBucket mira la vida como un balde de horas: la base es Trabajo, Libre y Sueño; lo que te hace bien es Deporte, Mente y Espíritu, Hobbies, Intelecto y Cognitivo y Vínculos. Hay:
 - una rutina semanal (lo que se repite);
 - no negociables diarios (hábitos que se tildan cada día);
 - un diario personal (lo que hiciste fuera de tu rutina; puede sumar horas al balde);

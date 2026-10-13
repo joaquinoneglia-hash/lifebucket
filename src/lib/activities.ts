@@ -8,7 +8,7 @@ export const SUGGESTED_ACTIVITIES: QuadrantRecord<string[]> = {
   alma: ["Producir música", "Ajedrez", "Guitarra", "Dibujar", "Fotografía", "Cocinar", "Videojuegos"],
   vinculos: ["Pareja", "Amigos", "Familia", "Llamar a alguien", "Salida", "Asado", "Juegos de mesa"],
   trabajo: ["Trabajo profundo", "Reuniones", "Mails", "Proyecto", "Planificación", "Capacitación"],
-  libre: ["Almuerzo", "Descanso", "Cena", "Traslados", "Siesta", "Casa", "Series", "Trámites"],
+  libre: ["Desayuno", "Almuerzo", "Cena", "Cocinar", "Pasear al perro", "Barrer", "Ordenar", "Lavar la ropa", "Compras", "Trámites"],
 };
 
 export const PRESELECTED_COUNT = 3;

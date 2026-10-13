@@ -8,9 +8,9 @@ import { BrandMark } from "./BrandMark";
 const DEMO: { id: string; label: string; share: number }[] = [
   { id: "trabajo", label: "Trabajo", share: 26 },
   { id: "cuerpo", label: "Deporte", share: 5 },
-  { id: "interior", label: "Mente y Alma", share: 2 },
+  { id: "interior", label: "Mente y Espíritu", share: 2 },
   { id: "alma", label: "Hobbies", share: 4 },
-  { id: "mente", label: "Habilidades", share: 3 },
+  { id: "mente", label: "Intelecto y Cognitivo", share: 3 },
   { id: "vinculos", label: "Vínculos", share: 5 },
   { id: "libre", label: "Libre y sueño", share: 55 },
 ];

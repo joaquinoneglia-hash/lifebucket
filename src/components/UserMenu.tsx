@@ -1,9 +1,9 @@
 "use client";
 
+import { getPalette, setPalette, type Palette } from "@/lib/palette";
 import { usePlanner } from "@/lib/store";
-import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, RotateCcw, Sparkles, Volume2, VolumeX } from "lucide-react";
+import { Cloud, CloudOff, Loader2, LogOut, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { flushCloud, stopCloudSync, useSync } from "@/lib/cloud-sync";
-import Link from "next/link";
 import { cn } from "@/lib/format";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import { useEffect, useRef, useState } from "react";
@@ -21,13 +21,6 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
   // En el celular el botón de sonido vive acá (en el encabezado no entra).
   const [mute, setMute] = useState(isMuted);
   // Las versiones de prueba solo aparecen para las cuentas habilitadas (lo decide el servidor).
-  const [beta, setBeta] = useState(false);
-  useEffect(() => {
-    fetch("/api/beta")
-      .then((r) => (r.ok ? r.json() : { beta: false }))
-      .then((d: { beta?: boolean }) => setBeta(!!d.beta))
-      .catch(() => {});
-  }, []);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -95,17 +88,6 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
             type="button"
             onClick={() => {
               setOpen(false);
-              window.dispatchEvent(new Event(TOUR_EVENT));
-            }}
-            className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
-          >
-            <Sparkles aria-hidden className="size-4" />
-            Ver la guía otra vez
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
               // Empezar de cero, como alguien nuevo: se borra todo (acá y en la nube), se cierra la sesión y, al
               // volver a entrar, arrancan la bienvenida (con su música) y la configuración guiada.
               const ok = window.confirm(
@@ -119,15 +101,6 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
             <RotateCcw aria-hidden className="size-4" />
             Empezar de cero (borra todo)
           </button>
-          {beta && (
-            <Link
-              href="/pasos"
-              className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
-            >
-              <FlaskConical aria-hidden className="size-4" />
-              Versión en pasos (beta)
-            </Link>
-          )}
           {withSound && (
             <button
               type="button"
@@ -176,5 +149,40 @@ function SyncLine() {
       <Icon aria-hidden className={cn("size-3.5", (status === "saving" || status === "loading") && "animate-spin")} />
       {text[status]}
     </p>
+  );
+}
+
+/** Los colores de la app: neutro (minimalista), pastel o intenso. */
+const PALETTES: { id: Palette; label: string; dots: string[] }[] = [
+  { id: "pastel", label: "Pastel", dots: ["#2e9e63", "#8a5cf0", "#e5508a"] },
+  { id: "intenso", label: "Intenso", dots: ["#00a651", "#7c3aed", "#e00000"] },
+  { id: "neutro", label: "Neutro", dots: ["#111", "#6b6b6b", "#c4c4c4"] },
+];
+
+/** Los colores de la app, arriba: cada clic pasa a la paleta siguiente (pastel → intenso → neutro). */
+export function PaletteSwitch() {
+  const [p, setP] = useState<Palette>("pastel");
+  useEffect(() => setP(getPalette()), []);
+  const i = PALETTES.findIndex((o) => o.id === p);
+  const cur = PALETTES[i];
+  const next = PALETTES[(i + 1) % PALETTES.length];
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setP(next.id);
+        setPalette(next.id);
+        play("pop");
+      }}
+      aria-label={`Colores: ${cur.label}. Cambiar a ${next.label}`}
+      title={`Colores: ${cur.label} (clic para ${next.label.toLowerCase()})`}
+      className="pressable grid size-10 place-items-center rounded-md hover:bg-surface/70"
+    >
+      <span className="flex -space-x-1">
+        {cur.dots.map((d) => (
+          <span key={d} className="size-2.5 rounded-full ring-2 ring-[var(--color-canvas,#f4f4f6)] transition-colors duration-200" style={{ background: d }} />
+        ))}
+      </span>
+    </button>
   );
 }

@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Dumbbell, Flower2, GraduationCap, HeartHandshake, Palette, Sofa, type LucideProps } from "lucide-react";
+import { BriefcaseBusiness, Dumbbell, Flower2, GraduationCap, HeartHandshake, Palette, CookingPot, type LucideProps } from "lucide-react";
 import type { QuadrantId } from "@/lib/quadrants";
 
 const ICONS = {
@@ -8,7 +8,7 @@ const ICONS = {
   alma: Palette,
   vinculos: HeartHandshake,
   trabajo: BriefcaseBusiness,
-  libre: Sofa,
+  libre: CookingPot,
 } satisfies Record<QuadrantId, unknown>;
 
 export function QuadrantIcon({ id, ...props }: { id: QuadrantId } & LucideProps) {

@@ -15,7 +15,7 @@ export const WeekAction = z.object({
   quadrant: z
     .enum(["trabajo", "cuerpo", "interior", "alma", "mente", "vinculos", "libre"])
     .nullable()
-    .describe("Categoría del bloque o del logro: cuerpo = Deporte, interior = Mente y Alma, alma = Hobbies y disfrute, mente = Habilidades, vinculos = Vínculos."),
+    .describe("Categoría del bloque o del logro: cuerpo = Deporte, interior = Mente y Espíritu, alma = Hobbies y disfrute, mente = Intelecto y Cognitivo, vinculos = Vínculos."),
   days: z.array(z.number().int()).nullable().describe("Días del bloque (0=domingo, 1=lunes … 6=sábado). En update_block, solo si cambian."),
   start: z.number().int().nullable().describe("Inicio en minutos desde la medianoche, múltiplo de 30, entre 300 (05:00) y 1410 (23:30)."),
   minutes: z.number().int().nullable().describe("Duración en minutos: de un bloque (múltiplo de 30, sin pasar de las 24:00) o de un logro."),

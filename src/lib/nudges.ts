@@ -3,7 +3,10 @@ import { goalAge } from "./goal-tips";
 import { sleepStats } from "./sleep-stats";
 import type { QuadrantId } from "./quadrants";
 import { goalsFor, type PlannerState } from "./store";
-import { ACTIVE_PARTS, monthMinutes } from "./week-shares";
+import { idealOf, idealProgress } from "./balance-goals";
+import { ACTIVE_PARTS, monthMinutes, weekMinutes } from "./week-shares";
+
+const hrs = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-AR")} h`;
 
 /**
  * Recomendaciones y recordatorios: todo lo que la app te sugiere ahora, de lo más importante a lo menos.
@@ -23,9 +26,9 @@ const EXAMPLE: Record<string, NudgeDraft> = {
   mente: { name: "Curso", quadrant: "mente", days: [3], start: 1140, minutes: 60 },
   vinculos: { name: "Salida con amigos", quadrant: "vinculos", days: [5], start: 1260, minutes: 120 },
 };
-type Data = Pick<PlannerState, "routine" | "dailyGoals" | "goalMonths" | "dailyChecks" | "tasks" | "logros" | "sleep" | "startedAt">;
+type Data = Pick<PlannerState, "routine" | "dailyGoals" | "goalMonths" | "dailyChecks" | "tasks" | "logros" | "sleep" | "startedAt"> & { idealHours?: PlannerState["idealHours"] };
 
-const LABEL: Record<string, string> = { cuerpo: "Deporte", interior: "Mente y Alma", alma: "Hobbies", mente: "Habilidades", vinculos: "Vínculos" };
+const LABEL: Record<string, string> = { cuerpo: "Deporte", interior: "Mente y Espíritu", alma: "Hobbies", mente: "Intelecto y Cognitivo", vinculos: "Vínculos" };
 
 export function computeNudges(s: Data, now = new Date()): Nudge[] {
   const today = toKey(now);
@@ -54,7 +57,34 @@ export function computeNudges(s: Data, now = new Date()): Nudge[] {
   const stuck = s.tasks.filter((t) => goalAge(t, today).stuck);
   if (stuck.length)
     out.push({ id: "trabadas", kind: "recomendacion", icon: "metas", title: `«${stuck[0].title}» se viene postergando`, body: "Probá partirla en un primer paso más chico y ponerle fecha esta semana.", cta: "Ver mis metas", go: "metas" });
+  // Tu balance de la semana contra tu balde ideal: lo que viene más atrasado según el día de la semana.
   if (s.routine.length) {
+    const wk = weekMinutes(s.routine, s.logros, s.sleep);
+    const prog = idealProgress(wk, idealOf(s.idealHours));
+    const dayIdx = (now.getDay() + 6) % 7; // lunes = 0
+    const expected = Math.round(((dayIdx + 1) / 7) * 100);
+    const behind = [...prog.rows].filter((r) => r.pct < expected - 15).sort((a, b) => a.pct - b.pct)[0];
+    if (behind && dayIdx >= 1) {
+      const p = behind.p;
+      const left = Math.max(0, Math.round(((behind.goal - behind.minutes) / 60) * 10) / 10);
+      const msg: Record<string, [string, string]> = {
+        cuerpo: ["¿Movemos el cuerpo esta semana?", `Llevás ${hrs(behind.minutes)} de deporte y la meta es ${hrs(behind.goal)} (la OMS recomienda 150 a 300 min por semana).`],
+        interior: ["Un rato para tu mente y tu espíritu", `Con 15 minutos por día ya se nota. Esta semana llevás ${hrs(behind.minutes)} de ${hrs(behind.goal)}.`],
+        alma: ["¿Y si te das un gusto?", `Tus hobbies llevan ${hrs(behind.minutes)} de ${hrs(behind.goal)} esta semana. Hacer algo por puro gusto te recarga.`],
+        mente: ["Aprendé algo nuevo esta semana", `Intelecto y Cognitivo lleva ${hrs(behind.minutes)} de ${hrs(behind.goal)}. Media hora de lectura o un curso cuentan.`],
+        vinculos: ["¿No te gustaría ver a los tuyos?", `Esta semana llevás ${hrs(behind.minutes)} con tus vínculos. Lo recomendado es verlos unas 2 veces por semana.`],
+      };
+      out.push({
+        id: `balance-${p}`,
+        kind: "recomendacion",
+        icon: "balde",
+        title: msg[p][0],
+        body: `${msg[p][1]} Te faltan ${left.toLocaleString("es-AR")} h.`,
+        cta: p === "vinculos" ? "Sumar un encuentro fijo" : "Sumarlo a mi rutina",
+        go: "semana",
+        draft: EXAMPLE[p],
+      });
+    }
     const { minutes } = monthMinutes(s.routine, s.logros, s.sleep, month, s.startedAt, today);
     const missing = ACTIVE_PARTS.filter((p) => minutes[p] === 0);
     if (missing.length)

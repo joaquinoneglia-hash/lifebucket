@@ -1,89 +1,130 @@
 "use client";
 
-import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
-import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronsUpDown, ChevronUp, EyeOff, GripVertical, MoreHorizontal } from "lucide-react";
+import { createContext, useContext, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@/lib/format";
+import { usePlanner } from "@/lib/store";
 
 /**
- * El dashboard de vida (compu), con una disposición fija:
- *   - a la izquierda: Tu Balde (con el resumen) arriba y tus metas importantes abajo;
- *   - al centro, a todo lo alto: tu rutina semanal;
- *   - a la derecha: los no negociables a lo largo y, abajo, tu diario personal.
- * Cada panel se comprime a su título y los bordes entre paneles se arrastran para ajustar el alto.
- * Lo que elegís queda guardado en este navegador.
+ * El dashboard de vida (compu), modular: tres columnas (la del centro, la más ancha) con los paneles
+ * apilados. Cada panel se mueve a otra columna o de lugar (arrastrándolo de ⠿ o desde ···), se comprime a su
+ * título y se estira (el borde entre dos paneles). Si una columna queda con un solo panel, ocupa todo el alto.
+ * La disposición queda guardada en este navegador.
  */
-export type ModuleId = "semana" | "bucket" | "metas" | "diarios" | "diario";
-export const MODULE_TITLES: Record<ModuleId, string> = {
+export type BaseModule = "semana" | "bucket" | "metas" | "diarios" | "diario";
+/** Un panel: uno de los fijos o una lista ("list:<id>"). */
+export type ModuleId = BaseModule | `list:${string}`;
+export type Col = "left" | "center" | "right";
+export const MODULE_TITLES: Record<BaseModule, string> = {
   semana: "Tu rutina semanal",
   bucket: "Tu Balde",
   metas: "Metas importantes",
   diarios: "No negociables",
-  diario: "Mi diario personal",
+  diario: "Mi diario",
 };
-type Prefs = { collapsed: ModuleId[]; bucket: number; diary: number };
-const DEFAULT: Prefs = { collapsed: [], bucket: 380, diary: 210 };
-const KEY = "lb:dash:v3";
+const titleOf = (id: ModuleId) => (id.startsWith("list:") ? (usePlanner.getState().lists.find((l) => `list:${l.id}` === id)?.title ?? "Lista") : MODULE_TITLES[id as BaseModule]);
+/** Mostrar u ocultar un panel desde cualquier lado (el menú de Mis listas). */
+export const showModule = (id: ModuleId, show: boolean) => window.dispatchEvent(new CustomEvent("lb:module-visibility", { detail: { id, show } }));
+/** Los paneles fijos que ocultaste (para mostrarlos de nuevo desde el menú). */
+export function hiddenModules(): BaseModule[] {
+  try {
+    return (JSON.parse(localStorage.getItem(KEY) ?? "null")?.hidden ?? []) as BaseModule[];
+  } catch {
+    return [];
+  }
+}
+const COLS: Col[] = ["left", "center", "right"];
+const COL_NAMES: Record<Col, string> = { left: "a la izquierda", center: "al centro", right: "a la derecha" };
+type Prefs = { cols: Record<Col, ModuleId[]>; collapsed: ModuleId[]; weights: Partial<Record<ModuleId, number>>; hidden: BaseModule[] };
+const DEFAULT: Prefs = {
+  cols: { left: ["bucket", "metas"], center: ["semana"], right: ["diarios", "diario"] },
+  collapsed: [],
+  hidden: [],
+  weights: { bucket: 1.25, metas: 1, semana: 3, diarios: 1.6, diario: 0.6 },
+};
+const KEY = "lb:board:v3";
+const ALL = Object.keys(MODULE_TITLES) as BaseModule[];
 
 function load(): Prefs {
   try {
-    const raw = JSON.parse(localStorage.getItem(KEY) ?? "null") as Partial<Prefs> | null;
-    return { ...DEFAULT, ...raw, collapsed: (raw?.collapsed ?? []).filter((id) => id in MODULE_TITLES) };
+    const raw = JSON.parse(localStorage.getItem(KEY) ?? "null") as Prefs | null;
+    if (!raw?.cols) return DEFAULT;
+    const seen = new Set<ModuleId>();
+    const cols = Object.fromEntries(COLS.map((c) => [c, (raw.cols[c] ?? []).filter((id) => (ALL.includes(id as BaseModule) || id.startsWith("list:")) && !seen.has(id) && seen.add(id))])) as Record<Col, ModuleId[]>;
+    for (const id of ALL) if (!seen.has(id)) cols[(COLS.find((c) => DEFAULT.cols[c].includes(id)) ?? "right") as Col].push(id);
+    return { cols, collapsed: raw.collapsed ?? [], weights: { ...DEFAULT.weights, ...raw.weights }, hidden: (raw.hidden ?? []).filter((id) => ALL.includes(id)) };
   } catch {
     return DEFAULT;
   }
 }
 
-type Ctx = { id: ModuleId; collapsed: boolean; toggle: () => void };
+type Ctx = { id: ModuleId; collapsed: boolean; toggle: () => void; hide: () => void; col: Col; index: number; count: number; move: (col: Col, index?: number) => void; onDragStart: (e: DragEvent) => void };
 const ModuleContext = createContext<Ctx | null>(null);
 
-/** El botón de comprimir/desplegar del encabezado de cada panel (fuera del dashboard de compu, nada). */
+/** Los controles de cada panel: ⠿ para arrastrarlo, ··· para moverlo y ⌃ para comprimirlo (fuera del tablero de compu, nada). */
 export function ModuleControls() {
   const m = useContext(ModuleContext);
+  const [menu, setMenu] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setMenu(false);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [menu]);
   if (!m) return null;
+  const item = "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12.5px] hover:bg-surface-sunken disabled:opacity-35 disabled:hover:bg-transparent";
+  const icon = { left: ArrowLeft, center: ArrowDown, right: ArrowRight };
   return (
-    <button
-      type="button"
-      aria-label={m.collapsed ? `Desplegar ${MODULE_TITLES[m.id]}` : `Comprimir ${MODULE_TITLES[m.id]}`}
-      title={m.collapsed ? "Desplegar" : "Comprimir"}
-      aria-expanded={!m.collapsed}
-      onClick={m.toggle}
-      className="pressable grid size-8 shrink-0 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
-    >
-      {m.collapsed ? <ChevronDown aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
-    </button>
-  );
-}
-
-/** La barra para ajustar el alto arrastrando (doble flecha). Doble clic: vuelve a su alto. */
-function Splitter({ label, onDrag, onReset }: { label: string; onDrag: (dy: number, done: boolean) => void; onReset: () => void }) {
-  const [active, setActive] = useState(false);
-  return (
-    <div
-      role="separator"
-      aria-orientation="horizontal"
-      aria-label={label}
-      title="Arrastrá para ajustar el alto · doble clic para volver"
-      onDoubleClick={onReset}
-      onPointerDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        const y0 = e.clientY;
-        setActive(true);
-        const move = (ev: PointerEvent) => onDrag(ev.clientY - y0, false);
-        const up = (ev: PointerEvent) => {
-          window.removeEventListener("pointermove", move);
-          window.removeEventListener("pointerup", up);
-          setActive(false);
-          onDrag(ev.clientY - y0, true);
-        };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-      }}
-      className="group/rs relative z-20 -my-3 flex h-3 shrink-0 cursor-row-resize items-center justify-center"
-    >
-      <span className={cn("flex h-4 items-center rounded-full bg-surface px-2 text-ink-muted opacity-0 shadow-[var(--shadow-card)] transition-opacity duration-150 group-hover/rs:opacity-100", active && "opacity-100")}>
-        <ChevronsUpDown aria-hidden className="size-3" />
+    <div ref={ref} className="relative flex shrink-0 items-center">
+      <span className={cn("flex items-center transition-opacity duration-150", !menu && "opacity-0 group-hover/panel:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100")}>
+      <span draggable onDragStart={m.onDragStart} title="Arrastrá para moverlo" aria-hidden className="grid h-8 w-5 cursor-grab place-items-center rounded-md text-ink-faint hover:bg-surface-sunken hover:text-ink active:cursor-grabbing">
+        <GripVertical className="size-3.5" />
       </span>
+      <button type="button" aria-label={`Mover ${titleOf(m.id)}`} aria-expanded={menu} onClick={() => setMenu(!menu)} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
+        <MoreHorizontal aria-hidden className="size-4" />
+      </button>
+      <button
+        type="button"
+        aria-label={`Ocultar ${titleOf(m.id)}`}
+        title="Ocultar (se vuelve a mostrar desde «Mis listas», arriba)"
+        onClick={m.hide}
+        className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
+      >
+        <EyeOff aria-hidden className="size-3.5" />
+      </button>
+      </span>
+      <button
+        type="button"
+        aria-label={m.collapsed ? `Desplegar ${titleOf(m.id)}` : `Comprimir ${titleOf(m.id)}`}
+        title={m.collapsed ? "Desplegar" : "Comprimir"}
+        aria-expanded={!m.collapsed}
+        onClick={m.toggle}
+        className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
+      >
+        {m.collapsed ? <ChevronDown aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
+      </button>
+      {menu && (
+        <div role="menu" className="animate-fade-up absolute top-full right-0 z-50 mt-1 w-48 rounded-xl border border-line bg-surface p-1 shadow-[var(--shadow-popover)]">
+          {COLS.filter((c) => c !== m.col).map((c) => {
+            const Icon = icon[c];
+            return (
+              <button key={c} type="button" role="menuitem" className={item} onClick={() => (setMenu(false), m.move(c))}>
+                <Icon aria-hidden className="size-3.5 text-ink-muted" />
+                Mover {COL_NAMES[c]}
+              </button>
+            );
+          })}
+          <button type="button" role="menuitem" disabled={m.index === 0} className={item} onClick={() => (setMenu(false), m.move(m.col, m.index - 1))}>
+            <ArrowUp aria-hidden className="size-3.5 text-ink-muted" />
+            Subir
+          </button>
+          <button type="button" role="menuitem" disabled={m.index >= m.count - 1} className={item} onClick={() => (setMenu(false), m.move(m.col, m.index + 1))}>
+            <ArrowDown aria-hidden className="size-3.5 text-ink-muted" />
+            Bajar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -97,54 +138,182 @@ export function DashboardBoard({ render }: { render: (id: ModuleId) => ReactNode
       localStorage.setItem(KEY, JSON.stringify(p));
     } catch {}
   };
-  const [live, setLive] = useState<Partial<Pick<Prefs, "bucket" | "diary">>>({});
+  const lists = usePlanner((s) => s.lists);
+  const shownLists = lists.filter((l) => !l.hidden).map((l) => `list:${l.id}` as ModuleId);
+  // Las listas nuevas (o que se vuelven a mostrar) entran a la derecha.
+  const placed = new Set(COLS.flatMap((c) => prefs.cols[c]));
+  const cols: Record<Col, ModuleId[]> = { ...prefs.cols, right: [...prefs.cols.right, ...shownLists.filter((id) => !placed.has(id))] };
+  useEffect(() => {
+    const onVis = (e: Event) => {
+      const { id, show } = (e as CustomEvent<{ id: ModuleId; show: boolean }>).detail;
+      if (id.startsWith("list:")) return usePlanner.getState().setListHidden(id.slice(5), !show);
+      setPrefs((p) => {
+        const next = { ...p, hidden: show ? p.hidden.filter((x) => x !== id) : [...new Set([...p.hidden, id as BaseModule])] };
+        try {
+          localStorage.setItem(KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    };
+    window.addEventListener("lb:module-visibility", onVis);
+    return () => window.removeEventListener("lb:module-visibility", onVis);
+  }, []);
+  const [dragging, setDragging] = useState<ModuleId | null>(null);
+  const [over, setOver] = useState<{ col: Col; index: number } | null>(null);
   const isC = (id: ModuleId) => prefs.collapsed.includes(id);
-  const toggle = (id: ModuleId) => save({ ...prefs, collapsed: isC(id) ? prefs.collapsed.filter((x) => x !== id) : [...prefs.collapsed, id] });
-
-  const slot = (id: ModuleId, className?: string, style?: CSSProperties) => (
-    <ModuleContext.Provider value={{ id, collapsed: isC(id), toggle: () => toggle(id) }}>
-      {isC(id) ? (
-        <section aria-label={MODULE_TITLES[id]} className={cn("card flex h-11 shrink-0 items-center justify-between gap-2 pr-2 pl-4", className)}>
-          <button type="button" onClick={() => toggle(id)} className="min-w-0 flex-1 truncate text-left type-title">
-            {MODULE_TITLES[id]}
-          </button>
-          <ModuleControls />
-        </section>
-      ) : (
-        <div data-module={id} style={style} className={cn("flex min-h-0 flex-col [&>*]:min-h-0 [&>*]:flex-1", className)}>
-          {render(id)}
-        </div>
-      )}
-    </ModuleContext.Provider>
-  );
-
-  const bucket = live.bucket ?? prefs.bucket;
-  const diary = live.diary ?? prefs.diary;
-  /** Arrastrar el borde: hacia abajo agranda el de arriba (`grow`) o achica el de abajo. */
-  const drag = (key: "bucket" | "diary", start: number, min: number, max: number, grow: boolean) => (dy: number, done: boolean) => {
-    const v = Math.max(min, Math.min(max, grow ? start + dy : start - dy));
-    if (done) {
-      setLive({});
-      save({ ...prefs, [key]: v });
-    } else setLive({ [key]: v });
+  const visible = (id: ModuleId) => (id.startsWith("list:") ? shownLists.includes(id) : !prefs.hidden.includes(id as BaseModule));
+  const move = (id: ModuleId, col: Col, index?: number) => {
+    const next = Object.fromEntries(COLS.map((c) => [c, cols[c].filter((x) => x !== id)])) as Record<Col, ModuleId[]>;
+    next[col].splice(index === undefined ? next[col].length : Math.max(0, Math.min(index, next[col].length)), 0, id);
+    save({ ...prefs, cols: next });
   };
+  const toggle = (id: ModuleId) => save({ ...prefs, collapsed: isC(id) ? prefs.collapsed.filter((x) => x !== id) : [...prefs.collapsed, id] });
+  const weight = (id: ModuleId) => prefs.weights[id] ?? 1;
 
   return (
-    <main id="contenido" className="flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6">
-      {/* Izquierda: tu balde (con el resumen) arriba y tus metas abajo. */}
-      <div className="flex w-[390px] shrink-0 flex-col gap-3 xl:w-[420px]">
-        {slot("bucket", isC("bucket") ? undefined : "shrink-0", !isC("bucket") && !isC("metas") ? { height: bucket } : undefined)}
-        {!isC("bucket") && !isC("metas") && <Splitter label="Ajustar el alto del balde" onReset={() => save({ ...prefs, bucket: DEFAULT.bucket })} onDrag={drag("bucket", prefs.bucket, 260, 640, true)} />}
-        {slot("metas", isC("metas") ? undefined : "flex-1")}
-      </div>
-      {/* Centro: la rutina, a todo lo alto. */}
-      <div className="flex min-w-0 flex-1 flex-col">{slot("semana", isC("semana") ? undefined : "flex-1")}</div>
-      {/* Derecha: los no negociables a lo largo y el diario abajo. */}
-      <div className="flex w-80 shrink-0 flex-col gap-3 xl:w-[340px]">
-        {slot("diarios", isC("diarios") ? undefined : "flex-1")}
-        {!isC("diarios") && !isC("diario") && <Splitter label="Ajustar el alto del diario" onReset={() => save({ ...prefs, diary: DEFAULT.diary })} onDrag={drag("diary", prefs.diary, 150, 560, false)} />}
-        {slot("diario", isC("diario") ? undefined : isC("diarios") ? "flex-1" : "shrink-0", !isC("diarios") && !isC("diario") ? { height: diary } : undefined)}
-      </div>
+    <main id="contenido" className="flex min-h-0 flex-1 gap-3 px-4 pb-4 sm:px-6" onDragEnd={() => (setDragging(null), setOver(null))}>
+      {COLS.map((col) => {
+        const list = cols[col].filter(visible);
+        const open = list.filter((id) => !isC(id));
+        return (
+          <div
+            key={col}
+            onDragOver={(e) => {
+              if (!dragging) return;
+              e.preventDefault();
+              const items = [...e.currentTarget.querySelectorAll<HTMLElement>(":scope > [data-slot]")];
+              const i = items.findIndex((el) => e.clientY < el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2);
+              const next = { col, index: i < 0 ? items.length : i };
+              if (over?.col !== next.col || over.index !== next.index) setOver(next);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const id = e.dataTransfer.getData("text/module") as ModuleId;
+              if (id && over) {
+                const from = cols[over.col].indexOf(id);
+                move(id, over.col, from >= 0 && from < over.index ? over.index - 1 : over.index);
+              }
+              setDragging(null);
+              setOver(null);
+            }}
+            className={cn(
+              "flex min-h-0 flex-col gap-3",
+              col === "center" ? "min-w-[420px] flex-1" : col === "left" ? "w-[380px] shrink-0 xl:w-[410px]" : "w-80 shrink-0 xl:w-[340px]",
+              !list.length && !dragging && "hidden",
+              !list.length && dragging && "rounded-2xl border-2 border-dashed border-line",
+            )}
+          >
+            {list.map((id, index) => {
+              const collapsed = isC(id);
+              const ctx: Ctx = {
+                id,
+                collapsed,
+                toggle: () => toggle(id),
+                hide: () => showModule(id, false),
+                col,
+                index,
+                count: list.length,
+                move: (c, i) => move(id, c, i),
+                onDragStart: (e) => {
+                  e.dataTransfer.setData("text/module", id);
+                  e.dataTransfer.effectAllowed = "move";
+                  const card = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-slot]");
+                  if (card) e.dataTransfer.setDragImage(card, 24, 20);
+                  setDragging(id);
+                },
+              };
+              // El borde para estirar: entre este panel y el siguiente abierto de la columna.
+              const nextOpen = open[open.indexOf(id) + 1];
+              return (
+                <div
+                  key={id}
+                  data-slot={id}
+                  className={cn(
+                    "group/panel relative flex min-h-0 flex-col",
+                    collapsed ? "shrink-0" : "basis-0",
+                    dragging === id && "opacity-40",
+                    over?.col === col && over.index === index && dragging && "before:absolute before:inset-x-2 before:-top-2 before:h-0.5 before:rounded-full before:bg-ink",
+                  )}
+                  style={collapsed ? undefined : { flexGrow: weight(id) }}
+                >
+                  <ModuleContext.Provider value={ctx}>
+                    {collapsed ? (
+                      <section aria-label={titleOf(id)} className="card flex h-11 shrink-0 items-center justify-between gap-2 pr-2 pl-4">
+                        <button type="button" onClick={() => toggle(id)} className="min-w-0 flex-1 truncate text-left type-title">
+                          {titleOf(id)}
+                        </button>
+                        <ModuleControls />
+                      </section>
+                    ) : (
+                      <div data-module={id} className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
+                        {render(id)}
+                      </div>
+                    )}
+                  </ModuleContext.Provider>
+                  {!collapsed && nextOpen && (
+                    <Splitter
+                      label={`Ajustar el alto de ${titleOf(id)}`}
+                      onReset={() => save({ ...prefs, weights: { ...prefs.weights, [id]: DEFAULT.weights[id] ?? 1, [nextOpen]: DEFAULT.weights[nextOpen] ?? 1 } })}
+                      onDrag={(start, dy, done) => {
+                        // Repartir el alto entre los dos paneles según cuánto se arrastró (sin cambiar la suma).
+                        const total = start.a + start.b;
+                        const ha = Math.max(90, Math.min(total - 90, start.a + dy));
+                        const sum = start.wa + start.wb;
+                        const next = { ...prefs.weights, [id]: (ha / total) * sum, [nextOpen]: ((total - ha) / total) * sum };
+                        if (done) save({ ...prefs, weights: next });
+                        else setPrefs({ ...prefs, weights: next });
+                      }}
+                      measure={(el) => ({
+                        a: el.parentElement!.getBoundingClientRect().height,
+                        b: el.parentElement!.parentElement!.querySelector<HTMLElement>(`[data-slot="${nextOpen}"]`)!.getBoundingClientRect().height,
+                        wa: weight(id),
+                        wb: weight(nextOpen),
+                      })}
+                    />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
     </main>
+  );
+}
+
+type Start = { a: number; b: number; wa: number; wb: number };
+
+/** El borde para estirar (doble flecha). Doble clic: vuelve al alto de siempre. */
+function Splitter({ label, onDrag, onReset, measure }: { label: string; onDrag: (start: Start, dy: number, done: boolean) => void; onReset: () => void; measure: (el: HTMLElement) => Start }) {
+  const [active, setActive] = useState(false);
+  return (
+    <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label={label}
+      title="Arrastrá para ajustar el alto · doble clic para volver"
+      onDoubleClick={onReset}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const start = measure(e.currentTarget);
+        const y0 = e.clientY;
+        setActive(true);
+        const move = (ev: PointerEvent) => onDrag(start, ev.clientY - y0, false);
+        const up = (ev: PointerEvent) => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          setActive(false);
+          onDrag(start, ev.clientY - y0, true);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      }}
+      className="group/rs absolute inset-x-0 -bottom-3 z-20 flex h-3 cursor-row-resize items-center justify-center"
+    >
+      <span className={cn("flex h-4 items-center rounded-full bg-surface px-2 text-ink-muted opacity-0 shadow-[var(--shadow-card)] transition-opacity duration-150 group-hover/rs:opacity-100", active && "opacity-100")}>
+        <ChevronsUpDown aria-hidden className="size-3" />
+      </span>
+    </div>
   );
 }

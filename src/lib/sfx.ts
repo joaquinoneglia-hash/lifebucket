@@ -3,7 +3,7 @@
  * Se pueden silenciar (se recuerda en este navegador).
  */
 
-export type Sfx = "click" | "pop" | "bubble" | "complete" | "delete" | "open" | "close" | "paper";
+export type Sfx = "click" | "pop" | "bubble" | "complete" | "delete" | "open" | "close" | "paper" | "fanfare";
 
 const MUTE_KEY = "lb:muted";
 let ctx: AudioContext | null = null;
@@ -92,6 +92,12 @@ export function play(name: Sfx) {
       break;
     case "paper":
       paper(a);
+      break;
+    case "fanfare":
+      // Día completo: un arpegio que sube (do–mi–sol–do) y un acorde brillante con destellos arriba.
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(a, { freq: f, start: i * 0.07, dur: 0.18, type: "triangle", gain: 0.11 }));
+      [523.25, 659.25, 783.99, 1046.5].forEach((f) => tone(a, { freq: f, start: 0.32, dur: 0.7, type: "sine", gain: 0.06 }));
+      [2093, 2637, 3136].forEach((f, i) => tone(a, { freq: f, start: 0.36 + i * 0.09, dur: 0.12, type: "sine", gain: 0.035 }));
       break;
   }
 }
