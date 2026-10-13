@@ -16,8 +16,8 @@ export interface SleepSettings {
 }
 
 export const DEFAULT_SLEEP: SleepSettings = {
-  weekday: { bed: 23 * 60, wake: 7 * 60 },
-  weekend: { bed: 24 * 60 + 30, wake: 9 * 60 },
+  weekday: { bed: 22 * 60, wake: 7 * 60 },
+  weekend: { bed: 23 * 60, wake: 9 * 60 },
 };
 
 /** Cómo resultó una noche, según lo que marcás en el ritual. */

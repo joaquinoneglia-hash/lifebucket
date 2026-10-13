@@ -282,7 +282,7 @@ export function DiaryComposer({ compact, bar, onSaved }: { compact?: boolean; ba
             }
           }}
           rows={bar ? 1 : compact ? 2 : 5}
-          placeholder={bar ? "Pedime algo para agregar a tu rutina o sumá algo que hiciste fuera de tu rutina para esta semana" : "Hoy corrí 2 horas, cené con amigos y practiqué guitarra…"}
+          placeholder={bar ? "Agregá algo dentro o fuera de tu rutina, como: «Mañana salgo a comer de 19 a 21 hs con amigos»" : "Hoy corrí 2 horas, cené con amigos y practiqué guitarra…"}
           aria-label={bar ? "Agregar a tu rutina o sumar algo fuera de tu rutina" : "¿Qué hiciste hoy?"}
           enterKeyHint="done"
           className={cn(

@@ -546,3 +546,13 @@ html[data-palette="intenso"] body {
     radial-gradient(55vw 50vh at 85% 100%, rgba(255, 70, 140, 0.45), transparent 70%),
     linear-gradient(160deg, #dbe6fb 0%, #e9defb 50%, #fbdfe9 100%);
 }
+
+/* La flechita de la guía, que se mueve hacia lo marcado. */
+@keyframes nudge-r {
+  0%, 100% { transform: translate(0, -50%); }
+  50% { transform: translate(5px, -50%); }
+}
+@keyframes nudge-l {
+  0%, 100% { transform: translate(0, -50%); }
+  50% { transform: translate(-5px, -50%); }
+}

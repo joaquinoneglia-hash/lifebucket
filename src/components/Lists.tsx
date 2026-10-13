@@ -8,6 +8,7 @@ import { cheer } from "@/lib/motivation";
 import { play } from "@/lib/sfx";
 import { newId, usePlanner, type ListItem, type ListType, type UserList } from "@/lib/store";
 import { hiddenModules, MODULE_TITLES, ModuleControls, showModule, type BaseModule } from "./Modules";
+import { PendingCard } from "./Pending";
 
 /**
  * Listas personales, para tener todo en orden. Cinco tipos, cada uno con su formato:
@@ -19,8 +20,7 @@ import { hiddenModules, MODULE_TITLES, ModuleControls, showModule, type BaseModu
  */
 export const LIST_TYPES: { id: ListType; name: string; hint: string; icon: LucideIcon; title: string }[] = [
   { id: "super", name: "Súper", hint: "Lo que hay que comprar, agrupado por sección.", icon: ShoppingCart, title: "Lista del súper" },
-  { id: "pendientes", name: "Pendientes", hint: "Cosas para hacer, con prioridad: lo urgente arriba.", icon: ClipboardList, title: "Pendientes" },
-  { id: "checklist", name: "Checklist para repetir", hint: "Rutinas de orden que se tildan y se reinician: «antes de salir», «limpieza del sábado».", icon: RotateCcw, title: "Antes de salir" },
+  { id: "pendientes", name: "Recordatorios", hint: "Tareas, cumpleaños, pagos, turnos y feriados, con aviso cuando se acercan.", icon: ClipboardList, title: "Recordatorios" },
   { id: "lugares", name: "¿Dónde está?", hint: "Dónde guardaste cada cosa: nunca más «¿dónde dejé el pasaporte?».", icon: MapPin, title: "¿Dónde está?" },
   { id: "notas", name: "Notas", hint: "Notas sueltas para no olvidarte de nada.", icon: NotebookPen, title: "Notas" },
 ];
@@ -50,7 +50,8 @@ const PRIORITIES = [
 /** Una lista como panel del tablero: su ícono y nombre arriba (con los controles del panel) y su contenido. */
 export function ListCard({ id, className }: { id: string; className?: string }) {
   const list = usePlanner((s) => s.lists.find((l) => l.id === id));
-  if (!list) return null;
+  if (!list || !TYPE[list.type]) return null;
+  if (list.type === "pendientes") return <PendingCard list={list} className={className} />;
   const T = TYPE[list.type];
   return (
     <section aria-label={list.title} className={cn("card flex min-h-0 flex-col overflow-hidden", className)}>
@@ -198,8 +199,7 @@ function ListBody({ list }: { list: UserList }) {
   const done = items.filter((i) => i.done).length;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 items-center gap-1 px-3 pt-2">
-        <span className="flex-1" />
+      <div className="flex shrink-0 items-center justify-end gap-1 px-3 pt-2 empty:hidden">
         {list.type === "checklist" && done > 0 && (
           <button type="button" title="Reiniciar (destildar todo)" aria-label="Reiniciar la checklist" onClick={() => save(items.map((i) => ({ ...i, done: false })))} className="pressable grid size-7 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
             <RotateCcw aria-hidden className="size-3.5" />
@@ -210,16 +210,6 @@ function ListBody({ list }: { list: UserList }) {
             <Eraser aria-hidden className="size-3.5" />
           </button>
         )}
-        <button
-          type="button"
-          title="Vaciar la lista"
-          aria-label="Vaciar la lista"
-          disabled={!items.length}
-          onClick={() => window.confirm(`¿Vaciar «${list.title}»? Se borra todo lo que tiene.`) && save([])}
-          className="pressable grid size-7 place-items-center rounded-md text-ink-faint hover:bg-surface-sunken hover:text-danger disabled:opacity-30"
-        >
-          <Trash2 aria-hidden className="size-3.5" />
-        </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-1">
         {items.length ? body : <p className="px-2 py-3 text-[12.5px] leading-snug text-ink-muted">{TYPE[list.type].hint}</p>}

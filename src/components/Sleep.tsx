@@ -329,12 +329,12 @@ export function DaySleepSheet({ date, isMobile, onClose }: { date: DateKey; isMo
 }
 
 /** El horario general de sueño, a mano desde la semana. */
-export function SleepDialog({ isMobile, onClose }: { isMobile: boolean; onClose: () => void }) {
+export function SleepDialog({ isMobile, onClose, side }: { isMobile: boolean; onClose: () => void; side?: boolean }) {
   const sleep = usePlanner((s) => s.sleep);
   const setSleep = usePlanner((s) => s.setSleep);
   const [draft, setDraft] = useState(sleep);
   return (
-    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="sleep-dialog-title" width="max-w-[440px]">
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="sleep-dialog-title" width="max-w-[440px]" side={side}>
       <div className="flex flex-col gap-5 p-5 sm:p-6">
         <header>
           <h2 id="sleep-dialog-title" className="type-headline">

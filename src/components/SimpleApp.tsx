@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Eraser, ListChecks, Music, Pencil, PieChart, Target, Volume2, VolumeX, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Eraser, ListChecks, Music, Pencil, PieChart, Target, Volume2, VolumeX, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { addDays, fromKey, toKey, weekNumber } from "@/lib/dates";
 import { cn, formatMinutes } from "@/lib/format";
@@ -15,9 +15,12 @@ import { PARTS, thisMonday, weekRangeLabel, weekShares } from "@/lib/week-shares
 import { firstDay, newId, usePlanner, type RoutineBlock } from "@/lib/store";
 import { BrandMark } from "./BrandMark";
 import { BucketCard } from "./Bucket";
-import { Book, RecapBook } from "./RecapBook";
+import { Book } from "./RecapBook";
 import type { DiaryItem } from "@/lib/diary";
-import { DiaryBox, DiaryComposer, DiaryMini, Story } from "./Diary";
+import { DiaryBox, DiaryComposer, Story } from "./Diary";
+import { MoodCard } from "./Mood";
+import { PendingAlerts } from "./Pending";
+import { UndoButton } from "./UndoButton";
 import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
@@ -30,11 +33,8 @@ import { firstName, useUser } from "@/lib/supabase/use-user";
 import { authConfigured } from "@/lib/supabase/config";
 import { startCloudSync, useSync } from "@/lib/cloud-sync";
 import { Setup } from "./Setup";
-import { Reminder } from "./Reminder";
 import { RoutineHint } from "./RoutineHint";
 import { ListCard, ListsMenu } from "./Lists";
-import { NudgeCenter, Nudges, type NudgeTarget } from "./Nudges";
-import type { Nudge } from "@/lib/nudges";
 import { CheerToast } from "./Cheer";
 import { DailyGoals } from "./DailyGoals";
 import { isZenPlaying, onZenChange, startZen, stopZen } from "@/lib/zen";
@@ -80,7 +80,6 @@ export function SimpleApp() {
   const routine = usePlanner((s) => s.routine);
   const setRoutine = usePlanner((s) => s.setRoutine);
   const logRoutine = usePlanner((s) => s.logRoutine);
-  const [book, setBook] = useState(false);
   // Desde qué día cuentan las métricas: el primero con algo cargado (o hoy, si recién empezás).
   const startedAt = usePlanner((s) => s.startedAt);
   const setStartedAt = usePlanner((s) => s.setStartedAt);
@@ -114,7 +113,9 @@ export function SimpleApp() {
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
   }, []);
-  const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number; draft?: { name: string; quadrant: QuadrantId; days: number[]; lock?: boolean; guided?: boolean } } | null>(null);
+  const [editing, setEditing] = useState<{ block?: RoutineBlock; day: number; start: number; minutes?: number; draft?: { name: string; quadrant: QuadrantId; days: number[]; lock?: boolean; guided?: boolean; title?: string; placeholder?: string; kicker?: string; subtitle?: string } } | null>(null);
+  // Lo que se está armando en el editor, dibujado en el calendario.
+  const [draftGhost, setDraftGhost] = useState<RoutineBlock | null>(null);
   const [askDelete, setAskDelete] = useState<{ block: RoutineBlock; day: number } | null>(null);
   const [askChange, setAskChange] = useState<Change | null>(null);
   const [sleepOpen, setSleepOpen] = useState(false);
@@ -208,26 +209,21 @@ export function SimpleApp() {
       const d = (e as CustomEvent<{ name: string; quadrant: QuadrantId; days: number[]; start: number; minutes: number }>).detail;
       setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days } });
     };
+    const sleepOpen = () => setSleepOpen(true);
+    // Abrir un bloque de la rutina para editarlo (desde "Tu base").
+    const editBlock = (e: Event) => {
+      const b = usePlanner.getState().routine.find((x) => x.id === (e as CustomEvent<{ id: string }>).detail.id);
+      if (b) setEditing({ block: b, day: b.days[0] ?? 1, start: b.start });
+    };
+    window.addEventListener("lb:edit-block", editBlock);
     window.addEventListener("lb:add-block", open);
-    return () => window.removeEventListener("lb:add-block", open);
+    window.addEventListener("lb:open-sleep", sleepOpen);
+    return () => {
+      window.removeEventListener("lb:add-block", open);
+      window.removeEventListener("lb:open-sleep", sleepOpen);
+      window.removeEventListener("lb:edit-block", editBlock);
+    };
   }, []);
-  const [justSetUp, setJustSetUp] = useState(false);
-  /** Desde el recordatorio: ir a cada parte (en la compu se destaca un momento; en el celular, su pestaña). */
-  const goTo = (where: NudgeTarget, nudge?: Nudge) => {
-    // Si el aviso trae un ejemplo, se abre el editor de la rutina ya cargado (o la configuración del sueño).
-    if (nudge?.sleep) return setSleepOpen(true);
-    if (nudge?.draft) {
-      const d = nudge.draft;
-      return setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days } });
-    }
-    if (phone) {
-      setTab(where === "metas" ? "logros" : where === "semana" ? "semana" : where === "bucket" ? "tablero" : "objetivos");
-      return;
-    }
-    const el = document.querySelector<HTMLElement>(`[data-module="${where}"]`);
-    el?.animate([{ boxShadow: "0 0 0 0 rgba(37,40,54,0.35)" }, { boxShadow: "0 0 0 10px rgba(37,40,54,0)" }], { duration: 900, iterations: 2 });
-    if (where === "diario") window.setTimeout(() => document.querySelector<HTMLElement>("#logro-text")?.focus(), 200);
-  };
   // En el celular (y tablets angostas) cada sección es una pestaña: la Semana entra entera, sin scroll.
   const phone = !desktop;
   const [tab, setTab] = useState<Section>(() => {
@@ -360,6 +356,7 @@ export function SimpleApp() {
       range={RANGE}
       showSleep={sleepSet}
       markToday={viewWeek === monday}
+      ghost={draftGhost ? [draftGhost] : undefined}
       extras={[...weekExtras, ...previewExtras]}
       previewDays={previewDays}
       onExtraChange={(id, next) => {
@@ -458,11 +455,14 @@ export function SimpleApp() {
   // En el celular, cada cosa en su pestaña: la rutina; Hoy (no negociables y diario); las metas; el balde y
   // cómo viene.
   const [storyMonth, setStoryMonth] = useState(new Date().toISOString().slice(0, 7));
+  const pendingId = usePlanner((s) => s.lists.find((l) => l.type === "pendientes" && !l.hidden)?.id);
   const phoneSections: Record<Section, React.ReactNode> = {
     semana: semanaPanel,
     objetivos: (
       <div data-tour="logros" className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pb-2">
         <DailyGoals className="shrink-0" />
+        {pendingId && <ListCard id={pendingId} className="h-[460px] shrink-0" />}
+        <MoodCard className="shrink-0" />
         <DiaryBox className="shrink-0" />
         <Story month={storyMonth} setMonth={setStoryMonth} className="card shrink-0 overflow-visible" />
       </div>
@@ -532,15 +532,6 @@ export function SimpleApp() {
         // Arriba: el sueño a la izquierda, LifeBucket al centro y la cuenta a la derecha.
         <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-4 pb-3 sm:px-6">
           <div className="flex items-center gap-2 justify-self-start">
-              <button
-              type="button"
-              data-tour="libro"
-              onClick={() => setBook(true)}
-              className="pressable flex items-center gap-2 rounded-full bg-surface/80 px-3.5 py-2 text-[13px] font-medium whitespace-nowrap shadow-[var(--shadow-card)] hover:bg-surface"
-            >
-              <BarChart3 aria-hidden className="size-4 text-ink-muted" />
-              Resumen general
-            </button>
             <ListsMenu />
           </div>
           <h1 className="flex items-center gap-2.5">
@@ -549,26 +540,24 @@ export function SimpleApp() {
           </h1>
           <div className="flex items-center gap-2 justify-self-end">
             <div data-tour="cuenta" className="flex items-center gap-1">
-              <NudgeCenter onGo={goTo} />
+              <UndoButton />
               <PaletteSwitch />
               {zenButton}
               {soundButton}
               <UserMenu />
             </div>
           </div>
-          {book && <RecapBook range="mes" isMobile={false} onClose={() => setBook(false)} />}
         </header>
       ) : (
         // En el celular: LIFEBUCKET al centro, el sueño a la izquierda, la cuenta a la derecha y los % abajo.
         <header className="flex shrink-0 flex-col px-4 pt-3 pb-2">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-            <div />
+          <div className="flex items-center justify-between gap-1">
             <h1 className="flex items-center gap-1.5">
               <BrandMark size={22} />
               <span className="text-[14px] font-semibold tracking-[0.16em] max-[359px]:text-[12px] max-[359px]:tracking-[0.08em]">LIFEBUCKET</span>
             </h1>
-            <div data-tour="cuenta" className="flex items-center gap-0.5 justify-self-end">
-              <NudgeCenter onGo={goTo} compact />
+            <div data-tour="cuenta" className="flex shrink-0 items-center gap-0 [&>button]:!w-8">
+              <UndoButton className="size-8" />
               <PaletteSwitch />
               {zenButton}
               {soundButton}
@@ -622,7 +611,7 @@ export function SimpleApp() {
           ) : id === "diarios" ? (
             <DailyGoals fit />
           ) : id === "diario" ? (
-            <DiaryMini />
+            <MoodCard />
           ) : id.startsWith("list:") ? (
             <ListCard id={id.slice(5)} />
           ) : null
@@ -637,6 +626,7 @@ export function SimpleApp() {
           start={editing.start}
           minutes={editing.minutes}
           draft={editing.draft}
+          onPreview={setDraftGhost}
           quadrants={SIMPLE_QUADRANTS}
           onClose={() => setEditing(null)}
           onSave={(b) => {
@@ -764,26 +754,25 @@ export function SimpleApp() {
       {/* En Logros y Metas hay campos para escribir abajo: ahí el asistente no aparece (taparía el botón de sumar). */}
       {/* El asistente con IA (botón flotante) queda apagado por ahora. */}
       <CheerToast />
+      {setupDone && <PendingAlerts />}
       {showSetup && (
         <Setup
           phone={phone}
           onTab={(t) => setTab(t)}
           onSleep={() => setSleepOpen(true)}
-          onAddBlock={(d) => setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days, lock: d.lock, guided: true } })}
+          onAddBlock={(d) => setEditing({ day: d.days[0] ?? 1, start: d.start, minutes: d.minutes, draft: { name: d.name, quadrant: d.quadrant, days: d.days, lock: d.lock, guided: true, title: d.title, placeholder: d.placeholder, kicker: d.kicker, subtitle: d.subtitle } })}
           onDone={() => {
-            setJustSetUp(true);
             markSeen();
             setIntro("none");
           }}
         />
       )}
-      {setupDone && intro === "none" && <Reminder onGo={goTo} />}
-      <RoutineHint armed={justSetUp} onAdd={() => setEditing({ day: 1, start: 600, minutes: 60 })} />
-      {setupDone && intro === "none" && <Nudges onGo={goTo} />}
+      <RoutineHint armed={setupDone && intro === "none"} />
 
       {sleepOpen && (
         <SleepDialog
           isMobile={!desktop}
+          side={!setupDone && desktop}
           onClose={() => {
             setSleepOpen(false);
             // Verlo y cerrarlo también cuenta como configurado (si te sirve el horario que propone).

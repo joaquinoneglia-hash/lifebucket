@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowRight, Check, ChevronLeft, ChevronRight, GripVertical, Plus, Trash2, X } from "lucide-react";
-import { ChartColumnBig } from "lucide-react";
+import { ArrowRight, CalendarDays, Check, ChevronLeft, ChevronRight, GripVertical, Plus, Trash2, X } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import { guessQuadrant } from "@/lib/categorize";
 import { fromKey, toKey } from "@/lib/dates";
@@ -14,7 +13,7 @@ import { play } from "@/lib/sfx";
 import { usePlanner, type TaskKind, type YearTask } from "@/lib/store";
 import { ModuleControls } from "./Modules";
 import { isLate, kindColor, TASK_KINDS } from "./TasksPanel";
-import { Sheet } from "./ui";
+import { Segmented, Sheet } from "./ui";
 
 const MONTHS = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -80,7 +79,7 @@ export function YearGoals({ className }: { className?: string }) {
       <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line py-2 pr-2 pl-4">
         <div className="min-w-0">
           <h2 id="year-goals-title" className="type-title truncate">
-            Metas importantes
+            Metas anuales importantes
           </h2>
           <p className="truncate text-[11.5px] text-ink-muted tabular-nums">{yearTasks.length ? `${done} de ${yearTasks.length} cumplidas en ${year}` : "2 o 3 por mes: las que te cambian"}</p>
         </div>
@@ -94,15 +93,15 @@ export function YearGoals({ className }: { className?: string }) {
           </button>
           <button
             type="button"
-            aria-label="Ver el reporte de metas"
-            title="Reporte de metas: historial, postergadas, cumplidas"
+            aria-label="Ampliar metas"
+            title="Ver en grande: todo el año, para editar, y las estadísticas"
             onClick={() => {
               play("open");
               setReport(true);
             }}
             className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
-            <ChartColumnBig aria-hidden className="size-4" />
+            <CalendarDays aria-hidden className="size-4" />
           </button>
           <ModuleControls />
         </div>
@@ -159,7 +158,7 @@ export function YearGoals({ className }: { className?: string }) {
         </ol>
       </div>
 
-      {report && <GoalsReport year={year} isMobile={!desktop} onClose={() => setReport(false)} />}
+      {report && <GoalsReport year={year} setYear={setYear} isMobile={!desktop} onClose={() => setReport(false)} />}
     </section>
   );
 }
@@ -228,7 +227,7 @@ function MonthBlock({
                 e.dataTransfer.setData("text/task", t.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
-              className={cn("group/t flex items-center gap-1 rounded-md py-0.5 pr-0.5 pl-0.5 hover:bg-surface-sunken/80", !t.done && "cursor-grab active:cursor-grabbing")}
+              className={cn("group/t relative flex items-start gap-1 rounded-md py-0.5 pr-0.5 pl-0.5 hover:bg-surface-sunken/80", !t.done && "cursor-grab active:cursor-grabbing")}
             >
               <button
                 type="button"
@@ -238,12 +237,12 @@ function MonthBlock({
                   if (!t.done) cheer("goalDone");
                   toggleTask(t.id);
                 }}
-                className={cn("grid size-3.5 shrink-0 place-items-center rounded-[4px] border", t.done ? "border-success bg-success text-white" : late ? "border-danger" : "border-ink-faint")}
+                className={cn("mt-[2px] grid size-3.5 shrink-0 place-items-center rounded-[4px] border", t.done ? "border-success bg-success text-white" : late ? "border-danger" : "border-ink-faint")}
               >
                 {t.done && <Check aria-hidden strokeWidth={3.5} className="size-2.5" />}
               </button>
-              <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: kindColor(t.kind) }} />
-              <span title={t.title} className={cn("min-w-0 flex-1 truncate text-[11.5px]", t.done && "text-ink-muted line-through", late && "text-danger")}>
+              <span aria-hidden className="mt-[6px] size-1.5 shrink-0 rounded-full" style={{ background: kindColor(t.kind) }} />
+              <span title={t.title} className={cn("min-w-0 flex-1 text-[11.5px] leading-snug [overflow-wrap:anywhere]", t.done && "text-ink-muted line-through", late && "text-danger")}>
                 {t.title}
               </span>
               {moved > 0 && (
@@ -251,6 +250,7 @@ function MonthBlock({
                   ×{moved}
                 </span>
               )}
+              <span className="absolute top-0.5 right-0.5 hidden items-center rounded-md bg-surface shadow-sm group-hover/t:flex group-focus-within/t:flex [@media(hover:none)]:static [@media(hover:none)]:flex [@media(hover:none)]:bg-transparent [@media(hover:none)]:shadow-none">
               {!t.done && (
                 <button
                   type="button"
@@ -260,7 +260,7 @@ function MonthBlock({
                     moveTask(t.id, nextMonth(t.month));
                     cheer("goalPostponed");
                   }}
-                  className="grid size-5 shrink-0 place-items-center rounded text-ink-faint opacity-0 group-hover/t:opacity-100 hover:text-ink focus-visible:opacity-100 [@media(hover:none)]:opacity-70"
+                  className="grid size-5 shrink-0 place-items-center rounded text-ink-faint hover:text-ink"
                 >
                   <ArrowRight aria-hidden className="size-3" />
                 </button>
@@ -272,10 +272,11 @@ function MonthBlock({
                   play("delete");
                   removeTask(t.id);
                 }}
-                className="grid size-5 shrink-0 place-items-center rounded text-ink-faint opacity-0 group-hover/t:opacity-100 hover:text-danger focus-visible:opacity-100 [@media(hover:none)]:hidden"
+                className="grid size-5 shrink-0 place-items-center rounded text-ink-faint hover:text-danger"
               >
                 <Trash2 aria-hidden className="size-3" />
               </button>
+              </span>
             </li>
           );
         })}
@@ -320,13 +321,46 @@ function MonthBlock({
  * El reporte de metas (expandido): cuántas te propusiste, cumpliste, no cumpliste y postergaste en el año, y
  * cada meta con su historia: cuándo se creó, por qué meses pasó, cuántos días lleva y cuándo se cumplió.
  */
-function GoalsReport({ year, isMobile, onClose }: { year: number; isMobile: boolean; onClose: () => void }) {
+function GoalsReport({ year, setYear, isMobile, onClose }: { year: number; setYear: (y: number) => void; isMobile: boolean; onClose: () => void }) {
   const tasks = usePlanner((s) => s.tasks);
+  const moveTask = usePlanner((s) => s.moveTask);
   const today = toKey(new Date());
+  const thisMonth = today.slice(0, 7);
   const months = Array.from({ length: 12 }, (_, i) => `${year}-${pad(i + 1)}`);
-  const st = taskStats(tasks, months, today.slice(0, 7));
+  const st = taskStats(tasks, months, thisMonth);
   const list = [...st.proposed].sort((a, b) => a.month.localeCompare(b.month));
   const movedCount = list.filter((t) => (t.history?.length ?? 0) > 0).length;
+  // Todo el año, editable: arrastrar una meta a otro mes la posterga (o la adelanta).
+  const [over, setOver] = useState<string | null>(null);
+  const [view, setView] = useState<"anio" | "metas">("anio");
+  const dropProps = (month: string) => ({
+    onDragOver: (e: DragEvent) => {
+      if (!e.dataTransfer.types.includes("text/task")) return;
+      e.preventDefault();
+      if (over !== month) setOver(month);
+    },
+    onDragLeave: () => setOver((o) => (o === month ? null : o)),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      setOver(null);
+      const t = tasks.find((x) => x.id === e.dataTransfer.getData("text/task"));
+      if (!t || t.month === month) return;
+      moveTask(t.id, month);
+      if (month > t.month && !t.done) cheer("goalPostponed");
+      else play("bubble");
+    },
+  });
+  // Estadísticas.
+  const monthsBetween = (from: string, to: string) => (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7));
+  const delay = (t: YearTask) => monthsBetween(t.history?.[0] ?? t.month, t.done ? (t.doneAt ?? today).slice(0, 7) : t.month);
+  const postponements = list.reduce((acc, t) => acc + (t.history?.length ?? 0), 0);
+  const closed = st.done.length + st.notDone.length;
+  const mostMoved = [...list].sort((a, b) => (b.history?.length ?? 0) - (a.history?.length ?? 0))[0];
+  const oldestOpen = list.filter((t) => !t.done && t.createdAt).sort((a, b) => a.createdAt!.localeCompare(b.createdAt!))[0];
+  const toDone = st.done.filter((t) => t.createdAt && t.doneAt).map((t) => goalAge(t, t.doneAt!).days ?? 0);
+  const avgToDone = toDone.length ? Math.round(toDone.reduce((a, b) => a + b, 0) / toDone.length) : null;
+  const bestMonth = months.map((m) => ({ m, n: list.filter((t) => t.done && t.month === m).length })).sort((a, b) => b.n - a.n)[0];
+  const byKind = TASK_KINDS.map((k) => ({ k, all: list.filter((t) => (t.kind ?? "otro") === k.id), ok: list.filter((t) => (t.kind ?? "otro") === k.id && t.done).length })).filter((x) => x.all.length);
   const stats = [
     { k: "Propuestas", v: st.proposed.length, c: "var(--color-ink)" },
     { k: "Cumplidas", v: st.done.length, c: "var(--color-success)" },
@@ -334,43 +368,113 @@ function GoalsReport({ year, isMobile, onClose }: { year: number; isMobile: bool
     { k: "Postergadas", v: movedCount, c: "#d99a00" },
     { k: "En camino", v: st.pending.length, c: "var(--color-ink-faint)" },
   ];
+  const facts = [
+    { k: "Cumplimiento", v: closed ? `${Math.round((st.done.length / closed) * 100)}%` : "–", d: "de las que ya cerraron su mes" },
+    { k: "Postergaciones", v: String(postponements), d: list.length ? `${(Math.round((postponements / list.length) * 10) / 10).toLocaleString("es-AR")} por meta en promedio` : "" },
+    { k: "Meses de atraso", v: String(list.reduce((acc, t) => acc + Math.max(0, delay(t)), 0)), d: "sumando todas las metas" },
+    { k: "Tiempo para cumplir", v: avgToDone !== null ? `${avgToDone} días` : "–", d: "en promedio, desde que la creaste" },
+    { k: "La más postergada", v: mostMoved && mostMoved.history?.length ? `×${mostMoved.history.length}` : "–", d: mostMoved && mostMoved.history?.length ? mostMoved.title : "ninguna todavía" },
+    { k: "La más antigua sin cumplir", v: oldestOpen ? `${goalAge(oldestOpen, today).days} días` : "–", d: oldestOpen ? oldestOpen.title : "ninguna" },
+    { k: "Mejor mes", v: bestMonth && bestMonth.n ? MONTHS[Number(bestMonth.m.slice(5)) - 1] : "–", d: bestMonth && bestMonth.n ? `${bestMonth.n} cumplidas` : "" },
+  ];
   const status = (t: YearTask) => (t.done ? { l: "Cumplida", c: "text-success" } : isLate(t, today) ? { l: "No cumplida", c: "text-danger" } : { l: "En camino", c: "text-ink-muted" });
 
   return (
-    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="goals-report-title" width="max-w-[980px]">
-      <div className={cn("flex flex-col", isMobile ? "h-[88dvh]" : "h-[min(760px,90dvh)]")}>
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line py-2.5 pr-2.5 pl-5">
-          <h2 id="goals-report-title" data-autofocus tabIndex={-1} className="type-title outline-none">
-            Tus metas de {year}
-          </h2>
-          <button type="button" aria-label="Cerrar" onClick={onClose} className="pressable grid size-9 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink">
-            <X aria-hidden className="size-4" />
-          </button>
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="goals-report-title" width="max-w-[1240px]">
+      <div className={cn("flex flex-col overflow-hidden", isMobile ? "h-[88dvh]" : "h-[min(820px,86dvh)]")}>
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line py-2 pr-2.5 pl-5">
+          <div className="flex items-center gap-1">
+            <h2 id="goals-report-title" data-autofocus tabIndex={-1} className="type-title mr-2 outline-none">
+              Metas anuales importantes
+            </h2>
+            <button type="button" aria-label="Año anterior" onClick={() => setYear(year - 1)} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <ChevronLeft aria-hidden className="size-4" />
+            </button>
+            <span className="w-12 text-center text-[14px] font-semibold tabular-nums">{year}</span>
+            <button type="button" aria-label="Año siguiente" onClick={() => setYear(year + 1)} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <ChevronRight aria-hidden className="size-4" />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Segmented label="Vista" options={[{ id: "anio", label: "El año" }, { id: "metas", label: "Cada meta" }] as const} value={view} onChange={setView} />
+            <button type="button" aria-label="Cerrar" onClick={onClose} className="pressable grid size-9 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <X aria-hidden className="size-4" />
+            </button>
+          </div>
         </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
-          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-            {stats.map((s) => (
-              <li key={s.k} className="flex flex-col gap-0.5 rounded-xl bg-surface-sunken/70 px-3 py-2.5">
-                <span className="flex items-center gap-1.5 text-[11.5px] text-ink-muted">
-                  <span aria-hidden className="size-2 rounded-full" style={{ background: s.c }} />
-                  {s.k}
-                </span>
-                <span className="text-[24px] leading-none font-semibold tabular-nums">{s.v}</span>
-              </li>
-            ))}
-          </ul>
+        {view === "anio" ? (
+          <div className="flex min-h-0 flex-1 gap-4 p-4 max-lg:flex-col max-lg:overflow-y-auto">
+            {/* Todo el año, para editar: tildar, sumar, borrar y arrastrar entre meses. */}
+            <ol className="grid min-h-0 flex-1 grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-rows-3">
+              {months.map((m, i) => (
+                <li key={m} className="min-h-0 max-lg:h-[150px]">
+                  <MonthBlock month={m} name={MONTHS[i]} list={tasks.filter((t) => t.month === m)} today={today} isNow={m === thisMonth} muted={m < thisMonth} over={over === m} dropProps={dropProps(m)} />
+                </li>
+              ))}
+            </ol>
+            {/* Las estadísticas, al costado. */}
+            <aside className="flex min-h-0 shrink-0 flex-col gap-2 lg:w-[300px] lg:overflow-y-auto">
+              <ul className="grid grid-cols-3 gap-1.5">
+                {stats.map((x) => (
+                  <li key={x.k} className="flex flex-col rounded-lg bg-surface-sunken/70 px-2 py-1.5">
+                    <span className="flex items-center gap-1 truncate text-[10.5px] text-ink-muted">
+                      <span aria-hidden className="size-1.5 shrink-0 rounded-full" style={{ background: x.c }} />
+                      {x.k}
+                    </span>
+                    <span className="text-[18px] leading-tight font-semibold tabular-nums">{x.v}</span>
+                  </li>
+                ))}
+              </ul>
+              <ul className="flex flex-col divide-y divide-line rounded-lg border border-line">
+                {facts.map((x) => (
+                  <li key={x.k} className="flex items-baseline justify-between gap-2 px-2.5 py-1.5">
+                    <span className="min-w-0">
+                      <span className="block text-[11.5px] text-ink-muted">{x.k}</span>
+                      {x.d && <span className="block truncate text-[10.5px] text-ink-faint">{x.d}</span>}
+                    </span>
+                    <span className="shrink-0 text-[14px] font-semibold tabular-nums">{x.v}</span>
+                  </li>
+                ))}
+              </ul>
+              {byKind.length > 0 && (
+                <ul className="flex flex-col gap-1 rounded-lg bg-surface-sunken/60 p-2.5">
+                  {byKind.map(({ k, all, ok }) => (
+                    <li key={k.id} className="grid grid-cols-[128px_1fr_32px] items-center gap-2 text-[11.5px] tabular-nums">
+                      <span className="flex items-center gap-1.5 truncate">
+                        <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: kindColor(k.id) }} />
+                        {k.label}
+                      </span>
+                      <span className="h-1.5 overflow-hidden rounded-full bg-surface">
+                        <span className="block h-full rounded-full" style={{ width: `${(ok / all.length) * 100}%`, background: kindColor(k.id) }} />
+                      </span>
+                      <span className="text-right text-ink-muted">
+                        {ok}/{all.length}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p className="flex items-center gap-1.5 text-[11px] leading-snug text-ink-faint">
+                <GripVertical aria-hidden className="size-3.5 shrink-0" />
+                Arrastrá una meta a otro mes para postergarla: queda registrado.
+              </p>
+            </aside>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {list.length === 0 ? (
-            <p className="mt-6 text-[13px] text-ink-muted">Todavía no cargaste metas para {year}.</p>
+            <p className="text-[13px] text-ink-muted">Todavía no cargaste metas para {year}.</p>
           ) : (
-            <div className="mt-6 overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] border-collapse text-left text-[12.5px]">
                 <thead>
-                  <tr className="border-b border-line text-[11px] tracking-wide text-ink-muted uppercase">
+                  <tr className="sticky top-0 border-b border-line bg-surface text-[11px] tracking-wide text-ink-muted uppercase">
                     <th className="py-2 pr-3 font-semibold">Meta</th>
                     <th className="py-2 pr-3 font-semibold">Mes</th>
                     <th className="py-2 pr-3 font-semibold">Creada</th>
                     <th className="py-2 pr-3 font-semibold">Recorrido</th>
                     <th className="py-2 pr-3 font-semibold">Días</th>
+                    <th className="py-2 pr-3 font-semibold">Atraso</th>
                     <th className="py-2 font-semibold">Estado</th>
                   </tr>
                 </thead>
@@ -400,6 +504,7 @@ function GoalsReport({ year, isMobile, onClose }: { year: number; isMobile: bool
                           )}
                         </td>
                         <td className="py-2 pr-3 text-ink-muted tabular-nums">{days ?? "–"}</td>
+                        <td className="py-2 pr-3 text-ink-muted tabular-nums">{delay(t) > 0 ? `${delay(t)} ${delay(t) === 1 ? "mes" : "meses"}` : "–"}</td>
                         <td className={cn("py-2 font-medium whitespace-nowrap", s.c)}>
                           {s.l}
                           {t.doneAt && <span className="block text-[11px] font-normal text-ink-muted">el {dayMonth.format(fromKey(t.doneAt))}</span>}
@@ -411,11 +516,8 @@ function GoalsReport({ year, isMobile, onClose }: { year: number; isMobile: bool
               </table>
             </div>
           )}
-          <p className="mt-4 flex items-center gap-1.5 text-[11.5px] text-ink-faint">
-            <GripVertical aria-hidden className="size-3.5" />
-            En el panel, arrastrá una meta a otro mes (o tocá →) para postergarla: queda registrado acá.
-          </p>
-        </div>
+          </div>
+        )}
       </div>
     </Sheet>
   );

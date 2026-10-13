@@ -1,7 +1,7 @@
 "use client";
 
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronDown, ChevronsUpDown, ChevronUp, EyeOff, GripVertical, MoreHorizontal } from "lucide-react";
-import { createContext, useContext, useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
+import { ChevronDown, ChevronsUpDown, ChevronUp, EyeOff } from "lucide-react";
+import { createContext, useContext, useEffect, useState, type DragEvent, type ReactNode } from "react";
 import { cn } from "@/lib/format";
 import { usePlanner } from "@/lib/store";
 
@@ -18,9 +18,9 @@ export type Col = "left" | "center" | "right";
 export const MODULE_TITLES: Record<BaseModule, string> = {
   semana: "Tu rutina semanal",
   bucket: "Tu Balde",
-  metas: "Metas importantes",
+  metas: "Metas anuales importantes",
   diarios: "No negociables",
-  diario: "Mi diario",
+  diario: "¿Cómo te sentiste?",
 };
 const titleOf = (id: ModuleId) => (id.startsWith("list:") ? (usePlanner.getState().lists.find((l) => `list:${l.id}` === id)?.title ?? "Lista") : MODULE_TITLES[id as BaseModule]);
 /** Mostrar u ocultar un panel desde cualquier lado (el menú de Mis listas). */
@@ -34,13 +34,12 @@ export function hiddenModules(): BaseModule[] {
   }
 }
 const COLS: Col[] = ["left", "center", "right"];
-const COL_NAMES: Record<Col, string> = { left: "a la izquierda", center: "al centro", right: "a la derecha" };
 type Prefs = { cols: Record<Col, ModuleId[]>; collapsed: ModuleId[]; weights: Partial<Record<ModuleId, number>>; hidden: BaseModule[] };
 const DEFAULT: Prefs = {
-  cols: { left: ["bucket", "metas"], center: ["semana"], right: ["diarios", "diario"] },
+  cols: { left: ["bucket", "metas"], center: ["semana"], right: ["diarios", "list:pendientes", "diario"] },
   collapsed: [],
   hidden: [],
-  weights: { bucket: 1.25, metas: 1, semana: 3, diarios: 1.6, diario: 0.6 },
+  weights: { bucket: 1.25, metas: 1, semana: 3, diarios: 1.3, diario: 1, "list:pendientes": 1.6 },
 };
 const KEY = "lb:board:v3";
 const ALL = Object.keys(MODULE_TITLES) as BaseModule[];
@@ -61,29 +60,13 @@ function load(): Prefs {
 type Ctx = { id: ModuleId; collapsed: boolean; toggle: () => void; hide: () => void; col: Col; index: number; count: number; move: (col: Col, index?: number) => void; onDragStart: (e: DragEvent) => void };
 const ModuleContext = createContext<Ctx | null>(null);
 
-/** Los controles de cada panel: ⠿ para arrastrarlo, ··· para moverlo y ⌃ para comprimirlo (fuera del tablero de compu, nada). */
+/** Los controles de cada panel: el ojito para ocultarlo y ⌃ para comprimirlo. El panel se arrastra desde su encabezado. */
 export function ModuleControls() {
   const m = useContext(ModuleContext);
-  const [menu, setMenu] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setMenu(false);
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [menu]);
   if (!m) return null;
-  const item = "flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12.5px] hover:bg-surface-sunken disabled:opacity-35 disabled:hover:bg-transparent";
-  const icon = { left: ArrowLeft, center: ArrowDown, right: ArrowRight };
   return (
-    <div ref={ref} className="relative flex shrink-0 items-center">
-      <span className={cn("flex items-center transition-opacity duration-150", !menu && "opacity-0 group-hover/panel:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100")}>
-      <span draggable onDragStart={m.onDragStart} title="Arrastrá para moverlo" aria-hidden className="grid h-8 w-5 cursor-grab place-items-center rounded-md text-ink-faint hover:bg-surface-sunken hover:text-ink active:cursor-grabbing">
-        <GripVertical className="size-3.5" />
-      </span>
-      <button type="button" aria-label={`Mover ${titleOf(m.id)}`} aria-expanded={menu} onClick={() => setMenu(!menu)} className="pressable grid size-8 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
-        <MoreHorizontal aria-hidden className="size-4" />
-      </button>
+    <div className="relative flex shrink-0 items-center">
+      <span className={cn("flex items-center transition-opacity duration-150", "opacity-0 group-hover/panel:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100")}>
       <button
         type="button"
         aria-label={`Ocultar ${titleOf(m.id)}`}
@@ -104,33 +87,14 @@ export function ModuleControls() {
       >
         {m.collapsed ? <ChevronDown aria-hidden className="size-4" /> : <ChevronUp aria-hidden className="size-4" />}
       </button>
-      {menu && (
-        <div role="menu" className="animate-fade-up absolute top-full right-0 z-50 mt-1 w-48 rounded-xl border border-line bg-surface p-1 shadow-[var(--shadow-popover)]">
-          {COLS.filter((c) => c !== m.col).map((c) => {
-            const Icon = icon[c];
-            return (
-              <button key={c} type="button" role="menuitem" className={item} onClick={() => (setMenu(false), m.move(c))}>
-                <Icon aria-hidden className="size-3.5 text-ink-muted" />
-                Mover {COL_NAMES[c]}
-              </button>
-            );
-          })}
-          <button type="button" role="menuitem" disabled={m.index === 0} className={item} onClick={() => (setMenu(false), m.move(m.col, m.index - 1))}>
-            <ArrowUp aria-hidden className="size-3.5 text-ink-muted" />
-            Subir
-          </button>
-          <button type="button" role="menuitem" disabled={m.index >= m.count - 1} className={item} onClick={() => (setMenu(false), m.move(m.col, m.index + 1))}>
-            <ArrowDown aria-hidden className="size-3.5 text-ink-muted" />
-            Bajar
-          </button>
-        </div>
-      )}
     </div>
   );
 }
 
 export function DashboardBoard({ render }: { render: (id: ModuleId) => ReactNode }) {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT);
+  // Arrastrar un panel: se agarra desde su encabezado (no desde botones ni campos).
+  const [armed, setArmed] = useState<ModuleId | null>(null);
   useEffect(() => setPrefs(load()), []);
   const save = (p: Prefs) => {
     setPrefs(p);
@@ -156,7 +120,26 @@ export function DashboardBoard({ render }: { render: (id: ModuleId) => ReactNode
       });
     };
     window.addEventListener("lb:module-visibility", onVis);
-    return () => window.removeEventListener("lb:module-visibility", onVis);
+    // La guía pide ver un panel: se muestra y se despliega si estaba comprimido.
+    const onExpand = (e: Event) => {
+      const id = (e as CustomEvent<{ id: ModuleId }>).detail.id;
+      if (id.startsWith("list:")) usePlanner.getState().setListHidden(id.slice(5), false);
+      setPrefs((p) => {
+        const grow = (e as CustomEvent<{ grow?: number }>).detail.grow;
+        const w = p.weights[id] ?? 1;
+        if (!p.collapsed.includes(id) && !p.hidden.includes(id as BaseModule) && (!grow || w >= grow)) return p;
+        const next = { ...p, collapsed: p.collapsed.filter((x) => x !== id), hidden: p.hidden.filter((x) => x !== id), weights: grow && w < grow ? { ...p.weights, [id]: grow } : p.weights };
+        try {
+          localStorage.setItem(KEY, JSON.stringify(next));
+        } catch {}
+        return next;
+      });
+    };
+    window.addEventListener("lb:module-expand", onExpand);
+    return () => {
+      window.removeEventListener("lb:module-visibility", onVis);
+      window.removeEventListener("lb:module-expand", onExpand);
+    };
   }, []);
   const [dragging, setDragging] = useState<ModuleId | null>(null);
   const [over, setOver] = useState<{ col: Col; index: number } | null>(null);
@@ -228,8 +211,21 @@ export function DashboardBoard({ render }: { render: (id: ModuleId) => ReactNode
                 <div
                   key={id}
                   data-slot={id}
+                  draggable={armed === id}
+                  onPointerDown={(e) => {
+                    const t = e.target as HTMLElement;
+                    const head = t.closest("header, [data-collapsed-head]");
+                    const control = t.closest("button, input, select, textarea, a, label, [role=separator], [role=menu]");
+                    setArmed(head && !control ? id : null);
+                  }}
+                  onPointerUp={() => setArmed(null)}
+                  onDragStart={(e) => {
+                    if (armed !== id) return;
+                    ctx.onDragStart(e);
+                  }}
+                  onDragEnd={() => setArmed(null)}
                   className={cn(
-                    "group/panel relative flex min-h-0 flex-col",
+                    "group/panel relative flex min-h-0 flex-col [&_header]:cursor-grab [&_header]:active:cursor-grabbing",
                     collapsed ? "shrink-0" : "basis-0",
                     dragging === id && "opacity-40",
                     over?.col === col && over.index === index && dragging && "before:absolute before:inset-x-2 before:-top-2 before:h-0.5 before:rounded-full before:bg-ink",
@@ -238,7 +234,7 @@ export function DashboardBoard({ render }: { render: (id: ModuleId) => ReactNode
                 >
                   <ModuleContext.Provider value={ctx}>
                     {collapsed ? (
-                      <section aria-label={titleOf(id)} className="card flex h-11 shrink-0 items-center justify-between gap-2 pr-2 pl-4">
+                      <section data-collapsed-head aria-label={titleOf(id)} className="card flex h-11 shrink-0 cursor-grab items-center justify-between gap-2 pr-2 pl-4">
                         <button type="button" onClick={() => toggle(id)} className="min-w-0 flex-1 truncate text-left type-title">
                           {titleOf(id)}
                         </button>

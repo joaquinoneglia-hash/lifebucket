@@ -1,6 +1,6 @@
 "use client";
 
-import { SlidersHorizontal, Trophy, X } from "lucide-react";
+import { SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DEFAULT_IDEAL, IDEAL_PARTS, IDEAL_WHY, idealOf, idealProgress, type IdealPart } from "@/lib/balance-goals";
 import { cn } from "@/lib/format";
@@ -79,52 +79,64 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
     } catch {}
   }, [order, prog.pct]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const left = Math.max(0, prog.goal - prog.total);
+  // Cada categoría: horas objetivo, horas llenadas y qué parte del tiempo para vos representa.
+  const share = (m: number) => (prog.total ? Math.round((m / prog.total) * 100) : 0);
+  const grid = "grid grid-cols-[14px_minmax(0,1fr)_52px_52px_44px] items-center gap-x-2";
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <Trophy aria-hidden className="size-3.5 text-[#d99a00]" />
-        <p className="min-w-0 flex-1 text-[11.5px] font-semibold tracking-wide uppercase">
-          Tu balde ideal <span className="font-medium tracking-normal text-ink-muted normal-case tabular-nums">· {h(prog.total)} de {h(prog.goal)}</span>
-        </p>
-        <button type="button" aria-label="Ajustar tus metas" title="Ajustar tus metas" onClick={() => setEdit(true)} className="pressable grid size-6 place-items-center rounded-md text-ink-muted hover:bg-surface-sunken hover:text-ink">
-          <SlidersHorizontal aria-hidden className="size-3.5" />
-        </button>
+    <div className="flex flex-col gap-1">
+      <div className={cn(grid, "pb-0.5 text-[10px] font-semibold tracking-wide text-ink-faint uppercase")}>
+        <span />
+        <span className="flex items-center gap-1.5 whitespace-nowrap">
+          Para vos
+          <button type="button" data-tour="ajustar-vos" title="Ajustar las horas objetivo de cada cosa" onClick={() => setEdit(true)} className="pressable inline-flex h-6 items-center gap-1 rounded-full bg-surface px-2 text-[11px] font-semibold tracking-normal text-ink normal-case ring-1 ring-line hover:ring-ink">
+            <SlidersHorizontal aria-hidden className="size-3" />
+            Ajustar
+          </button>
+        </span>
+        <span className="text-right">Objetivo</span>
+        <span className="text-right">Llenado</span>
+        <span className="text-right">%</span>
       </div>
-      {/* La barra total hacia el balde ideal. */}
-      <div className="h-2 overflow-hidden rounded-full bg-surface-sunken" aria-hidden>
-        <div className="h-full rounded-full bg-[linear-gradient(90deg,var(--color-cuerpo),var(--color-interior),var(--color-alma))] transition-[width] duration-700" style={{ width: `${Math.min(100, prog.pct)}%` }} />
-      </div>
-      <p className="text-[11px] text-ink-muted">{left > 0 ? `Te faltan ${h(left)} para tu balde ideal ${weeks === 1 ? "de la semana" : "del mes"}.` : "¡Balde ideal completo! 🎉"}</p>
-      <ol className="mt-0.5 flex flex-col gap-1.5" aria-label="Tablero de logros">
-        {rows.map((r, i) => (
+      <ol className="flex flex-col gap-1" aria-label="Tiempo para vos por categoría">
+        {rows.map((r) => (
           <li
             key={r.p}
             ref={(el) => {
               if (el) refs.current.set(r.p, el);
               else refs.current.delete(r.p);
             }}
-            className="flex items-center gap-2 text-[12px] tabular-nums"
+            className={cn(grid, "text-[12px] tabular-nums")}
           >
-            <span className="w-3 text-right text-[10.5px] font-semibold text-ink-faint">{i + 1}</span>
-            <span className="grid size-[18px] shrink-0 place-items-center rounded-full text-white" style={{ background: partColor(r.p) }}>
-              <QuadrantIcon id={r.p} className="size-3" />
+            <span className="grid size-[16px] place-items-center rounded-full text-white" style={{ background: partColor(r.p) }}>
+              <QuadrantIcon id={r.p} className="size-2.5" />
             </span>
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="flex items-baseline justify-between gap-1">
-                <span className={cn("truncate leading-tight", r.minutes === 0 && "text-ink-muted")}>{label(r.p)}</span>
-                <span className="shrink-0 text-[11px] text-ink-muted">
-                  {h(r.minutes)} / {h(r.goal)}
-                </span>
-              </span>
-              <span className="h-1.5 overflow-hidden rounded-full bg-surface-sunken">
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className={cn("truncate leading-tight", r.minutes === 0 && "text-ink-muted")}>{label(r.p)}</span>
+              {/* Cuánto del objetivo se llenó. */}
+              <span className="h-1 overflow-hidden rounded-full bg-surface-sunken" aria-hidden>
                 <span className="block h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, r.pct)}%`, background: partColor(r.p) }} />
               </span>
             </span>
-            <span className={cn("w-9 text-right text-[11.5px] font-semibold", r.pct >= 100 ? "text-success" : r.pct === 0 && "text-ink-faint")}>{r.pct >= 100 ? "✓" : `${r.pct}%`}</span>
+            <span className="text-right text-[11.5px] text-ink-muted">{h(r.goal)}</span>
+            <span className={cn("text-right text-[11.5px] font-semibold", r.pct >= 100 ? "text-success" : r.minutes === 0 && "text-ink-faint")}>
+              {r.pct >= 100 && "✓ "}
+              {h(r.minutes)}
+            </span>
+            <span className={cn("text-right text-[11.5px] font-semibold", r.minutes === 0 && "text-ink-faint")}>{share(r.minutes)}%</span>
           </li>
         ))}
       </ol>
+      {/* El total del tiempo para vos. */}
+      <div className={cn(grid, "mt-0.5 border-t border-line pt-1.5 text-[12px] font-semibold tabular-nums")}>
+        <span />
+        <span>Total</span>
+        <span className="text-right text-[11.5px] text-ink-muted">{h(prog.goal)}</span>
+        <span className={cn("text-right text-[11.5px]", prog.pct >= 100 && "text-success")}>
+          {prog.pct >= 100 && "✓ "}
+          {h(prog.total)}
+        </span>
+        <span className="text-right text-[11.5px]">{prog.total ? "100%" : "0%"}</span>
+      </div>
       {edit && <IdealEditor onClose={() => setEdit(false)} />}
     </div>
   );

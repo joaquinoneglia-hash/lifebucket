@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowRight, Moon } from "lucide-react";
+import { ArrowRight, Moon, SlidersHorizontal, X } from "lucide-react";
 import { useState } from "react";
-import { fromKey } from "@/lib/dates";
+import { createPortal } from "react-dom";
+import { fromKey, toKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { QUADRANT_BY_ID } from "@/lib/quadrants";
@@ -12,7 +13,7 @@ import { ModuleControls } from "./Modules";
 import { QuadrantIcon } from "./QuadrantIcon";
 import { GoalsBoard } from "./GoalsBoard";
 import { RecapBook } from "./RecapBook";
-import { Segmented } from "./ui";
+import { Segmented, Sheet } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const fmtDay = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long" });
@@ -34,11 +35,12 @@ export function BucketCard({ className, showReport = true }: { className?: strin
   const desktop = useMediaQuery("(min-width: 1024px)");
 
   const month = new Date().toISOString().slice(0, 7);
-  // El mes cuenta desde que empezaste a usar la app hasta hoy (no te suma días que no estabas).
-  const monthly = monthMinutes(routine, logros, sleep, month, startedAt);
+  // El mes entero: tu semana llevada a todos los días del mes (así el objetivo semanal se ve en el mes).
+  const lastDay = toKey(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
+  const monthly = monthMinutes(routine, logros, sleep, month, "", lastDay);
   const { minutes } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep) } : monthly;
   const total = bucketTotal(minutes);
-  const partial = range === "mes" && monthly.start > `${month}-01`;
+  const partial = false && startedAt;
   const pct = (m: number) => Math.round((m / total) * 100);
   const mine = ACTIVE_PARTS.reduce((acc, p) => acc + minutes[p], 0);
   const byHours = (list: Part[]) => [...list].sort((a, b) => minutes[b] - minutes[a]);
@@ -90,11 +92,11 @@ export function BucketCard({ className, showReport = true }: { className?: strin
         {/* Dos grupos bien separados: lo que es para vos (con color) y la base (Trabajo, Tareas cotidianas, Sueño). */}
         <div className="flex max-h-full min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
           {/* Tiempo para vos: el tablero de logros hacia tu balde ideal. */}
-          <div className="rounded-xl bg-[color-mix(in_oklab,var(--color-success)_7%,transparent)] px-2.5 py-2 ring-1 ring-[color-mix(in_oklab,var(--color-success)_25%,transparent)]">
+          <div data-tour="balde-vos" className="rounded-xl bg-[color-mix(in_oklab,var(--color-success)_7%,transparent)] px-2.5 py-2 ring-1 ring-[color-mix(in_oklab,var(--color-success)_25%,transparent)]">
             <GoalsBoard minutes={minutes} weeks={range === "semana" ? 1 : monthly.days / 7} />
           </div>
-          <ul className="flex flex-col gap-[3px] rounded-xl bg-surface-sunken/70 px-2.5 py-2">
-            <GroupTotal label="La base" value={h(base)} pct={pct(base)} muted />
+          <ul data-tour="balde-base" className="flex flex-col gap-[3px] rounded-xl bg-surface-sunken/70 px-2.5 py-2">
+            <GroupTotal label="La base" value={h(base)} pct={pct(base)} muted action={<BaseAdjust />} />
             {BASE.map(row)}
           </ul>
         </div>
@@ -133,12 +135,122 @@ export function BucketCard({ className, showReport = true }: { className?: strin
 
 
 /** El total de un grupo (Para vos, Libre y sueño): sus horas y su %. */
-function GroupTotal({ label, value, pct, muted }: { label: string; value: string; pct: number; muted?: boolean }) {
+function GroupTotal({ label, value, pct, muted, action }: { label: string; value: string; pct: number; muted?: boolean; action?: React.ReactNode }) {
   return (
     <li className={cn("mb-0.5 flex items-center gap-2 border-b pb-1 text-[11.5px] font-semibold tracking-wide uppercase tabular-nums", muted ? "border-line text-ink-muted" : "border-[color-mix(in_oklab,var(--color-success)_25%,transparent)] text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]")}>
       <span className="min-w-0 flex-1 truncate">{label}</span>
+      {action}
       <span className="font-medium text-ink-muted normal-case">{value}</span>
       <span className="w-8 text-right">{pct}%</span>
     </li>
+  );
+}
+
+/** Ajustar la base desde el balde: abre una pantalla con el sueño, el trabajo y las tareas cotidianas para tocar cada uno. */
+function BaseAdjust() {
+  const [open, setOpen] = useState(false);
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  return (
+    <>
+      <button
+        type="button"
+        data-tour="ajustar-base"
+        onClick={() => setOpen(true)}
+        className="pressable inline-flex h-6 items-center gap-1 rounded-full bg-surface px-2 text-[11px] font-semibold tracking-normal text-ink normal-case ring-1 ring-line hover:ring-ink"
+      >
+        <SlidersHorizontal aria-hidden className="size-3" />
+        Ajustar
+      </button>
+      {/* Fuera del título (que va en mayúsculas): en el body. */}
+      {open && createPortal(<BaseEditor isMobile={!desktop} onClose={() => setOpen(false)} />, document.body)}
+    </>
+  );
+}
+
+const DAY_LETTER = ["D", "L", "M", "M", "J", "V", "S"];
+const hhmm = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+function BaseEditor({ isMobile, onClose }: { isMobile: boolean; onClose: () => void }) {
+  const routine = usePlanner((s) => s.routine);
+  const sleep = usePlanner((s) => s.sleep);
+  const sleepSet = usePlanner((s) => s.sleepSet);
+  const go = (fn: () => void) => {
+    onClose();
+    window.setTimeout(fn, 60);
+  };
+  const edit = (id: string) => go(() => window.dispatchEvent(new CustomEvent("lb:edit-block", { detail: { id } })));
+  const add = (quadrant: "trabajo" | "libre", name: string, start: number, minutes: number) =>
+    go(() => window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name, quadrant, days: [1, 2, 3, 4, 5], start, minutes } })));
+  const section = (quadrant: "trabajo" | "libre", title: string, addLabel: string, addName: string, start: number, minutes: number) => {
+    const blocks = routine.filter((b) => b.quadrant === quadrant).sort((x, y) => x.start - y.start);
+    return (
+      <section className="rounded-xl border border-line p-3">
+        <p className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold">
+          <span className="grid size-6 place-items-center rounded-full text-white" style={{ background: partColor(quadrant) }}>
+            <QuadrantIcon id={quadrant} className="size-3.5" />
+          </span>
+          {title}
+        </p>
+        {blocks.length ? (
+          <ul className="flex flex-col gap-1">
+            {blocks.map((b) => (
+              <li key={b.id}>
+                <button type="button" onClick={() => edit(b.id)} className="pressable flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-sunken">
+                  <span className="min-w-0 flex-1 truncate text-[12.5px] font-medium">{b.name}</span>
+                  <span className="text-[11px] text-ink-muted tabular-nums">
+                    {[1, 2, 3, 4, 5, 6, 0].filter((d) => b.days.includes(d)).map((d) => DAY_LETTER[d]).join(" ")} · {hhmm(b.start)}–{hhmm(b.start + b.minutes)}
+                  </span>
+                  <span className="text-[11.5px] font-semibold text-ink-muted">Editar</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="px-2 text-[12px] text-ink-muted">Todavía no hay nada.</p>
+        )}
+        <button type="button" onClick={() => add(quadrant, addName, start, minutes)} className="pressable mt-1.5 inline-flex h-8 items-center rounded-full px-3 text-[12px] font-semibold text-ink-muted ring-1 ring-line hover:text-ink hover:ring-ink">
+          + {addLabel}
+        </button>
+      </section>
+    );
+  };
+  return (
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="base-title" width="max-w-[520px]">
+      <div className="flex flex-col gap-3 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 id="base-title" className="type-headline">
+              Tu base
+            </h2>
+            <p className="mt-0.5 text-[12.5px] text-ink-muted">Lo que sostiene tu semana: sueño, trabajo y tareas cotidianas. Tocá lo que quieras cambiar.</p>
+          </div>
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="pressable grid size-9 shrink-0 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink">
+            <X aria-hidden className="size-4" />
+          </button>
+        </div>
+        <section className="rounded-xl border border-line p-3">
+          <p className="mb-1.5 flex items-center gap-2 text-[13px] font-semibold">
+            <span className="grid size-6 place-items-center rounded-full bg-[var(--color-sleep)] text-white">
+              <Moon aria-hidden className="size-3.5" />
+            </span>
+            Sueño
+          </p>
+          <button type="button" onClick={() => go(() => window.dispatchEvent(new Event("lb:open-sleep")))} className="pressable flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-surface-sunken">
+            <span className="min-w-0 flex-1 text-[12px] text-ink-muted tabular-nums">
+              {sleepSet ? (
+                <>
+                  Semana: {hhmm(sleep.weekday.bed)} a {hhmm(sleep.weekday.wake)} · Finde: {hhmm(sleep.weekend.bed)} a {hhmm(sleep.weekend.wake)}
+                </>
+              ) : (
+                "Sin configurar"
+              )}
+            </span>
+            <span className="text-[11.5px] font-semibold text-ink-muted">Cambiar horarios</span>
+          </button>
+        </section>
+        {section("trabajo", "Trabajo", "Sumar trabajo", "Trabajo", 540, 480)}
+        {section("libre", "Tareas cotidianas", "Sumar tarea cotidiana", "", 780, 60)}
+      </div>
+    </Sheet>
   );
 }

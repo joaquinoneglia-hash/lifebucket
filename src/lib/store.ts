@@ -176,20 +176,58 @@ export interface Logro {
 export type TaskKind = "trabajo" | "cuerpo" | "interior" | "mente" | "alma" | "vinculos" | "otro";
 
 /** Un objetivo del año ("hacer un viaje"): por mes, con fecha opcional y sin horario. */
-/** Listas personales: súper, notas, pendientes, checklists para repetir y dónde guardé las cosas. */
+/** Listas personales: súper, notas, pendientes y dónde guardé las cosas. ("checklist" quedó de antes: pasa a Pendientes.) */
 export type ListType = "super" | "notas" | "pendientes" | "checklist" | "lugares";
+/** Cada cuánto se repite un pendiente: al completarlo, vuelve con la fecha siguiente. */
+export type Repeat = "diaria" | "semanal" | "mensual" | "anual";
+/** Tipo de recordatorio (cada uno con su color e ícono). Los feriados no se guardan: se calculan. */
+export type ReminderKind = "tarea" | "cumple" | "aniversario" | "pago" | "salud" | "mascota" | "tramite";
 export interface ListItem {
   id: string;
   text: string;
   done?: boolean;
   /** Súper: la sección; pendientes: la prioridad; lugares: dónde está. */
   meta?: string;
+  /** Pendientes: para cuándo vence. */
+  due?: DateKey;
+  /** Pendientes: su grupo ("Personal", "Trabajo", "Con mi novia"…). */
+  group?: string;
+  /** Pendientes: se repite. */
+  repeat?: Repeat;
+  /** Recordatorios: de qué tipo es (sin tipo: tarea). Puede ser uno propio (id de `customKinds`). */
+  kind?: ReminderKind | string;
+  /** Recordatorios: a qué hora (minutos desde la medianoche), si importa. */
+  at?: number;
+  /** Recordatorios: cuánto antes avisar, en minutos (60 = una hora antes, 1440 = un día antes). */
+  remind?: number;
+  /** Cumpleaños y aniversarios: el año en que empezó (para decir cuántos cumple). */
+  since?: number;
+  /** Cuándo se completó. */
+  doneAt?: DateKey;
+}
+/** Cómo se ordena la lista de pendientes. */
+export type PendingSort = "prioridad" | "fecha" | "manual";
+/** Un día en "¿Cómo te sentiste hoy?": las emociones (1 a 3) y unas líneas. No suma horas al balde. */
+export interface MoodEntry {
+  date: DateKey;
+  feelings: string[];
+  text: string;
 }
 export interface UserList {
   id: string;
   type: ListType;
   title: string;
   items: ListItem[];
+  /** Pendientes: los grupos que armaste, cómo se ordena y si se ocultan los completados. */
+  groups?: string[];
+  sort?: PendingSort;
+  hideDone?: boolean;
+  /** Recordatorios: los tipos que no se muestran (incluye "feriado"). */
+  hiddenKinds?: string[];
+  /** Recordatorios: feriados y fechas que no querés ver ("Día del Niño" para siempre, "Día del Niño@2026-08-16" solo ese). */
+  hiddenHolidays?: string[];
+  /** Recordatorios: tipos propios, con su nombre, ícono y color. */
+  customKinds?: { id: string; name: string; emoji: string; color: string }[];
   /** Oculta: no se ve en el tablero (se vuelve a mostrar desde «ocultas»). */
   hidden?: boolean;
 }
@@ -305,6 +343,10 @@ export interface PlannerState {
   renameList: (id: string, title: string) => void;
   setListItems: (id: string, items: ListItem[]) => void;
   setListHidden: (id: string, hidden: boolean) => void;
+  updateList: (id: string, patch: Partial<Omit<UserList, "id" | "type">>) => void;
+  /** "¿Cómo te sentiste hoy?": un registro por día. */
+  moods: MoodEntry[];
+  setMood: (entry: MoodEntry) => void;
   /** Tu balde ideal: horas por semana para cada cosa que es para vos (si no se ajustó, los valores recomendados). */
   idealHours: Partial<Record<string, number>>;
   setIdealHours: (h: Partial<Record<string, number>>) => void;
@@ -395,7 +437,7 @@ export interface PlannerState {
 /** Dónde se guardan los datos en el navegador. Antes se llamaba "lifeplan:v1". */
 const STORAGE_KEY = "lifebucket:v1";
 /** Versión del formato de los datos (la usa también la nube). */
-export const STORE_VERSION = 10;
+export const STORE_VERSION = 12;
 const LEGACY_STORAGE_KEY = "lifeplan:v1";
 
 // Migración del nombre: si hay datos con la clave vieja y todavía no con la nueva, se copian
@@ -439,7 +481,14 @@ export const usePlanner = create<PlannerState>()(
       tasks: [],
       moments: [],
       logros: [],
-      lists: [],
+      // Pendientes aparece de entrada en el tablero.
+      lists: [{ id: "pendientes", type: "pendientes", title: "Recordatorios", items: [] }],
+      moods: [],
+      setMood: (entry) =>
+        set((s) => ({
+          moods: [...s.moods.filter((m) => m.date !== entry.date), ...(entry.feelings.length || entry.text.trim() ? [entry] : [])].sort((a, b) => a.date.localeCompare(b.date)),
+        })),
+      updateList: (id, patch) => set((s) => ({ lists: s.lists.map((l) => (l.id === id ? { ...l, ...patch } : l)) })),
       addList: (type, title) => {
         // Una sola lista por tipo: si ya está, se vuelve a mostrar.
         const had = get().lists.find((l) => l.type === type);
@@ -810,7 +859,22 @@ export function migratePlanner(persisted: unknown, version: number): PlannerStat
   if (version < 9) state = { ...state, sleepSet: state.sleepSet || state.setupDone || (state.routine ?? []).length > 0 };
   // v10: una sola lista por tipo; si había repetidas, sus ítems se juntan en la primera.
   if (version < 10) state = { ...state, lists: mergeListsByType(state.lists ?? []) };
+  // v11: la checklist para repetir pasa a Pendientes (cada paso, como pendiente que se repite cada día) y
+  // Pendientes está siempre; llega "¿Cómo te sentiste hoy?".
+  if (version < 11) state = { ...state, lists: checklistToPending(state.lists ?? []), moods: state.moods ?? [] };
+  // v12: Pendientes pasa a llamarse Recordatorios (con tipos: cumpleaños, pagos, salud…).
+  if (version < 12) state = { ...state, lists: (state.lists ?? []).map((l) => (l.type === "pendientes" && l.title === "Pendientes" ? { ...l, title: "Recordatorios" } : l)) };
   return state;
+}
+
+function checklistToPending(lists: UserList[]): UserList[] {
+  const checks = lists.filter((l) => l.type === "checklist");
+  let out = lists.filter((l) => l.type !== "checklist");
+  const moved: ListItem[] = checks.flatMap((c) => c.items.map((i) => ({ ...i, done: false, repeat: "diaria" as const, group: c.title })));
+  const pending = out.find((l) => l.type === "pendientes");
+  if (pending) out = out.map((l) => (l === pending ? { ...l, items: [...l.items, ...moved], groups: [...new Set([...(l.groups ?? []), ...checks.map((c) => c.title)])] } : l));
+  else out = [...out, { id: "pendientes", type: "pendientes", title: "Pendientes", items: moved, groups: checks.map((c) => c.title) }];
+  return out;
 }
 
 function mergeListsByType(lists: UserList[]): UserList[] {

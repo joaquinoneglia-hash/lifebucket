@@ -1,7 +1,7 @@
 "use client";
 
 import { Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { SUGGESTED_ACTIVITIES } from "@/lib/activities";
 import { guessQuadrant } from "@/lib/categorize";
 import { cn, formatMinutes } from "@/lib/format";
@@ -39,9 +39,15 @@ export function BlockEditor({
   quadrants,
   minutes: initialMinutes,
   draft,
+  onPreview,
 }: {
-  /** Un bloque nuevo precargado (por ejemplo, desde la configuración guiada: "Trabajo", de lunes a viernes). */
-  draft?: { name: string; quadrant: QuadrantId; days: number[]; lock?: boolean; guided?: boolean };
+  /**
+   * Un bloque nuevo precargado (por ejemplo, desde la configuración guiada: "Trabajo", de lunes a viernes).
+   * En la guía trae su propia pregunta como título y el ejemplo del nombre.
+   */
+  draft?: { name: string; quadrant: QuadrantId; days: number[]; lock?: boolean; guided?: boolean; title?: string; placeholder?: string; kicker?: string; subtitle?: string };
+  /** Mientras lo armás, cómo quedaría (para dibujarlo en el calendario). */
+  onPreview?: (b: RoutineBlock | null) => void;
   /** Duración inicial al crear (p. ej. la franja que arrastraste). */
   minutes?: number;
   /** Qué categorías se pueden elegir (por defecto, todas menos Libre). */
@@ -82,9 +88,14 @@ export function BlockEditor({
   const [from, setFrom] = useState(block?.start ?? start);
   const [minutes, setMinutes] = useState(block?.minutes ?? initialMinutes ?? 60);
   const valid = name.trim() && days.length;
+  useEffect(() => {
+    onPreview?.(days.length ? { id: block?.id ?? "preview", quadrant, name: name.trim() || "…", days, start: from, minutes } : null);
+  }, [quadrant, name, days, from, minutes]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => onPreview?.(null), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const desktop = useMediaQuery("(min-width: 1024px)");
 
   return (
-    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="routine-block-title" width="max-w-[440px]">
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="routine-block-title" width="max-w-[440px]" side={!!draft?.guided && desktop}>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -93,13 +104,15 @@ export function BlockEditor({
         }}
         className="flex flex-col gap-4 p-5 sm:p-6"
       >
+        {draft?.kicker && !block && <p data-guided-editor className="-mb-2 text-[11px] font-semibold tracking-[0.16em] text-ink-faint uppercase">{draft.kicker}</p>}
         <h2 id="routine-block-title" className="type-headline">
-          {block ? "Cambiar bloque" : "Sumar a tu semana"}
+          {block ? "Cambiar bloque" : (draft?.title ?? "Sumar a tu semana")}
         </h2>
+        {draft?.subtitle && !block && <p className="-mt-2 rounded-xl bg-[color-mix(in_oklab,#d99a00_12%,transparent)] px-3 py-2 text-[12.5px] leading-snug font-medium text-[#8a6200]">{draft.subtitle}</p>}
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="routine-name" className="text-[12px] text-ink-muted">
-            {block ? "¿Qué es?" : "¿Qué vas a agregar?"}
+            {block ? "¿Qué es?" : draft?.title ? "Nombre" : "¿Qué vas a agregar?"}
           </label>
           <input
             id="routine-name"
@@ -109,7 +122,7 @@ export function BlockEditor({
               setTyped(true);
               write(e.target.value);
             }}
-            placeholder="Gimnasio, trabajo, leer, almuerzo…"
+            placeholder={draft?.placeholder ?? "Gimnasio, trabajo, leer, almuerzo…"}
             autoComplete="off"
             enterKeyHint="next"
             className="h-10 rounded-md border border-line bg-surface px-3 text-[14px] focus:border-ink focus:outline-none"
@@ -283,7 +296,7 @@ export function BlockEditor({
           <div className="flex gap-2">
             <GhostButton onClick={onClose}>Cancelar</GhostButton>
             <PrimaryButton type="submit" disabled={!valid}>
-              {block ? "Guardar" : "Sumar"}
+              {block ? "Guardar" : draft?.kicker ? "Guardar y seguir" : "Sumar"}
             </PrimaryButton>
           </div>
         </footer>

@@ -52,6 +52,10 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
   }, []);
   const days = monthDays(month);
   const stats = rangeStats(goals, checks, days, today, startedAt);
+  // El % del mes: tildes hechas sobre todas las casillas del mes (no negociables × días), de 0 a 100.
+  const boxes = goals.length * days.length;
+  const ticked = days.reduce((acc, d) => acc + goals.filter((g) => (checks[d] ?? []).includes(g.id)).length, 0);
+  const boxPct = boxes ? Math.round((ticked / boxes) * 100) : 0;
   const isCurrent = month === today.slice(0, 7);
   const shift = (by: number) => {
     const d = fromKey(anchor);
@@ -101,7 +105,7 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
               "Todavía no empezó"
             ) : (
               <>
-                <b className="font-semibold text-ink">{stats.pct}%</b> cumplido en {monthName.toLowerCase()}
+                <b className="font-semibold text-ink">{boxPct}%</b> cumplido en {monthName.toLowerCase()}
               </>
             )}
           </p>
@@ -164,7 +168,7 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
               </div>
             </div>
 
-            <div ref={listRef} role="grid" aria-label={`No negociables: ${label}`} className={cn("relative px-2 pb-2", fit && "flex min-h-0 flex-1 flex-col overflow-y-auto")}>
+            <div ref={listRef} role="grid" aria-label={`No negociables: ${label}`} className={cn("relative px-2", fit ? "flex min-h-0 flex-1 flex-col overflow-y-auto pb-0" : "pb-2")}>
               {/* El nombre de cada objetivo arriba de su columna, en vertical. */}
               <div role="row" className="sticky top-0 z-10 grid shrink-0 items-end bg-surface pt-1 pb-1.5 text-[10.5px] text-ink-muted" style={{ gridTemplateColumns: cols }}>
                 <span role="columnheader" className="pl-1.5 font-semibold">
@@ -250,7 +254,7 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
                 );
               })}
               {/* Totales por no negociable (cuántos días del mes) y el total del mes. */}
-              <div role="row" className="sticky bottom-0 z-10 mt-1 grid shrink-0 items-center border-t border-line bg-surface pt-1.5 text-[11px] font-semibold tabular-nums" style={{ gridTemplateColumns: cols }}>
+              <div role="row" className="sticky bottom-0 z-10 mt-1 grid shrink-0 items-center border-t border-line bg-surface pt-1.5 pb-2 text-[11px] font-semibold tabular-nums" style={{ gridTemplateColumns: cols }}>
                 <span role="rowheader" className="pl-1.5 text-ink-muted">
                   Total
                 </span>
@@ -260,8 +264,8 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
                   </span>
                 ))}
                 <span aria-hidden />
-                <span role="gridcell" className="pr-1 text-right">
-                  {stats.pct}%
+                <span role="gridcell" title={`${ticked} de ${boxes} casillas`} className="pr-1 text-right">
+                  {boxPct}%
                 </span>
               </div>
             </div>
@@ -363,6 +367,7 @@ function GoalEditor({ goals, onDone }: { goals: DailyGoal[]; onDone: () => void 
             onDone();
             window.setTimeout(() => window.dispatchEvent(new Event("lb:noneg-listo")), 50);
           }}
+          data-tour="noneg-listo"
           className="pressable h-8 rounded-full bg-ink px-4 text-[12.5px] font-semibold text-surface hover:bg-ink/90"
         >
           Listo
