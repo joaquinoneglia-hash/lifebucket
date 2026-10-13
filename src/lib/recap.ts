@@ -93,7 +93,7 @@ export function buildRecap(d: Data, range: Range, now = new Date()) {
   const prev = d.routineHistory.find((h) => h.date === toKey(addDays(fromKey(monday), -7)))?.shares;
   if (range === "semana" && prev) {
     const diff = pct(mine) - ACTIVE_PARTS.reduce((acc, p) => acc + (prev[p] ?? 0), 0);
-    if (diff !== 0) bucketText += ` Frente a la semana pasada, ${diff > 0 ? "sumaste" : "perdiste"} ${Math.abs(diff)} puntos de tiempo para vos.`;
+    if (diff !== 0) bucketText += ` Frente a la semana pasada, ${diff > 0 ? "sumaste" : "perdiste"} ${Math.abs(diff)} puntos de tiempo para mí.`;
   }
 
   // Logros diarios (en la proyección: lo que va del año).
@@ -165,7 +165,7 @@ export function buildRecap(d: Data, range: Range, now = new Date()) {
   const intro =
     range === "anio"
       ? `${period}. Si repetís lo que venís haciendo, así va a quedar repartido tu año: ${hrs(minutes.sueno)} durmiendo, ${hrs(minutes.trabajo)} trabajando y ${hrs(mine)} para lo que te hace bien.`
-      : `${period}. ${top.length ? `Lo tuyo se llevó ${hrs(mine)}` : "Todavía no hay tiempo para vos cargado"}${dailyGoals.length && goals.days ? `, cumpliste el ${goals.pct}% de tus no negociables` : ""}${entries.length ? ` y anotaste ${entries.length} ${entries.length === 1 ? "cosa que hiciste" : "cosas que hiciste"}` : ""}.`;
+      : `${period}. ${top.length ? `Lo tuyo se llevó ${hrs(mine)}` : "Todavía no hay tiempo para mí cargado"}${dailyGoals.length && goals.days ? `, cumpliste el ${goals.pct}% de tus no negociables` : ""}${entries.length ? ` y anotaste ${entries.length} ${entries.length === 1 ? "cosa que hiciste" : "cosas que hiciste"}` : ""}.`;
 
   return {
     range,

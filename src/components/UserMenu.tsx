@@ -133,36 +133,41 @@ function SyncLine() {
   );
 }
 
-/** Los colores de la app: neutro (minimalista), pastel o intenso. */
-const PALETTES: { id: Palette; label: string; dots: string[] }[] = [
-  { id: "pastel", label: "Color", dots: ["#2e9e63", "#8a5cf0", "#e5508a"] },
-  { id: "neutro", label: "Blanco y negro", dots: ["#111", "#6b6b6b", "#c4c4c4"] },
-];
 
-/** Los colores de la app, arriba: cada clic pasa a la paleta siguiente (pastel → intenso → neutro). */
-export function PaletteSwitch() {
+/**
+ * Los colores de la app, arriba: un interruptor (prendido, a color; apagado, blanco y negro). La perilla se
+ * desliza y se pinta con los colores de la app.
+ */
+export function PaletteSwitch({ compact }: { compact?: boolean }) {
   const [p, setP] = useState<Palette>("pastel");
   useEffect(() => setP(getPalette()), []);
-  const i = Math.max(0, PALETTES.findIndex((o) => o.id === p));
-  const cur = PALETTES[i];
-  const next = PALETTES[(i + 1) % PALETTES.length];
+  const color = p !== "neutro";
+  const toggle = () => {
+    const next: Palette = color ? "neutro" : "pastel";
+    setP(next);
+    setPalette(next);
+    play("pop");
+  };
   return (
-    <button
-      type="button"
-      onClick={() => {
-        setP(next.id);
-        setPalette(next.id);
-        play("pop");
-      }}
-      aria-label={`Colores: ${cur.label}. Cambiar a ${next.label}`}
-      title={`Colores: ${cur.label} (clic para ${next.label.toLowerCase()})`}
-      className="pressable grid size-10 place-items-center rounded-md hover:bg-surface/70"
-    >
-      <span className="flex -space-x-1">
-        {cur.dots.map((d) => (
-          <span key={d} className="size-2.5 rounded-full ring-2 ring-[var(--color-canvas,#f4f4f6)] transition-colors duration-200" style={{ background: d }} />
-        ))}
-      </span>
-    </button>
+    <span className="inline-flex">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={color}
+        onClick={toggle}
+        aria-label={color ? "Colores: a color (tocá para blanco y negro)" : "Colores: blanco y negro (tocá para color)"}
+        title={color ? "A color · tocá para blanco y negro" : "Blanco y negro · tocá para color"}
+        className={cn("pressable inline-flex items-center gap-1.5 rounded-full", compact ? "px-1" : "h-9 bg-surface/80 pr-1.5 pl-3 text-[12px] font-medium shadow-[var(--shadow-card)] hover:bg-surface")}
+      >
+        {!compact && <span className="w-[54px] text-left">{color ? "Color" : "B y N"}</span>}
+        <span className={cn("relative h-5 w-9 rounded-full transition-colors duration-200", color ? "bg-[linear-gradient(90deg,#96bef5,#c4b0f5,#faaacd,#ffc8aa)]" : "bg-ink/20")}>
+          <span
+            className={cn("absolute top-0.5 left-0.5 grid size-4 place-items-center rounded-full bg-white shadow-sm transition-transform duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]", color && "translate-x-4")}
+          >
+            <span className={cn("size-2 rounded-full transition-colors duration-200", color ? "bg-[conic-gradient(#5b8def,#9b7bf0,#ec6fa5,#f5a36b,#5b8def)]" : "bg-ink/50")} />
+          </span>
+        </span>
+      </button>
+    </span>
   );
 }

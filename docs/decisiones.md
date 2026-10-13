@@ -323,3 +323,15 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - **«Tiempo para vos» multicolor** (balde y editor): degradé como el fondo de la app, en lugar de verde, porque el verde es el color de Deporte.
 - **Editor más compacto:** sin el título «Categoría»; Trabajo, Tareas cotidianas y No hago nada en una sola línea, con fichas chicas como las del tiempo para vos. Se saca la leyenda debajo de los días.
 - **Eventos puntuales en el calendario:** al tocarlos, además de borrar, «Hacerlo rutina» abre el editor con ese evento cargado para elegir días y horario; al guardarlo, el evento puntual pasa a la rutina (se borra del diario para no contarlo dos veces).
+
+## 2026-10-13 — Guía más clara, avisos cerca del módulo, «Tiempo para mí» y fueguito
+
+- **Guía:** el trabajo se carga de a un paso (primero «¿Cómo se llama tu trabajo principal?», después aparecen días y horario). «¿Tenés un emprendimiento?» es una tarjeta arriba, al centro, sin señalar nada. El ejemplo del almuerzo se ofrece a la izquierda del calendario, a la altura de 12 a 13. Las flechas de las tarjetas van del lado del elemento que señalan. En los no negociables de hoy, el botón es «Hoy no hice ninguno» (si tildás todos, sigue solo). En metas, la tarjeta va arriba del campo, señalándolo. En el balde se saca «Y acá, tu sueño, tu trabajo…» y se abre el grupo si estaba cerrado, para ir directo a «Ajustar». Se saca de los atajos el paso de «Tu cuenta / modo prueba».
+- **Ojito de cada panel:** siempre visible (no solo al pasar el mouse).
+- **Colores:** un interruptor «Color / B y N» con perilla que se desliza (prendido, a color).
+- **«Tiempo para vos» pasa a llamarse «Tiempo para mí».** Cada vez que sumás tiempo para mí, suena y aparece un aviso; los hitos (la mitad, la meta, subir de puesto) también se festejan viendo el mes.
+- **Avisos del acompañante:** aparecen cerca del módulo donde estás (el último que tocaste), en verde, y se desvanecen solos; los logros grandes (día perfecto, meta cumplida) llevan papelitos. Tildar un no negociable suelto solo suena; el aviso es para el día completo.
+- **Recordatorios:** «Recordatorios» a la izquierda de la ficha y la campanita a la derecha, con sus circulitos (rojo hoy, amarillo próximos días).
+- **Fueguito:** si el trabajo es 50 % más (o más) que el «Tiempo para mí», al lado de su % titila un 🔥.
+- **La nota del balde** («no llega ni a la mitad…») sale de abajo del balde y flota al lado del trabajo. Se puede ocultar (queda un 💬 para volver a verla) pero no borrar; vuelve a mostrarse al día siguiente.
+- **Celular:** en pantallas angostas se ve solo el logo (sin la palabra) para que entren los íconos.

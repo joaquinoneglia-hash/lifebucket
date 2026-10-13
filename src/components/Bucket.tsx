@@ -4,7 +4,7 @@ import { ChevronDown, Moon, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { toKey } from "@/lib/dates";
-import { cheer } from "@/lib/motivation";
+import { cheer, lastCheerAt } from "@/lib/motivation";
 import { play } from "@/lib/sfx";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
@@ -21,7 +21,7 @@ const h = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-
 
 /**
  * Tu Balde: tu semana (o tu mes) en partes, todas sobre el 100%: Sueño, Trabajo, Tareas cotidianas, el
- * tiempo para vos (un grupo que se abre para ver deporte, mente, hobbies…) y los espacios sin completar. Se
+ * tiempo para mí (un grupo que se abre para ver deporte, mente, hobbies…) y los espacios sin completar. Se
  * ordenan de mayor a menor; cuando lo tuyo sube un puesto, se festeja. El aviso compara lo tuyo con el
  * trabajo: menos de la mitad es grave; cerca, vas bien; si lo supera, ¡logro!
  */
@@ -70,12 +70,24 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
     .map((id) => ({ id, m: id === "vos" ? mine : part[id] }))
     .sort((a, b) => b.m - a.m);
   const vosRank = rows.findIndex((r) => r.id === "vos");
+  // Cada vez que sumás tiempo para vos: sonido y un aviso (si no hubo otro más importante recién).
+  const lastMine = useRef<{ m: number; range: string } | null>(null);
+  useEffect(() => {
+    const prev = lastMine.current;
+    lastMine.current = { m: mine, range };
+    if (!prev || prev.range !== range || mine <= prev.m + 1) return;
+    const added = range === "semana" ? Math.round((mine - prev.m) / 30) / 2 : 0;
+    const t = window.setTimeout(() => {
+      if (Date.now() - lastCheerAt() > 400) cheer("mine", added >= 0.5 ? `+${String(added).replace(".", ",")} h de «Tiempo para mí» por semana. ¡Eso! 💪` : undefined, '[data-module="bucket"]');
+    }, 60);
+    return () => window.clearTimeout(t);
+  }, [mine, range]);
   // Cuando lo tuyo sube un puesto: sonido y aviso (no al abrir la app).
   const lastRank = useRef<number | null>(null);
   useEffect(() => {
     if (lastRank.current !== null && vosRank < lastRank.current) {
       const passed = rows[vosRank + 1];
-      cheer("allChecks", `¡Tu tiempo para vos superó a ${passed ? ROW_LABEL[passed.id].toLowerCase() : "otra parte"}! 🎉`);
+      cheer("allChecks", `¡Tu «Tiempo para mí» superó a ${passed ? ROW_LABEL[passed.id].toLowerCase() : "otra parte"}! 🎉`, '[data-module="bucket"]');
     }
     lastRank.current = vosRank;
   }, [vosRank]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -84,9 +96,9 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
   const ratio = minutes.trabajo ? mine / minutes.trabajo : mine > 0 ? 2 : 0;
   const level = minutes.trabajo === 0 && mine === 0 ? null : ratio >= 1 ? "logro" : ratio >= 0.5 ? "cerca" : "grave";
   const LEVEL = {
-    grave: { text: `Tu tiempo para vos no llega ni a la mitad de tu trabajo (${Math.round(ratio * 100)}%). Sumá algo para vos.`, cls: "bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]" },
+    grave: { text: `Tu «Tiempo para mí» no llega ni a la mitad de tu trabajo (${Math.round(ratio * 100)}%). Sumá algo para vos.`, cls: "bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]" },
     cerca: { text: `Estás cerquita de un buen balance entre lo tuyo y el trabajo: lo tuyo es el ${Math.round(ratio * 100)}% de tu trabajo.`, cls: "bg-[color-mix(in_oklab,#d99a00_14%,transparent)] text-[#8a6200]" },
-    logro: { text: "¡Lograste el balance! Tu tiempo para vos ya supera a tu trabajo.", cls: "bg-[color-mix(in_oklab,var(--color-success)_13%,transparent)] text-[color-mix(in_oklab,var(--color-success)_75%,var(--color-ink))]" },
+    logro: { text: "¡Lograste el balance! Tu «Tiempo para mí» ya supera a tu trabajo.", cls: "bg-[color-mix(in_oklab,var(--color-success)_13%,transparent)] text-[color-mix(in_oklab,var(--color-success)_75%,var(--color-ink))]" },
   } as const;
   // El logro se festeja una vez por semana (o por mes), con papelitos.
   const [party, setParty] = useState(false);
@@ -109,14 +121,63 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
     window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "libre", days: [slot?.day ?? 1], start: slot?.start ?? 8 * 60, minutes: 60 } }));
   };
 
+  // El trabajo se come lo tuyo (50% más o más): un fueguito que titila al lado de su %.
+  const fire = minutes.trabajo > 0 && minutes.trabajo >= mine * 1.5;
+  // La nota del balde: flota al lado del trabajo; se oculta (vuelve al día siguiente) pero no se borra.
+  const today = toKey(new Date());
+  const [noteHidden, setNoteHidden] = useState(() => {
+    try {
+      return localStorage.getItem(NOTE_KEY) === today;
+    } catch {
+      return false;
+    }
+  });
+  const hideNote = (hide: boolean) => {
+    setNoteHidden(hide);
+    try {
+      if (hide) localStorage.setItem(NOTE_KEY, today);
+      else localStorage.removeItem(NOTE_KEY);
+    } catch {}
+  };
+  const workRow = useRef<HTMLLIElement>(null);
+  const [notePos, setNotePos] = useState<React.CSSProperties | null>(null);
+  useEffect(() => {
+    if (!level || noteHidden) return setNotePos(null);
+    const place = () => {
+      const row = workRow.current?.getBoundingClientRect();
+      const card = workRow.current?.closest("section")?.getBoundingClientRect();
+      if (!row || !card || !row.height) return setNotePos(null);
+      const vw = window.innerWidth;
+      // A la derecha del balde, a la altura del trabajo; si no entra, debajo de la fila.
+      setNotePos(card.right + 290 < vw ? { left: card.right + 10, top: row.top - 6, width: 270 } : { left: card.left + 12, top: row.bottom + 6, width: card.width - 24 });
+    };
+    place();
+    const t = window.setInterval(place, 400);
+    window.addEventListener("resize", place);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("resize", place);
+    };
+  }, [level, noteHidden]);
+
   const baseRow = (id: "sueno" | "trabajo" | "libre" | "nada") => (
-    <li key={id} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] tabular-nums", part[id] === 0 && "opacity-45")}>
+    <li key={id} ref={id === "trabajo" ? workRow : undefined} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] tabular-nums", part[id] === 0 && "opacity-45")}>
       <span className="grid size-[20px] shrink-0 place-items-center rounded-full text-[11px] text-white" style={{ background: ROW_COLOR[id] }}>
         {id === "sueno" ? <Moon aria-hidden className="size-3" /> : id === "nada" ? "💤" : <QuadrantIcon id={id} className="size-3" />}
       </span>
       <span className="min-w-0 flex-1 truncate font-medium">{ROW_LABEL[id]}</span>
       <span className="text-ink-muted">{h(part[id])}</span>
+      {id === "trabajo" && fire && (
+        <span aria-label="El trabajo se come tu tiempo" title="Tu trabajo es 50% más (o más) que tu «Tiempo para mí»" className="inline-block origin-bottom motion-safe:animate-[flame_1.1s_ease-in-out_infinite]">
+          🔥
+        </span>
+      )}
       <span className="w-10 text-right font-semibold">{pct(part[id])}%</span>
+      {id === "trabajo" && level && noteHidden && (
+        <button type="button" onClick={() => hideNote(false)} aria-label="Ver la nota de tu balde" title="Ver la nota" className="pressable -mr-1 grid size-6 place-items-center rounded-full text-[12px] hover:bg-surface-sunken">
+          💬
+        </button>
+      )}
     </li>
   );
 
@@ -150,7 +211,7 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
                 <span className="grid size-[20px] shrink-0 place-items-center rounded-full text-white" style={{ background: VOS_STRONG }}>
                   <ChevronDown aria-hidden className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
                 </span>
-                <span className="min-w-0 flex-1 truncate font-semibold">Tiempo para vos</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">Tiempo para mí</span>
                 <span className="text-ink-muted">{h(mine)}</span>
                 <span className="w-10 text-right font-bold">{pct(mine)}%</span>
               </button>
@@ -190,20 +251,29 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
         )}
       </ul>
 
-      {level && (
-        <div role="status" className={cn("flex items-center gap-2.5 rounded-xl px-3 py-2", LEVEL[level].cls)}>
-          <p className="min-w-0 flex-1 text-[12.5px] leading-snug font-medium">{LEVEL[level].text}</p>
-          {level !== "logro" && (
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "cuerpo", days: [2, 4], start: 1140, minutes: 60 } }))}
-              className="pressable h-8 shrink-0 rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90"
-            >
-              Sumar algo para vos
-            </button>
-          )}
-        </div>
-      )}
+      {level &&
+        notePos &&
+        createPortal(
+          <div role="status" style={notePos} className={cn("animate-fade-up fixed z-[55] flex flex-col gap-2 rounded-2xl px-3.5 py-2.5 shadow-[var(--shadow-popover)] ring-1 ring-black/5", LEVEL[level].cls, "bg-surface")}>
+            <div className={cn("absolute inset-0 -z-10 rounded-2xl", LEVEL[level].cls)} />
+            <div className="flex items-start gap-2">
+              <p className="min-w-0 flex-1 text-[12.5px] leading-snug font-medium">{LEVEL[level].text}</p>
+              <button type="button" onClick={() => hideNote(true)} aria-label="Ocultar la nota (vuelve mañana)" title="Ocultar (vuelve mañana)" className="pressable -mt-0.5 -mr-1.5 grid size-6 shrink-0 place-items-center rounded-full opacity-70 hover:bg-black/5 hover:opacity-100">
+                <X aria-hidden className="size-3.5" />
+              </button>
+            </div>
+            {level !== "logro" && (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "cuerpo", days: [2, 4], start: 1140, minutes: 60 } }))}
+                className="pressable h-8 self-start rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90"
+              >
+                Sumar algo para vos
+              </button>
+            )}
+          </div>,
+          document.body,
+        )}
 
       {party &&
         createPortal(
@@ -224,7 +294,7 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
             <div className="animate-fade-up rounded-3xl bg-surface px-7 py-5 text-center shadow-[var(--shadow-popover)]">
               <p className="text-[30px]">🎉</p>
               <p className="mt-1 text-[18px] font-semibold">¡Lograste el balance!</p>
-              <p className="mt-1 text-[13.5px] text-ink-muted">Tu tiempo para vos supera a tu trabajo. Ese es el objetivo.</p>
+              <p className="mt-1 text-[13.5px] text-ink-muted">Tu «Tiempo para mí» supera a tu trabajo. Ese es el objetivo.</p>
             </div>
           </div>,
           document.body,
@@ -234,7 +304,8 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
 }
 
 const OPEN_KEY = "lb:balde-vos-abierto";
-const ROW_LABEL = { sueno: "Sueño", trabajo: "Trabajo", libre: "Tareas cotidianas", nada: "No hago nada", vos: "Tiempo para vos" } as const;
+const NOTE_KEY = "lb:balde-nota-oculta";
+const ROW_LABEL = { sueno: "Sueño", trabajo: "Trabajo", libre: "Tareas cotidianas", nada: "No hago nada", vos: "Tiempo para mí" } as const;
 // Sueño en azul, trabajo en negro, tareas cotidianas en gris.
 const ROW_COLOR = { sueno: "#3b6fe0", trabajo: "#1f2329", libre: "#8a919c", nada: "#c3c8d0" } as const;
 
@@ -347,7 +418,7 @@ function BaseEditor({ isMobile, onClose }: { isMobile: boolean; onClose: () => v
   );
 }
 
-// Tiempo para vos, multicolor como el fondo de la app (el verde es de Deporte): un fondo suave y el borde con
+// Tiempo para mí, multicolor como el fondo de la app (el verde es de Deporte): un fondo suave y el borde con
 // el degradé.
 const VOS_STRONG = "linear-gradient(135deg, #5b8def, #9b7bf0 40%, #ec6fa5 75%, #f5a36b)";
 const VOS_BG = `linear-gradient(120deg, color-mix(in oklab, #96bef5 22%, var(--color-surface)), color-mix(in oklab, #c4b0f5 22%, var(--color-surface)) 40%, color-mix(in oklab, #faaacd 22%, var(--color-surface)) 75%, color-mix(in oklab, #ffc8aa 24%, var(--color-surface))) padding-box, ${VOS_STRONG} border-box`;

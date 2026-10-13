@@ -88,7 +88,9 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
     toggle(date, id);
     if (want) {
       const now = dayScore(goals, usePlanner.getState().dailyChecks, date);
-      cheer(now === goals.length ? "allChecks" : "check");
+      // Una casilla suelta, solo el sonido; el aviso (con papelitos) es para el día completo.
+      if (now === goals.length) cheer("allChecks", undefined, '[data-module="diarios"]');
+      else play("pop");
     }
   };
 

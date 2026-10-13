@@ -2079,8 +2079,8 @@ export function RemindersChip({ compact }: { compact?: boolean }) {
           aria-label={compact ? "Recordatorios" : undefined}
           className={cn("pressable relative flex items-center gap-2 rounded-full whitespace-nowrap", compact ? "size-8 justify-center" : "py-2 pr-2.5 pl-3.5 text-[13px] font-medium hover:bg-surface")}
         >
-          <Bell aria-hidden className={cn("size-4 origin-top", now.length ? "text-danger" : "text-ink-muted", (now.length > 0 || soon.length > 0) && "motion-safe:animate-[bell-ring_2.6s_ease-in-out_infinite]")} />
           {!compact && "Recordatorios"}
+          <Bell aria-hidden className={cn("size-4 origin-top", now.length ? "text-danger" : "text-ink-muted", (now.length > 0 || soon.length > 0) && "motion-safe:animate-[bell-ring_2.6s_ease-in-out_infinite]")} />
           {/* Los numeritos: en rojo lo de hoy (o vencido), en amarillo lo de los próximos días. */}
           <span className={cn("flex items-center gap-0.5", compact && "absolute -top-1 -right-1")}>
             {now.length > 0 && (

@@ -572,3 +572,17 @@ html[data-palette="intenso"] body {
   84% { transform: rotate(-6deg); }
   90% { transform: rotate(3deg); }
 }
+
+/* El aviso del acompañante: aparece, se queda un momento y se desvanece subiendo. */
+@keyframes cheer-life {
+  0% { opacity: 0; transform: translate(-50%, 10px) scale(0.96); }
+  10% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -12px) scale(0.98); }
+}
+
+/* El fueguito del trabajo: titila sin parar. */
+@keyframes flame {
+  0%, 100% { transform: scale(1) rotate(-4deg); filter: brightness(1); }
+  50% { transform: scale(1.18) rotate(5deg); filter: brightness(1.15); }
+}

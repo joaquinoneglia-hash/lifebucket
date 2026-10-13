@@ -45,8 +45,8 @@ export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part
 
   // Hitos: subir de puesto, la mitad y la meta de una categoría, y el balde ideal completo.
   useEffect(() => {
-    if (weeks !== 1) return;
-    const week = thisMonday();
+    // En la semana o en el mes: cada hito se festeja una vez por período.
+    const week = weeks === 1 ? thisMonday() : `mes-${new Date().toISOString().slice(0, 7)}`;
     let hits: Record<string, string> = {};
     try {
       hits = JSON.parse(localStorage.getItem(HIT_KEY) ?? "{}");
@@ -54,7 +54,7 @@ export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part
     const fire = (id: string, text: string) => {
       if (hits[id] === week) return false;
       hits[id] = week;
-      cheer("allChecks", text);
+      cheer("allChecks", text, '[data-module="bucket"]');
       return true;
     };
     const ids = rows.map((r) => r.p as string);
@@ -71,7 +71,7 @@ export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part
       const up = rows.find((r, i) => r.minutes > 0 && before.indexOf(r.p) > i);
       if (up) {
         const passed = before[ids.indexOf(up.p)];
-        cheer("check", `${label(up.p)} pasó a ${label(passed as IdealPart)} 💪`);
+        cheer("check", `${label(up.p)} pasó a ${label(passed as IdealPart)} 💪`, '[data-module="bucket"]');
       }
     }
     prevOrder.current = ids;
@@ -80,7 +80,7 @@ export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part
     } catch {}
   }, [order, prog.pct]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Cada categoría: horas objetivo, horas llenadas y qué parte del tiempo para vos representa.
+  // Cada categoría: horas objetivo, horas llenadas y qué parte del tiempo para mí representa.
   // Cada porcentaje es sobre todo el balde (la base más lo que es para vos), igual que en «La base».
   const all = total ?? bucketTotal(minutes);
   const share = (m: number) => Math.round((m / all) * 100);
@@ -100,7 +100,7 @@ export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part
         <span className="text-right">Llenado</span>
         <span className="text-right text-[11.5px] font-semibold tracking-normal text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">{total === undefined ? `${share(prog.total)}%` : "%"}</span>
       </div>
-      <ol className="flex flex-col gap-1" aria-label="Tiempo para vos por categoría">
+      <ol className="flex flex-col gap-1" aria-label="Tiempo para mí por categoría">
         {rows.map((r) => (
           <li
             key={r.p}
@@ -129,7 +129,7 @@ export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part
           </li>
         ))}
       </ol>
-      {/* El total del tiempo para vos. */}
+      {/* El total del tiempo para mí. */}
       <div className={cn(grid, "mt-0.5 border-t border-line pt-1.5 text-[12px] font-semibold tabular-nums")}>
         <span />
         <span>Total</span>

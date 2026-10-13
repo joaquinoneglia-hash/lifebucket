@@ -171,7 +171,7 @@ export function BlockEditor({
         </div>
 
         <div className={cn("flex flex-col gap-1.5", draft?.lock && "hidden")}>
-          {/* Arriba, lo de todos los días (Trabajo, Tareas cotidianas, No hago nada); abajo, el tiempo para vos. */}
+          {/* Arriba, lo de todos los días (Trabajo, Tareas cotidianas, No hago nada); abajo, el tiempo para mí. */}
           <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-1">
               {pickable
@@ -222,7 +222,7 @@ export function BlockEditor({
             </div>
             {pickable.some((q) => FOR_YOU.includes(q.id)) && (
               <div className="flex flex-col gap-1 rounded-xl p-1.5" style={{ background: "linear-gradient(120deg, color-mix(in oklab, #96bef5 16%, var(--color-surface)), color-mix(in oklab, #c4b0f5 16%, var(--color-surface)) 40%, color-mix(in oklab, #faaacd 16%, var(--color-surface)) 75%, color-mix(in oklab, #ffc8aa 18%, var(--color-surface)))" }}>
-                <span className="px-1 text-[10.5px] font-semibold tracking-wide text-ink-muted uppercase">Tiempo para vos</span>
+                <span className="px-1 text-[10.5px] font-semibold tracking-wide text-ink-muted uppercase">Tiempo para mí</span>
                 <div className="flex flex-wrap gap-1">
                   {pickable
                     .filter((q) => FOR_YOU.includes(q.id))
@@ -266,10 +266,13 @@ export function BlockEditor({
           </p>
         </div>
 
+        {/* En la guía, de a un paso: primero el nombre; después, días y horario. */}
+        {!(draft?.guided && !block && !name.trim()) && (
+          <div className="animate-fade-up flex flex-col gap-4">
         <div className="flex flex-col gap-1.5">
 
           <span className="flex items-center justify-between text-[12px] text-ink-muted">
-            ¿Qué días?
+            {draft?.guided ? "¿Qué días y en qué horario?" : "¿Qué días?"}
             <span className="flex gap-1">
               {[
                 { label: "L a V", days: [1, 2, 3, 4, 5] },
@@ -355,7 +358,8 @@ export function BlockEditor({
             {perDay ? "Mismo horario todos los días" : "Personalizar horario por día"}
           </button>
         )}
-
+          </div>
+        )}
         <footer className="flex items-center justify-between gap-2 pt-1">
           {onDelete ? (
             <GhostButton danger onClick={onDelete}>

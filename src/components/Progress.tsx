@@ -151,7 +151,7 @@ function ProgressView({
   });
   const series: Series[] = [
     {
-      title: "Tu balde: tiempo para vos",
+      title: "Tu balde: tiempo para mí",
       hint: "Qué parte de tu mes fue para vos",
       color: "var(--color-success)",
       values: balde,

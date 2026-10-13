@@ -66,7 +66,7 @@ export function ModuleControls() {
   if (!m) return null;
   return (
     <div className="relative flex shrink-0 items-center">
-      <span className={cn("flex items-center transition-opacity duration-150", "opacity-0 group-hover/panel:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100")}>
+      <span className="flex items-center">
       <button
         type="button"
         aria-label={`Ocultar ${titleOf(m.id)}`}

@@ -50,21 +50,21 @@ const REMINDER_TEXT = "cumple de mamá el 3 de mayo";
 const NO_CHECKS: string[] = [];
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 /** Lo que se abre en el editor en cada paso: con la pregunta del paso como título. */
-const WORK = { name: "", quadrant: "trabajo" as QuadrantId, days: [1, 2, 3, 4, 5], start: 540, minutes: 480, lock: true, kicker: "Bloque 1 · Rutina", title: "¿En qué horario tenés tu trabajo principal?", placeholder: "Nombre de tu trabajo (ej.: Brandtag)" };
-const BUSINESS = { name: "", quadrant: "trabajo" as QuadrantId, days: [1, 2, 3, 4, 5], start: 17 * 60, minutes: 120, lock: true, kicker: "Bloque 1 · Rutina", title: "¿Cuándo le dedicás a tu emprendimiento?", placeholder: "¿Cómo se llama tu emprendimiento?" };
+const WORK = { name: "", quadrant: "trabajo" as QuadrantId, days: [1, 2, 3, 4, 5], start: 540, minutes: 480, lock: true, kicker: "Bloque 1 · Rutina", title: "¿Cómo se llama tu trabajo principal?", placeholder: "Ej.: Brandtag, el banco, freelance…" };
+const BUSINESS = { name: "", quadrant: "trabajo" as QuadrantId, days: [1, 2, 3, 4, 5], start: 17 * 60, minutes: 120, lock: true, kicker: "Bloque 1 · Rutina", title: "¿Cómo se llama tu emprendimiento?", placeholder: "El nombre de tu emprendimiento" };
 const ATAJOS: { sel: string; text: string }[] = [
   { sel: '[data-tour="mis-listas"]', text: "Mis listas: súper, notas, ¿dónde está?, recordatorios y los paneles que ocultaste" },
   { sel: '[data-module="semana"] header', text: "Cada panel se arrastra desde su título para moverlo" },
   { sel: 'button[aria-label^="Ocultar"]', text: "El ojito oculta un panel (vuelve desde «Mis listas»)" },
   { sel: 'button[aria-label="Deshacer el último cambio"]', text: "Deshacer el último cambio" },
-  { sel: 'button[aria-label^="Colores"]', text: "Colores: color o blanco y negro" },
+  { sel: 'button[aria-label^="Colores"]', text: "Colores: prendido, a color; apagado, blanco y negro" },
   { sel: 'button[aria-label$="los sonidos"]', text: "Prender o apagar los sonidos" },
-  { sel: 'button[aria-label="Tu cuenta"]', text: "Tu cuenta: modo prueba y salir" },
 ];
 
 type Rect = { top: number; left: number; width: number; height: number };
 type Action = { label: string; onClick: () => void; kind?: "primary" | "ghost" | "danger" };
-type Mark = { sel?: string; rect?: Rect; text: ReactNode; dark?: boolean; actions?: Action[]; extra?: ReactNode };
+/** float: una tarjeta arriba, al centro, sin señalar nada. side: de qué lado va la tarjeta (si no, se elige sola). */
+type Mark = { sel?: string; rect?: Rect; text: ReactNode; dark?: boolean; actions?: Action[]; extra?: ReactNode; float?: boolean; side?: "left" | "right" | "below" | "above" };
 
 /** Las columnas del calendario y dónde cae cada hora en pantalla. */
 function grid() {
@@ -403,6 +403,11 @@ export function Setup({
       else el.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
   }, [step.id]);
+  useEffect(() => {
+    if (step.id !== "balde-ajustar" || document.querySelector('[data-tour="ajustar-vos"]')) return;
+    document.querySelector<HTMLButtonElement>('[data-tour="balde-vos"] > button[aria-expanded="false"]')?.click();
+    window.setTimeout(() => document.querySelector('[data-tour="ajustar-vos"]')?.scrollIntoView({ block: "nearest", behavior: "smooth" }), 100);
+  }, [step.id]);
   const idealOpen = typeof document !== "undefined" && !!document.querySelector("#ideal-title");
   const idealWasOpen = useRef(false);
   useEffect(() => {
@@ -430,8 +435,8 @@ export function Setup({
           ? []
           : [
               {
-                sel: head,
-                text: "¿Tenés un emprendimiento?",
+                float: true,
+                text: "¿Tenés un emprendimiento? Si tenés, cargalo como tu trabajo.",
                 actions: [
                   { label: "Cargar mi emprendimiento", onClick: () => onAddBlock(BUSINESS), kind: "primary" },
                   { label: "Más adelante", onClick: next },
@@ -440,8 +445,13 @@ export function Setup({
               },
             ];
       case "libres":
-        if (libres === "ofrecer")
-          return [{ sel: head, text: "Agregá tus espacios libres. Por ejemplo, el almuerzo de 12 a 13, en el medio de tu trabajo.", actions: [{ label: "Mostrame cómo", onClick: runLunch, kind: "primary" }, { label: "Saltear", onClick: next }] }];
+        if (libres === "ofrecer") {
+          const g = grid();
+          // Desde el borde del calendario (las horas), así la tarjeta queda a la izquierda, a la altura del almuerzo.
+          const cal = document.querySelector('[data-module="semana"]')?.getBoundingClientRect();
+          const at = g && cal ? { left: cal.left + 8, top: g.y(12 * 60), width: g.col(5).right - cal.left - 8, height: g.y(13 * 60) - g.y(12 * 60) } : null;
+          return [{ ...(at ? { rect: at, side: "left" as const } : { sel: head }), text: "Agregá tus espacios libres. Por ejemplo, el almuerzo de 12 a 13, en el medio de tu trabajo.", actions: [{ label: "Mostrame cómo", onClick: runLunch, kind: "primary" }, { label: "Saltear", onClick: next }] }];
+        }
         if (libres === "preguntar" && lunchRect.current)
           return [
             {
@@ -534,7 +544,7 @@ export function Setup({
         return [{ sel: 'input[aria-label^="No negociable"]:focus, input[aria-label^="No negociable"]:placeholder-shown', text: "Escribí acá uno o más no negociables: los hábitos que te cuesta sostener (Enter para el siguiente)" }];
       }
       case "hoy":
-        return [{ sel: "[data-today]", text: "Tocá cada casilla o arrastrá para completar los de hoy", actions: [{ label: "Seguir", onClick: next }] }];
+        return [{ sel: "[data-today]", text: "Tocá cada casilla o arrastrá para completar los de hoy", actions: [{ label: "Hoy no hice ninguno", onClick: next }] }];
       case "noneg-ver":
         if (historyOpen) return [];
         return verPhase === "lapiz"
@@ -546,8 +556,8 @@ export function Setup({
       case "metas": {
         const input = 'input[aria-label^="Nueva meta para"]';
         const sel = document.querySelector(input) ? input : 'button[aria-label^="Sumar una meta a"]';
-        if (addedGoals === 1) return [{ sel, text: "¡Bien! ¿Querés sumar una más?", actions: [{ label: "No, sigamos", onClick: next }] }];
-        return [{ sel, text: sel === input ? "Escribí una meta importante y tocá Enter para sumarla" : "Tocá para sumar una meta importante del año" }];
+        if (addedGoals === 1) return [{ sel, side: "above", text: "¡Bien! ¿Querés sumar una más?", actions: [{ label: "No, sigamos", onClick: next }] }];
+        return [{ sel, side: "above", text: sel === input ? "Escribí una meta importante y tocá Enter para sumarla" : "Tocá para sumar una meta importante del año" }];
       }
       case "recordatorios":
         if (rem === "ofrecer")
@@ -564,7 +574,7 @@ export function Setup({
         if (rem === "escribiendo") return [{ sel: 'input[aria-label="Nuevo recordatorio"]', text: "Mirá: reconoce solo el tipo (cumpleaños), la fecha y que se repite cada año" }];
         return [{ sel: 'input[aria-label="Nuevo recordatorio"]', text: "¡Listo! Ahora probá agregar otro más", actions: [{ label: "Saltear", onClick: next }] }];
       case "balde-vos":
-        return [{ sel: '[data-tour="balde-vos"]', text: "Esto es lo que es para vos: deporte, mente y espíritu, hobbies, aprender y los tuyos. Cada fila: tu objetivo, lo que llenaste y qué parte del balde ocupa.", actions: [{ label: "Siguiente ✓", onClick: next, kind: "primary" }] }];
+        return [{ sel: '[data-tour="balde-vos"]', text: "Este es tu «Tiempo para mí»: deporte, mente y espíritu, hobbies, aprender y los tuyos. Cada fila: tu objetivo, lo que llenaste y qué parte del balde ocupa.", actions: [{ label: "Siguiente ✓", onClick: next, kind: "primary" }] }];
       case "balde-base":
         return [{ sel: '[data-tour="balde-lista"]', text: "Y esta es la base de tu vida: sueño, trabajo y tareas cotidianas, cada una con su %, ordenadas de mayor a menor.", actions: [{ label: "Siguiente ✓", onClick: next, kind: "primary" }] }];
       case "balde-libres":
@@ -591,10 +601,7 @@ export function Setup({
             { sel: '[aria-labelledby="ideal-title"] li', text: "Con − y + cambiás las horas por semana de cada cosa: deporte, mente y espíritu, hobbies…" },
             { sel: '[aria-labelledby="ideal-title"] button[aria-label="Cerrar"]', text: "Cerrá para terminar", dark: true },
           ];
-        return [
-          { sel: '[data-tour="ajustar-vos"]', text: "Tocá para ajustar tus objetivos de cada semana", actions: [{ label: "Saltear", onClick: next }] },
-          { sel: '[data-tour="ajustar-base"]', text: "Y acá, tu sueño, tu trabajo y tus tareas cotidianas", dark: true },
-        ];
+        return [{ sel: '[data-tour="ajustar-vos"]', text: "Tocá para ajustar tus objetivos de cada semana", actions: [{ label: "Saltear", onClick: next }] }];
       case "atajos": {
         const a = ATAJOS[atajo];
         if (!a) return [];
@@ -616,19 +623,22 @@ export function Setup({
     return r && r.width > 0 ? r : null;
   };
   const chip = (m: Mark, k: number) => {
-    const r = resolve(m);
-    if (!r) return null;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const w = 280;
-    const side = r.left + r.width + w + 24 < vw ? "right" : r.left - w - 24 > 0 ? "left" : "below";
+    if (m.float) return floatCard(m, k);
+    const r = resolve(m);
+    if (!r) return null;
+    const side = m.side ?? (r.left + r.width + w + 24 < vw ? "right" : r.left - w - 24 > 0 ? "left" : "below");
     const cy = Math.min(Math.max(80, r.top + r.height / 2), vh - 100);
     const style: React.CSSProperties =
       side === "right"
         ? { top: cy, left: r.left + r.width + 14, transform: "translateY(-50%)" }
         : side === "left"
           ? { top: cy, right: vw - r.left + 14, transform: "translateY(-50%)" }
-          : { top: Math.min(r.top + r.height + 12, vh - 170), left: Math.min(Math.max(12, r.left), vw - w - 12) };
+          : side === "above"
+            ? { top: r.top - 12, left: Math.min(Math.max(12, r.left - 8), vw - w - 12), transform: "translateY(-100%)" }
+            : { top: Math.min(r.top + r.height + 12, vh - 170), left: Math.min(Math.max(12, r.left), vw - w - 12) };
     return (
       <div key={k}>
         <span aria-hidden className={cn("fixed rounded-xl ring-[3px]", m.dark ? "ring-ink/80" : "animate-pulse ring-[#d99a00]")} style={{ top: r.top - 4, left: r.left - 4, width: r.width + 8, height: r.height + 8 }} />
@@ -637,9 +647,12 @@ export function Setup({
           className={cn("fixed flex w-max max-w-[280px] flex-col gap-1.5 rounded-2xl px-3 py-2.5 text-[13px] leading-snug font-semibold shadow-[var(--shadow-popover)]", m.dark ? "bg-ink text-surface" : "bg-[#d99a00] text-white", m.actions && "pointer-events-auto")}
           style={style}
         >
+          {/* La flecha, del lado del elemento que señala. */}
           <span className="flex items-start gap-1.5">
-            {side !== "below" && <span className="text-[15px] leading-none">{side === "right" ? "←" : "→"}</span>}
+            {side === "right" && <span className="text-[15px] leading-none">←</span>}
+            {side === "above" && <span className="text-[15px] leading-none">↓</span>}
             <span>{m.text}</span>
+            {side === "left" && <span className="ml-auto text-[15px] leading-none">→</span>}
           </span>
           {m.extra}
           {m.actions && (
@@ -664,6 +677,21 @@ export function Setup({
     );
   };
 
+  // Una tarjeta arriba, al centro de la pantalla (para preguntas que no señalan nada).
+  const floatCard = (m: Mark, k: number) => (
+    <div key={k} role="note" className="animate-fade-up pointer-events-auto fixed top-20 left-1/2 z-[2] flex w-[min(440px,calc(100vw-32px))] -translate-x-1/2 flex-col gap-2.5 rounded-2xl bg-[#d99a00] px-4 py-3.5 text-[14.5px] leading-snug font-semibold text-white shadow-[var(--shadow-popover)]">
+      <span>{m.text}</span>
+      {m.actions && (
+        <span className="flex flex-wrap gap-1.5">
+          {m.actions.map((a) => (
+            <button key={a.label} type="button" onClick={a.onClick} className={cn("pressable h-9 rounded-full px-3.5 text-[13px] font-semibold", a.kind === "primary" ? "bg-white text-[#8a6200]" : a.kind === "danger" ? "bg-[#b42318] text-white" : "bg-white/20 text-white hover:bg-white/30")}>
+              {a.label}
+            </button>
+          ))}
+        </span>
+      )}
+    </div>
+  );
   const centerCard = (body: ReactNode, cta: string, onCta: () => void, secondary?: { label: string; onClick: () => void }) => (
     <div className="absolute inset-0 grid place-items-center overflow-y-auto p-4">
       <div role="dialog" aria-labelledby="setup-title" className="pointer-events-auto animate-fade-up relative flex w-full max-w-[560px] flex-col gap-3 rounded-3xl bg-surface p-7 shadow-[var(--shadow-popover)] sm:p-8">

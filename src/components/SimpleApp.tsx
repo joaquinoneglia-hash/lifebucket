@@ -764,7 +764,7 @@ export function SimpleApp() {
           <div className="flex items-center justify-between gap-1">
             <h1 className="flex items-center gap-1.5">
               <BrandMark size={22} />
-              <span className="text-[14px] font-semibold tracking-[0.16em] max-[359px]:text-[12px] max-[359px]:tracking-[0.08em]">
+              <span className="text-[14px] font-semibold tracking-[0.16em] max-[409px]:sr-only">
                 LIFEBUCKET
               </span>
             </h1>
@@ -776,7 +776,7 @@ export function SimpleApp() {
               <ProgressButton compact />
               <BitacoraButton compact />
               <UndoButton className="size-8" />
-              <PaletteSwitch />
+              <PaletteSwitch compact />
               {soundButton}
               <UserMenu />
             </div>

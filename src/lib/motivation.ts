@@ -15,7 +15,8 @@ export type CheerKind =
   | "goalPostponed"
   | "routine"
   | "setupStep"
-  | "welcome";
+  | "welcome"
+  | "mine";
 
 const PHRASES: Record<CheerKind, string[]> = {
   check: ["¡Uno más! Así se construye un hábito.", "Bien ahí. Paso a paso.", "Tildado. Tu yo de mañana te lo agradece.", "Eso. Lo pequeño, todos los días.", "Sumaste. Seguí así."],
@@ -29,6 +30,7 @@ const PHRASES: Record<CheerKind, string[]> = {
   routine: ["Tu rutina toma forma.", "Un bloque más en tu semana."],
   setupStep: ["¡Listo! Un paso menos.", "Muy bien. Seguimos.", "Perfecto. Ya casi."],
   welcome: ["Bienvenido a tu dashboard de vida."],
+  mine: ["Más tiempo para vos. ¡Eso!", "Tu balde se llena de lo que te hace bien.", "Bien ahí: un rato más para vos."],
 };
 
 const SOUNDS: Record<CheerKind, Sfx | null> = {
@@ -43,9 +45,13 @@ const SOUNDS: Record<CheerKind, Sfx | null> = {
   routine: null,
   setupStep: "complete",
   welcome: "complete",
+  mine: "bubble",
 };
 
 export const CHEER_EVENT = "lb:cheer";
+/** Cuándo fue el último aviso (para no pisar uno importante con otro chico). */
+let lastAt = 0;
+export const lastCheerAt = () => lastAt;
 const last: Partial<Record<CheerKind, number>> = {};
 
 /** Una frase al azar (sin repetir la última de ese tipo). */
@@ -57,11 +63,12 @@ export function phrase(kind: CheerKind) {
   return list[i];
 }
 
-/** Celebra: suena y muestra la frase un momento abajo de la pantalla. */
-export function cheer(kind: CheerKind, text?: string) {
+/** Celebra: suena y muestra la frase un momento cerca del módulo (anchor: un selector, si no el último que tocaste). */
+export function cheer(kind: CheerKind, text?: string, anchor?: string) {
   const sound = SOUNDS[kind];
   if (sound) play(sound);
-  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CHEER_EVENT, { detail: { kind, text: text ?? phrase(kind) } }));
+  lastAt = Date.now();
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CHEER_EVENT, { detail: { kind, text: text ?? phrase(kind), anchor } }));
 }
 
 /** Frases para el saludo de cada momento del día. */
