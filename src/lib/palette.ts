@@ -5,7 +5,7 @@ const KEY = "lb:palette";
 export function getPalette(): Palette {
   try {
     const v = localStorage.getItem(KEY);
-    return v === "neutro" || v === "intenso" ? v : "pastel";
+    return v === "neutro" ? v : "pastel";
   } catch {
     return "pastel";
   }

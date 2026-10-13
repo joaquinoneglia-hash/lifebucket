@@ -460,6 +460,13 @@ function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () =>
           </div>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {/* Durante la guía: qué es esto y cómo seguir. */}
+          {!usePlanner.getState().setupDone && (
+            <p className="mb-4 flex items-center gap-2 rounded-xl bg-[#d99a00] px-3.5 py-2.5 text-[13.5px] font-semibold text-white">
+              <span aria-hidden>👉</span>
+              Acá ves la vista total de tus resultados: el mes, la semana y el año. Cuando quieras, cerrá con la ✕ de arriba para seguir.
+            </p>
+          )}
           {editing ? (
             <div className="mx-auto max-w-[520px]">
               <GoalEditor goals={goals} onDone={() => setEditing(false)} />

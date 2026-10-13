@@ -19,7 +19,8 @@ const HIT_KEY = "lb:hits";
  * ordenadas de más a menos avance. Cuando una pasa a otra, sube con una animación y un sonido; llegar a la
  * mitad o a la meta de una categoría, o a tu balde ideal, se festeja (una vez por semana cada hito).
  */
-export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, number>; weeks?: number }) {
+/** `total`: sobre cuánto se calcula el % (por defecto, todo el balde). */
+export function GoalsBoard({ minutes, weeks = 1, total }: { minutes: Record<Part, number>; weeks?: number; total?: number }) {
   const custom = usePlanner((s) => s.idealHours);
   const ideal = idealOf(custom);
   const prog = idealProgress(minutes, ideal, weeks);
@@ -81,7 +82,7 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
 
   // Cada categoría: horas objetivo, horas llenadas y qué parte del tiempo para vos representa.
   // Cada porcentaje es sobre todo el balde (la base más lo que es para vos), igual que en «La base».
-  const all = bucketTotal(minutes);
+  const all = total ?? bucketTotal(minutes);
   const share = (m: number) => Math.round((m / all) * 100);
   const grid = "grid grid-cols-[14px_minmax(0,1fr)_52px_52px_44px] items-center gap-x-2";
   return (
@@ -89,7 +90,7 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
       <div className={cn(grid, "pb-0.5 text-[10px] font-semibold tracking-wide text-ink-faint uppercase")}>
         <span />
         <span className="flex items-center gap-1.5 whitespace-nowrap">
-          Para vos
+          {total === undefined && "Para vos"}
           <button type="button" data-tour="ajustar-vos" title="Ajustar las horas objetivo de cada cosa" onClick={() => setEdit(true)} className="pressable inline-flex h-6 items-center gap-1 rounded-full bg-surface px-2 text-[11px] font-semibold tracking-normal text-ink normal-case ring-1 ring-line hover:ring-ink">
             <SlidersHorizontal aria-hidden className="size-3" />
             Ajustar
@@ -97,7 +98,7 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
         </span>
         <span className="text-right">Objetivo</span>
         <span className="text-right">Llenado</span>
-        <span className="text-right text-[11.5px] font-semibold tracking-normal text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">{share(prog.total)}%</span>
+        <span className="text-right text-[11.5px] font-semibold tracking-normal text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">{total === undefined ? `${share(prog.total)}%` : "%"}</span>
       </div>
       <ol className="flex flex-col gap-1" aria-label="Tiempo para vos por categoría">
         {rows.map((r) => (
@@ -151,7 +152,7 @@ function IdealEditor({ onClose }: { onClose: () => void }) {
   const ideal = idealOf(custom);
   const total = IDEAL_PARTS.reduce((a, p) => a + ideal[p], 0);
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-ink/35 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[90] grid place-items-center bg-ink/35 p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div role="dialog" aria-labelledby="ideal-title" className="animate-fade-up relative flex w-full max-w-[460px] flex-col gap-3 rounded-3xl bg-surface p-6 shadow-[var(--shadow-popover)]">
         <button type="button" aria-label="Cerrar" onClick={onClose} className="pressable absolute top-3 right-3 grid size-9 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken">
           <X aria-hidden className="size-4" />

@@ -226,6 +226,8 @@ export interface UserList {
   hiddenKinds?: string[];
   /** Recordatorios: feriados y fechas que no querés ver ("Día del Niño" para siempre, "Día del Niño@2026-08-16" solo ese). */
   hiddenHolidays?: string[];
+  /** Recordatorios: nombres propios para feriados y fechas especiales (por su nombre de siempre). */
+  holidayNames?: Record<string, string>;
   /** Recordatorios: tipos propios, con su nombre, ícono y color. */
   customKinds?: { id: string; name: string; emoji: string; color: string }[];
   /** Oculta: no se ve en el tablero (se vuelve a mostrar desde «ocultas»). */
@@ -371,6 +373,9 @@ export interface PlannerState {
   /** El primer día que usaste la app: las métricas del mes arrancan acá. */
   startedAt: DateKey | "";
   setStartedAt: (date: DateKey) => void;
+  /** País donde vivís (código ISO): define los feriados y fechas patrias. */
+  country: string;
+  setCountry: (country: string) => void;
   /** Objetivos diarios (la base son 5; se pueden sumar más). */
   dailyGoals: DailyGoal[];
   /** Qué objetivos diarios se cumplieron cada día: fecha → ids. */
@@ -527,6 +532,8 @@ export const usePlanner = create<PlannerState>()(
       setGoalMonth: (month, ids) => set((s) => ({ goalMonths: { ...s.goalMonths, [month]: ids } })),
       startedAt: "",
       setStartedAt: (startedAt) => set({ startedAt }),
+      country: "AR",
+      setCountry: (country) => set({ country }),
       dailyGoals: [],
       dailyChecks: {},
       routineHistory: [],

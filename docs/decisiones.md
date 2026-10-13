@@ -294,3 +294,16 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - **Calendario:** se ven todas las horas al costado, más legibles.
 - **Días elegidos en verde** (editor y guía), con la aclaración de que si algún día es en otro horario se cambia después en el calendario.
 - **Guía, «Agregá tus espacios libres»:** «Por ejemplo, voy a agregar el almuerzo de 12 a 13»; después pregunta «¿Te sirve?» con «Sí, dejalo» o «No, borralo», y explica cómo sumar lo demás arrastrando.
+
+## 2026-10-13 — Balde por partes, Recordatorios arriba, Mi Progreso y país
+
+- **Tu balde sin «La base»:** Sueño (azul), Trabajo (negro) y Tareas cotidianas (gris) son filas propias, y todo va sobre el 100 % junto con el tiempo para vos y los espacios libres sin completar (con su %; tocándolos se completan en la rutina). Las filas se ordenan de mayor a menor, así «Tiempo para vos» queda arriba o abajo de cada parte según cuánto ocupa; cuando sube un puesto suena y aparece un aviso. El grupo «Tiempo para vos» se pliega (deporte, mente, hobbies…).
+- **El aviso del balde compara lo tuyo con el trabajo:** menos de la mitad es grave (rojo); de la mitad en adelante, amarillo («estás cerquita»); si lo supera, logro con papelitos y fanfarria (una vez por semana o mes).
+- **Mi Progreso** (arriba, al lado de «Mis listas») reemplaza al «Resumen» del balde: solo la evolución del año mes a mes de cada módulo (balde, no negociables, metas, recordatorios y ánimo).
+- **Recordatorios arriba:** ficha fija «Recordatorios» con campanita: en rojo lo que vence hoy o ya venció, en amarillo lo de los próximos 7 días (al pasar el mouse, cuántos por tipo). Abre la vista grande. Al lado, un campo para sumar uno rápido; sus opciones (fecha, tipo, aviso) flotan debajo sin ocupar lugar. Se saca de «Mis listas». En el celular, solo el ícono con el número.
+- **Lista de recordatorios:** arranca mostrando este mes (filtros Este mes · Esta semana · Todas las fechas; lo vencido se ve siempre); los meses se pliegan y los que vienen arrancan cerrados; «Sin fecha» va al final, debajo de «Próximas fechas».
+- **Aviso por defecto:** un día antes a la misma hora, y otra vez el día y la hora del evento.
+- **Mover en el calendario uno que se repite** pregunta «Solo este» (queda una copia suelta y el original sigue con su próxima fecha) o «Todos».
+- **Configurar tipos:** cada tipo se puede editar, también los de siempre (se guardan como propios con el mismo id). «Feriados y fechas especiales» → «Ver fechas»: todas las del año, para renombrarlas, ocultarlas o volver a mostrarlas, y elegir el país.
+- **País** (en la bienvenida de la guía, arranca con el del navegador): define feriados y fechas patrias. Calculados sin conexión para Argentina, Uruguay, Chile, Paraguay, México, Colombia, Perú, España y Estados Unidos; para otros países, solo las fechas universales.
+- **Rutina semanal:** se saca «Editar tu rutina» y «Borrar» pasa a ser «Limpiar». Lo que sumás a la rutina ya vale de acá en adelante para todos los meses que vienen (las semanas pasadas quedan guardadas como estaban).

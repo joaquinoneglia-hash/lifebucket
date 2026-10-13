@@ -321,6 +321,7 @@ export function ListsMenu() {
         type="button"
         onClick={() => (open ? setOpen(false) : show())}
         aria-expanded={open}
+        data-tour="mis-listas"
         className="pressable flex items-center gap-2 rounded-full bg-surface/80 px-3.5 py-2 text-[13px] font-medium whitespace-nowrap shadow-[var(--shadow-card)] hover:bg-surface"
       >
         <ListPlus aria-hidden className="size-4 text-ink-muted" />
@@ -330,7 +331,7 @@ export function ListsMenu() {
         <div className="animate-fade-up absolute top-full left-0 z-[60] mt-2 w-[300px] rounded-2xl border border-line bg-surface p-2 shadow-[var(--shadow-popover)]">
           <p className="px-2 pt-1 pb-1.5 text-[11px] font-semibold tracking-wide text-ink-faint uppercase">Tus listas</p>
           <ul className="flex flex-col">
-            {LIST_TYPES.map((t) => {
+            {LIST_TYPES.filter((t) => t.id !== "pendientes").map((t) => {
               const l = lists.find((x) => x.type === t.id);
               const shown = !!l && !l.hidden;
               const left = l ? l.items.filter((i) => !i.done).length : 0;

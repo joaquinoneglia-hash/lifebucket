@@ -1,8 +1,7 @@
 "use client";
 
 import { getPalette, setPalette, type Palette } from "@/lib/palette";
-import { usePlanner } from "@/lib/store";
-import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, Volume2, VolumeX } from "lucide-react";
 import { flushCloud, stopCloudSync, useSync } from "@/lib/cloud-sync";
 import { cn } from "@/lib/format";
 import { isMuted, play, setMuted } from "@/lib/sfx";
@@ -41,19 +40,6 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
   if (!who) return null;
   const initial = (who.name || who.email || "L").trim()[0]?.toUpperCase();
 
-  /** Borra todos los datos de la cuenta (vuelve al estado inicial, también en la nube) y cierra la sesión. */
-  const startOver = async () => {
-    // En modo prueba: solo se vacían los datos de prueba (tu cuenta no se toca).
-    if (isTestMode()) return enterTestMode();
-    const initial = usePlanner.getInitialState();
-    usePlanner.setState(Object.fromEntries(Object.entries(initial).filter(([, v]) => typeof v !== "function")), false);
-    try {
-      for (const k of Object.keys(localStorage)) if (k.startsWith("lb:") && k !== "lb:zen" && k !== "lb:muted") localStorage.removeItem(k);
-      sessionStorage.clear();
-    } catch {}
-    await signOut();
-  };
-
   const signOut = async () => {
     if (isTestMode()) return exitTestMode();
     // Primero se sube lo pendiente; después se borran los datos de este navegador (quedan en la nube).
@@ -90,25 +76,8 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
           {authConfigured && <SyncLine />}
           <button
             type="button"
-            onClick={() => {
-              setOpen(false);
-              // Empezar de cero, como alguien nuevo: se borra todo (acá y en la nube), se cierra la sesión y, al
-              // volver a entrar, arrancan la bienvenida (con su música) y la configuración guiada.
-              const ok = window.confirm(
-                "Volver a empezar de cero\n\nSe borra todo lo que cargaste: tu rutina, tus no negociables, tus metas y tu diario (en este navegador y en la nube). No se puede deshacer.\n\nDespués se cierra tu sesión para que vuelvas a entrar como la primera vez.",
-              );
-              if (!ok) return;
-              void startOver();
-            }}
-            className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
-          >
-            <RotateCcw aria-hidden className="size-4" />
-            {isTestMode() ? "Empezar la prueba de cero" : "Empezar de cero (borra todo)"}
-          </button>
-          <button
-            type="button"
             onClick={() => (isTestMode() ? exitTestMode() : enterTestMode())}
-            className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+            className="pressable flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
             <FlaskConical aria-hidden className="size-4" />
             {isTestMode() ? "Salir del modo prueba (volver a mis datos)" : "Modo prueba (sin tocar mis datos)"}
@@ -122,7 +91,7 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
                 if (mute) play("pop");
               }}
               aria-pressed={!mute}
-              className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+              className="pressable flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
             >
               {mute ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
               {mute ? "Activar sonidos" : "Silenciar sonidos"}
@@ -132,7 +101,7 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
             <button
               type="button"
               onClick={signOut}
-              className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+              className="pressable flex min-h-9 w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
             >
               <LogOut aria-hidden className="size-4" />
               Salir
@@ -166,16 +135,15 @@ function SyncLine() {
 
 /** Los colores de la app: neutro (minimalista), pastel o intenso. */
 const PALETTES: { id: Palette; label: string; dots: string[] }[] = [
-  { id: "pastel", label: "Pastel", dots: ["#2e9e63", "#8a5cf0", "#e5508a"] },
-  { id: "intenso", label: "Intenso", dots: ["#00a651", "#7c3aed", "#e00000"] },
-  { id: "neutro", label: "Neutro", dots: ["#111", "#6b6b6b", "#c4c4c4"] },
+  { id: "pastel", label: "Color", dots: ["#2e9e63", "#8a5cf0", "#e5508a"] },
+  { id: "neutro", label: "Blanco y negro", dots: ["#111", "#6b6b6b", "#c4c4c4"] },
 ];
 
 /** Los colores de la app, arriba: cada clic pasa a la paleta siguiente (pastel → intenso → neutro). */
 export function PaletteSwitch() {
   const [p, setP] = useState<Palette>("pastel");
   useEffect(() => setP(getPalette()), []);
-  const i = PALETTES.findIndex((o) => o.id === p);
+  const i = Math.max(0, PALETTES.findIndex((o) => o.id === p));
   const cur = PALETTES[i];
   const next = PALETTES[(i + 1) % PALETTES.length];
   return (

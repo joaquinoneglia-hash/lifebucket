@@ -731,7 +731,13 @@ export function WeekTemplateGrid({
           day={editing.day}
           start={editing.start}
           onClose={() => setEditing(null)}
-          onSave={(b) => {
+          onSave={(bb) => {
+            if (Array.isArray(bb)) {
+              onChange([...template, ...bb]);
+              setEditing(null);
+              return;
+            }
+            const b = bb;
             onChange(editing.block ? template.map((x) => (x.id === b.id ? b : x)) : [...template, b]);
             setEditing(null);
           }}

@@ -55,7 +55,8 @@ export function BlockEditor({
   block?: RoutineBlock;
   day: number;
   start: number;
-  onSave: (b: RoutineBlock) => void;
+  /** Uno, o varios si se eligió un horario distinto para algunos días. */
+  onSave: (b: RoutineBlock | RoutineBlock[]) => void;
   onDelete?: () => void;
   onClose: () => void;
 }) {
@@ -88,6 +89,9 @@ export function BlockEditor({
   const [from, setFrom] = useState(block?.start ?? start);
   const [minutes, setMinutes] = useState(block?.minutes ?? initialMinutes ?? 60);
   const valid = name.trim() && days.length;
+  // Distinto horario según el día: cada día con su desde y hasta.
+  const [perDay, setPerDay] = useState<Record<number, { from: number; minutes: number }> | null>(null);
+  const togglePerDay = () => setPerDay(perDay ? null : Object.fromEntries(days.map((d) => [d, { from, minutes }])));
   useEffect(() => {
     onPreview?.(days.length ? { id: block?.id ?? "preview", quadrant, name: name.trim() || "…", days, start: from, minutes } : null);
   }, [quadrant, name, days, from, minutes]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -100,6 +104,17 @@ export function BlockEditor({
         onSubmit={(e) => {
           e.preventDefault();
           if (!valid) return;
+          if (perDay && !block) {
+            // Se agrupan los días con el mismo horario en un bloque.
+            const groups = new Map<string, number[]>();
+            for (const d of days) {
+              const t = perDay[d] ?? { from, minutes };
+              const k = `${t.from}-${t.minutes}`;
+              groups.set(k, [...(groups.get(k) ?? []), d]);
+            }
+            onSave([...groups].map(([k, ds]) => ({ id: newId(), quadrant, name: name.trim(), days: ds, start: Number(k.split("-")[0]), minutes: Number(k.split("-")[1]) })));
+            return;
+          }
           onSave({ id: block?.id ?? newId(), quadrant, name: name.trim(), days, start: from, minutes });
         }}
         className="flex flex-col gap-4 p-5 sm:p-6"
@@ -108,11 +123,11 @@ export function BlockEditor({
         <h2 id="routine-block-title" className="type-headline">
           {block ? "Cambiar bloque" : (draft?.title ?? "Sumar a tu semana")}
         </h2>
-        {draft?.subtitle && !block && <p className="-mt-2 rounded-xl bg-[color-mix(in_oklab,#d99a00_12%,transparent)] px-3 py-2 text-[12.5px] leading-snug font-medium text-[#8a6200]">{draft.subtitle}</p>}
+
 
         <div className="flex flex-col gap-1.5">
           <label htmlFor="routine-name" className="text-[12px] text-ink-muted">
-            {block ? "¿Qué es?" : draft?.title ? "Nombre" : "¿Qué vas a agregar?"}
+            {block ? "¿Qué es?" : draft?.title ? "" : "¿Qué vas a agregar?"}
           </label>
           <input
             id="routine-name"
@@ -216,7 +231,7 @@ export function BlockEditor({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          {draft?.guided && <p className="rounded-lg bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-2.5 py-1.5 text-[11.5px] leading-snug text-[#8a6200]">👉 Tocá los días en que se repite (podés elegir varios, o «L a V» de un toque). Se repite todas las semanas.</p>}
+
           <span className="flex items-center justify-between text-[12px] text-ink-muted">
             ¿Qué días?
             <span className="flex gap-1">
@@ -260,7 +275,21 @@ export function BlockEditor({
           <p className="text-[11px] leading-snug text-ink-faint">En verde, los días que van. Si algún día es en otro horario, después lo cambiás tocándolo en el calendario.</p>
         </div>
 
-        {draft?.guided && <p className="-mb-1 rounded-lg bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-2.5 py-1.5 text-[11.5px] leading-snug text-[#8a6200]">👉 Elegí a qué hora empieza («Desde») y a qué hora termina («Hasta»).</p>}
+        {perDay && !block ? (
+          <div className="flex flex-col gap-1.5">
+            {WEEK_ORDER.filter((d) => days.includes(d)).map((d) => {
+              const t = perDay[d] ?? { from, minutes };
+              const set = (p: Partial<{ from: number; minutes: number }>) => setPerDay({ ...perDay, [d]: { ...t, ...p } });
+              return (
+                <div key={d} className="grid grid-cols-[48px_1fr_1fr] items-center gap-2">
+                  <span className="text-[12.5px] font-semibold">{DAY_LETTER[d].name.slice(0, 3)}</span>
+                  <Select label={`Desde (${DAY_LETTER[d].name})`} value={String(t.from)} onChange={(v) => set({ from: Number(v), minutes: Math.min(Math.max(30, t.minutes), 24 * 60 - Number(v)) })} options={TIMES.slice(0, -1).map((m) => ({ value: String(m), label: formatTime(m) }))} />
+                  <Select label={`Hasta (${DAY_LETTER[d].name})`} value={String(t.from + t.minutes)} onChange={(v) => set({ minutes: Number(v) - t.from })} options={TIMES.filter((m) => m > t.from).map((m) => ({ value: String(m), label: formatTime(m) }))} />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-2">
           <label className="flex flex-col gap-1">
             <span className="text-[12px] text-ink-muted">Desde</span>
@@ -285,6 +314,12 @@ export function BlockEditor({
             />
           </label>
         </div>
+        )}
+        {!block && days.length > 1 && (
+          <button type="button" onClick={togglePerDay} className="pressable -mt-1 self-start rounded-full px-3 py-1.5 text-[12px] font-semibold text-ink-muted ring-1 ring-line hover:bg-surface-sunken hover:text-ink">
+            {perDay ? "Mismo horario todos los días" : "Personalizar horario por día"}
+          </button>
+        )}
 
         <footer className="flex items-center justify-between gap-2 pt-1">
           {onDelete ? (

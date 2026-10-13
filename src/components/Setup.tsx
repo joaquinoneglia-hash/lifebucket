@@ -1,248 +1,91 @@
 "use client";
 
-import { ArrowRight, Briefcase, Check, Eye, GripVertical, ListPlus, Moon, Music, Plus, Rocket, Sparkles, Undo2, Volume2, VolumeX } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/format";
 import { cheer } from "@/lib/motivation";
 import { play, playIntro } from "@/lib/sfx";
 import { BrandMark } from "./BrandMark";
 import { toKey } from "@/lib/dates";
-import { QUADRANT_BY_ID, type QuadrantId } from "@/lib/quadrants";
-import { partStyle } from "@/lib/mode";
-import { QuadrantIcon } from "./QuadrantIcon";
-import { carve, emptyMinutes, type RoutineBlock } from "@/lib/routine";
+import { type QuadrantId } from "@/lib/quadrants";
+import { carve, emptyMinutes, firstFreeSlot, type RoutineBlock } from "@/lib/routine";
+import { COUNTRIES } from "@/lib/reminders";
 import { goalsFor, newId, usePlanner } from "@/lib/store";
-import { ACTIVE_PARTS, weekMinutes } from "@/lib/week-shares";
-import { isZenPlaying, onZenChange, startZen, stopZen } from "@/lib/zen";
 
 /**
- * La guía de configuración, paso a paso. Primero una bienvenida a pantalla completa (sin ver la app atrás);
- * después cada bloque del tablero se destaca solo (el resto queda oscuro y borroso) y se completa ahí mismo:
- * 1) la rutina semanal (sueño, trabajo, emprendimiento y el resto de la semana, con un ejemplo de almuerzo
- * que pisa el trabajo), y la barra para anotar lo que queda afuera; 2) los no negociables; 3) las metas
- * anuales; 4) los recordatorios. Al final, el balde con su análisis y un paseo por los botones de arriba.
+ * La guía de configuración. Bienvenida e intro en una tarjeta al centro; después, en cada módulo, sin ventanas:
+ * el panel del paso queda destacado (el resto, oscuro) y la guía son tarjetitas con flechita pegadas a cada
+ * elemento, con sus botones cuando hay que elegir algo. Bloque 1: sueño, trabajo, emprendimiento, espacios
+ * libres (con la demostración del almuerzo) y la barra de texto. Bloque 2: no negociables (escribirlos, tildar
+ * los de hoy, editar y ver los resultados). Bloque 3: metas anuales. Bloque 4: recordatorios. Al final, el
+ * balde de tu vida (para vos, la base, los espacios sin completar y los objetivos), un festejo y los atajos.
  */
 type Phone = "semana" | "objetivos" | "logros" | "tablero";
-type Step = {
-  id: string;
-  /** El panel que se destaca (su data-module). */
-  target?: string;
-  phone?: Phone;
-  kicker: string;
-  title: string;
-  body?: string;
-  lines?: string[];
-  note?: string;
-  action?: "sleep" | "work" | "business";
-  /** Dónde tocar o escribir (se resalta con una flechita) y qué dice la flechita. */
-  spot?: string;
-  spotLabel?: string;
-  /** Se puede dejar para después. */
-  skip?: string;
-  /** Más detalle: qué se puede hacer en ese panel. */
-  tips?: string[];
-  /** Agrandar el panel durante el paso (peso en su columna). */
-  grow?: number;
-  /** Sin "Siguiente": el paso termina solo (o desde el panel). */
-  noNext?: boolean;
-  /** Otras flechitas, en cada elemento del panel, con qué es o qué se hace ahí. */
-  marks?: { sel: string; text: string }[];
-};
+type Step = { id: string; target?: string; phone?: Phone; center?: boolean };
 
 const STEPS: Step[] = [
-  {
-    id: "welcome",
-    kicker: "LifeBucket",
-    title: "¿Sentís que se te va la vida y todo es trabajo y dormir?",
-    lines: [
-      "¿Te gustaría ver cómo va tu vida…",
-      "…y cómo va a ser si seguís por el camino que vas?",
-      "Creé LifeBucket para mí y para vos.",
-      "Sin volvernos obsesivos: día a día y sin estresarnos, saber qué estamos haciendo para ser más felices.",
-    ],
-  },
-  {
-    id: "rutina",
-    kicker: "Bloque 1 · Tu rutina semanal",
-    title: "Primero, vamos a configurar tu rutina semanal",
-    lines: ["Es importante que completes todos los espacios, incluyendo tus tiempos libres o lo que dedicás a tareas cotidianas.", "Así vas a ver de verdad en qué se te va la semana."],
-  },
-  { id: "sueno", target: "semana", phone: "semana", kicker: "Bloque 1 · Rutina · 1 de 4", title: "¿En qué horario te acostás y te levantás?", action: "sleep", noNext: true },
-  {
-    id: "trabajo",
-    target: "semana",
-    phone: "semana",
-    kicker: "Bloque 1 · Rutina · 2 de 4",
-    title: "¿En qué horario tenés tu trabajo principal?",
-    body: "Elegí los días y el horario, y ponele el nombre (por ejemplo, el de tu empresa).",
-    note: "Si tenés más de un horario, sumá otro.",
-    action: "work",
-    noNext: true,
-  },
-  { id: "emprendimiento", target: "semana", phone: "semana", kicker: "Bloque 1 · Rutina · 3 de 4", title: "¿Tenés un emprendimiento?", body: "Si le dedicás horas a un proyecto propio, ponele su nombre y su horario, desde y hasta.", action: "business", noNext: true },
-  {
-    id: "resto",
-    target: "semana",
-    phone: "semana",
-    kicker: "Bloque 1 · Rutina · 4 de 4",
-    title: "Agregá tus espacios libres",
-    body: "Todo lo que repetís y no es trabajar, dormir ni emprender. Mirá el ejemplo: arrastrando sumamos el ALMUERZO de 13 a 14, encima de tu trabajo. Se puede superponer: el trabajo se corta solo.",
-    note: "Para sumar más, arrastrá sobre los espacios en blanco del calendario. Intentá completar todo; si no, lo dejás para después: cada semana te vamos a preguntar.",
-    skip: "Saltear por ahora",
-  },
-  {
-    id: "texto",
-    target: "semana",
-    phone: "semana",
-    kicker: "Bloque 1 · Antes de seguir",
-    title: "¿Te olvidaste algo o hiciste algo fuera de tu rutina? Escribilo acá",
-    body: "Si te olvidás de algún evento de tu rutina, o querés sumar algo que hiciste fuera de ella, escribilo en este campo: se interpreta solo y queda marcado en tu calendario. Mirá, te muestro un ejemplo:",
-    note: "Lo que sumes así cuenta en tus resultados de la semana y del mes.",
-    spot: "#logro-text",
-    spotLabel: "Se escribe como lo contarías: lo entiende solo",
-  },
-  {
-    id: "noneg",
-    target: "diarios",
-    phone: "objetivos",
-    kicker: "Bloque 2 · No negociables",
-    title: "Escribí tus no negociables: los hábitos que te cuesta sostener (mínimo 3)",
-    body: "Esos hábitos con los que luchás día a día, que te cuesta respetar. Sumá al menos 3 (podés llegar a 5).",
-    spot: 'input[aria-label^="No negociable"]:focus, input[aria-label^="No negociable"]:placeholder-shown, button[aria-label="Editar los no negociables de este mes"]',
-    spotLabel: "Escribí uno y tocá Enter (o Tab) para el siguiente",
-    grow: 2.4,
-    noNext: true,
-    tips: [
-      "Escribí uno y tocá Enter para pasar al siguiente.",
-      "Cada mes podés cambiarlos con el lápiz: los meses anteriores quedan como estaban.",
-      "El gráfico muestra cómo te fue: la semana día por día y el año mes a mes.",
-    ],
-  },
-  {
-    id: "hoy",
-    target: "diarios",
-    phone: "objetivos",
-    kicker: "Bloque 2 · No negociables",
-    title: "Tildá los que ya cumpliste hoy",
-    body: "Tildalos en la grilla: así arrancás tu racha desde el primer día.",
-    spot: "[data-today]",
-    spotLabel: "Tocá cada casilla (o arrastrá)",
-    skip: "Saltear: arranco mañana",
-    grow: 2.4,
-    tips: ["Podés arrastrar para tildar varios de una.", "Cada día se pinta según cuánto cumpliste: rojo, amarillo, verde.", "Abajo ves el total del mes."],
-  },
-  {
-    id: "metas",
-    target: "metas",
-    phone: "logros",
-    kicker: "Bloque 3 · Metas anuales importantes",
-    title: "Sumá las metas importantes de tu año: 2 o 3 por mes (empezar a entrenar, mudarte…)",
-    body: "Te recomendamos metas a largo plazo, 2 o 3 importantes por mes. Por ejemplo: «Quiero empezar a entrenar», «Quiero mudarme», «Quiero trabajar la relación con mi papá».",
-    note: "¡Ojo! Estas metas te van a decir cuántas veces las postergaste: es un incentivo para no dejarlas pasar y trabajarlas.",
-    spot: 'input[aria-label^="Nueva meta para"], button[aria-label^="Sumar una meta a"]',
-    spotLabel: "Escribí una meta y tocá Enter",
-    noNext: true,
-    marks: [{ sel: 'button[aria-label="Ampliar metas"]', text: "En grande: el año y cuántas veces postergaste" }],
-    tips: [
-      "Tocá el cuadradito cuando la cumplas.",
-      "Si no llegás, pasala al mes que viene con la flecha → o arrastrándola: queda registrado cuántas veces la postergaste.",
-      "Con el calendario de arriba la ves en grande: todo el año y tus estadísticas.",
-    ],
-  },
-  {
-    id: "recordatorios",
-    target: "list:pendientes",
-    phone: "objetivos",
-    kicker: "Bloque 4 · Recordatorios",
-    title: "Recordatorios: cumpleaños, pagos, turnos, el súper… con aviso",
-    body: "Cositas con aviso: cumpleaños, ir al súper, comprar un regalo, sacar a pasear al perro… No entran en tu rutina, pero pueden repetirse.",
-    note: "¿Querés sumar algunos ahora? Escribilo como lo dirías: «cumple de mamá el 3 de mayo», «pagar el alquiler el 1 de cada mes».",
-    spot: 'input[aria-label="Nuevo recordatorio"]',
-    spotLabel: "Ahora probá agregar uno vos",
-    marks: [{ sel: 'button[aria-label="Ampliar recordatorios"]', text: "Calendario, feriados y tipos" }],
-    skip: "Saltear por ahora",
-    grow: 3,
-    tips: [
-      "Reconoce solo la fecha y la hora («el viernes a las 18»), el tipo (cumpleaños, pagos, salud, trámites…) y si se repite.",
-      "Antes de agregarlo podés cambiar todo: tipo, importancia, fecha, hora, cada cuánto se repite y cuándo avisarte.",
-      "Con el calendario de arriba lo ves en grande, con feriados y fechas especiales, y ahí configurás los tipos.",
-    ],
-  },
-  {
-    id: "balde-que",
-    target: "bucket",
-    phone: "tablero",
-    kicker: "Tu LifeBucket · 1 de 3",
-    title: "Este es tu LifeBucket: así se reparte tu semana",
-    marks: [
-      { sel: '[data-tour="balde-base"]', text: "La base de tu vida: sueño, trabajo y tareas cotidianas" },
-      { sel: '[data-tour="balde-vos"]', text: "Lo que es para vos: deporte, mente, hobbies, aprender y los tuyos" },
-    ],
-  },
-  {
-    id: "balde-ajustar",
-    target: "bucket",
-    phone: "tablero",
-    kicker: "Tu LifeBucket · 2 de 3",
-    title: "Tocá estos botones para editar",
-    marks: [
-      { sel: '[data-tour="ajustar-vos"]', text: "Tus horas objetivo de cada cosa para vos" },
-      { sel: '[data-tour="ajustar-base"]', text: "Tu sueño, tu trabajo y tus tareas cotidianas" },
-    ],
-  },
-  { id: "balde", target: "bucket", phone: "tablero", kicker: "Tu LifeBucket · 3 de 3", title: "Hermoso, tu LifeBucket ya está listo", skip: "Saltear", body: "Así se reparte tu semana entre la base (sueño, trabajo y tareas cotidianas) y el tiempo para vos.",
-    tips: ["«Ajustar» en «Para vos» cambia las horas objetivo de cada cosa.", "«Ajustar» en «La base» abre tu sueño, tu trabajo y tus tareas cotidianas.", "Arriba elegís ver la semana o el mes entero."],
-  },
-  { id: "tour", kicker: "Para terminar", title: "Ya terminamos. Unos atajos que te van a servir" },
+  { id: "welcome", center: true },
+  { id: "rutina", center: true },
+  { id: "sueno", target: "semana", phone: "semana" },
+  { id: "trabajo", target: "semana", phone: "semana" },
+  { id: "emprendimiento", target: "semana", phone: "semana" },
+  { id: "libres", target: "semana", phone: "semana" },
+  { id: "texto", target: "semana", phone: "semana" },
+  { id: "noneg", target: "diarios", phone: "objetivos" },
+  { id: "hoy", target: "diarios", phone: "objetivos" },
+  { id: "noneg-ver", target: "diarios", phone: "objetivos" },
+  { id: "metas", target: "metas", phone: "logros" },
+  { id: "recordatorios", target: "list:pendientes", phone: "objetivos" },
+  { id: "balde-intro", center: true },
+  { id: "balde-vos", target: "bucket", phone: "tablero" },
+  { id: "balde-base", target: "bucket", phone: "tablero" },
+  { id: "balde-libres", target: "bucket", phone: "tablero" },
+  { id: "balde-ajustar", target: "bucket", phone: "tablero" },
+  { id: "fin", center: true },
+  { id: "atajos" },
 ];
 
-const EXAMPLE_TEXT = "mañana salgo a caminar de 19 a 20 hs";
+const EXAMPLE_TEXT = "mañana salgo a caminar de 18 a 21 hs";
+const REMINDER_TEXT = "cumple de mamá el 3 de mayo";
 const NO_CHECKS: string[] = [];
 const DAY_NAMES = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
-
-/** Un ejemplo por categoría para lo que falta en tu balde (se ajusta antes de sumarlo). */
-const EXAMPLE: Record<string, { name: string; quadrant: QuadrantId; days: number[]; start: number; minutes: number }> = {
-  cuerpo: { name: "Gimnasio", quadrant: "cuerpo", days: [2, 4], start: 1140, minutes: 60 },
-  interior: { name: "Meditar", quadrant: "interior", days: [1, 3, 5], start: 420, minutes: 30 },
-  alma: { name: "Hobby", quadrant: "alma", days: [6], start: 600, minutes: 120 },
-  mente: { name: "Curso", quadrant: "mente", days: [3], start: 1140, minutes: 60 },
-  vinculos: { name: "Salida con amigos", quadrant: "vinculos", days: [5], start: 1260, minutes: 120 },
-};
-/** Lo que se abre en el editor en cada paso: con la misma pregunta, para que se entienda qué cargar. */
-const WORK = {
-  name: "",
-  quadrant: "trabajo" as QuadrantId,
-  days: [1, 2, 3, 4, 5],
-  start: 540,
-  minutes: 480,
-  lock: true,
-  kicker: "Bloque 1 · Rutina · 2 de 4",
-  title: "¿En qué horario tenés tu trabajo principal?",
-  subtitle: "1. Ponele un nombre · 2. Elegí los días · 3. Elegí desde y hasta. Mientras lo armás, se dibuja en el calendario.",
-  placeholder: "Nombre de tu trabajo (ej.: el de tu empresa)",
-};
-const BUSINESS = {
-  name: "",
-  quadrant: "trabajo" as QuadrantId,
-  days: [1, 2, 3, 4, 5],
-  start: 17 * 60,
-  minutes: 120,
-  lock: true,
-  kicker: "Bloque 1 · Rutina · 3 de 4",
-  title: "¿Cuándo le dedicás a tu emprendimiento?",
-  subtitle: "Ponele su nombre, los días y el horario (desde y hasta).",
-  placeholder: "¿Cómo se llama tu emprendimiento?",
-};
-const LABEL: Record<string, string> = { cuerpo: "Deporte", interior: "Mente y Espíritu", alma: "Hobbies", mente: "Intelecto y Cognitivo", vinculos: "Vínculos" };
-
-const TOUR: { icon: typeof ListPlus; title: string; text: string }[] = [
-  { icon: ListPlus, title: "Mis listas", text: "Arriba a la izquierda: súper, notas, ¿dónde está? y tus recordatorios. Cada una se muestra u oculta con el ojito." },
-  { icon: GripVertical, title: "Paneles a tu manera", text: "Arrastrá cada panel desde su título para moverlo; estiralo desde el borde, comprimilo con ⌃ u ocultalo con el ojito." },
-  { icon: Sparkles, title: "Colores", text: "El botón de los puntitos cambia la paleta de la app: pastel, intensa o neutra." },
-  { icon: Music, title: "Música y sonidos", text: "Prendé o apagá la música zen y los sonidos cuando quieras." },
-  { icon: Undo2, title: "Deshacer", text: "Si te equivocaste, la flechita vuelve atrás el último cambio." },
-  { icon: Eye, title: "Recomendaciones", text: "La campanita junta avisos y consejos para que tu balde esté parejo." },
+/** Lo que se abre en el editor en cada paso: con la pregunta del paso como título. */
+const WORK = { name: "", quadrant: "trabajo" as QuadrantId, days: [1, 2, 3, 4, 5], start: 540, minutes: 480, lock: true, kicker: "Bloque 1 · Rutina", title: "¿En qué horario tenés tu trabajo principal?", placeholder: "Nombre de tu trabajo (ej.: Brandtag)" };
+const BUSINESS = { name: "", quadrant: "trabajo" as QuadrantId, days: [1, 2, 3, 4, 5], start: 17 * 60, minutes: 120, lock: true, kicker: "Bloque 1 · Rutina", title: "¿Cuándo le dedicás a tu emprendimiento?", placeholder: "¿Cómo se llama tu emprendimiento?" };
+const ATAJOS: { sel: string; text: string }[] = [
+  { sel: '[data-tour="mis-listas"]', text: "Mis listas: súper, notas, ¿dónde está?, recordatorios y los paneles que ocultaste" },
+  { sel: '[data-module="semana"] header', text: "Cada panel se arrastra desde su título para moverlo" },
+  { sel: 'button[aria-label^="Ocultar"]', text: "El ojito oculta un panel (vuelve desde «Mis listas»)" },
+  { sel: 'button[aria-label="Deshacer el último cambio"]', text: "Deshacer el último cambio" },
+  { sel: 'button[aria-label^="Colores"]', text: "Colores: color o blanco y negro" },
+  { sel: 'button[aria-label$="los sonidos"]', text: "Prender o apagar los sonidos" },
+  { sel: 'button[aria-label="Tu cuenta"]', text: "Tu cuenta: modo prueba y salir" },
 ];
+
+type Rect = { top: number; left: number; width: number; height: number };
+type Action = { label: string; onClick: () => void; kind?: "primary" | "ghost" | "danger" };
+type Mark = { sel?: string; rect?: Rect; text: ReactNode; dark?: boolean; actions?: Action[]; extra?: ReactNode };
+
+/** Las columnas del calendario y dónde cae cada hora en pantalla. */
+function grid() {
+  const cols = [...document.querySelectorAll<HTMLElement>("[data-module=semana] [data-day-col]")];
+  if (cols.length < 7) return null;
+  const order = [1, 2, 3, 4, 5, 6, 0];
+  const col = (d: number) => cols[order.indexOf(d)].getBoundingClientRect();
+  const y = (m: number) => {
+    const r = cols[0].getBoundingClientRect();
+    return r.top + ((m - 5 * 60) / (24 * 60 - 5 * 60)) * r.height;
+  };
+  return { col, y };
+}
+
+/** Escribir en un campo como si fuera una persona (para que React se entere). */
+function typeInto(el: HTMLInputElement | HTMLTextAreaElement | null, text: string) {
+  if (!el) return;
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, text);
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 export function Setup({
   phone,
@@ -258,85 +101,58 @@ export function Setup({
   onDone: () => void;
 }) {
   const [i, setI] = useState(0);
-  const iRef = useRef(0);
-  iRef.current = i;
   const step = STEPS[i];
-  const [rect, setRect] = useState<DOMRect | null>(null);
-  const [leaving, setLeaving] = useState(false);
-  const [zen, setZen] = useState(isZenPlaying());
-  useEffect(() => onZenChange(setZen), []);
+  const stepRef = useRef(step.id);
+  stepRef.current = step.id;
   const setSetupDone = usePlanner((s) => s.setSetupDone);
-
   const routine = usePlanner((s) => s.routine);
+  const sleep = usePlanner((s) => s.sleep);
+  const sleepSet = usePlanner((s) => s.sleepSet);
   const allGoals = usePlanner((s) => s.dailyGoals);
   const goalMonths = usePlanner((s) => s.goalMonths);
   const tasks = usePlanner((s) => s.tasks);
-  const sleepSet = usePlanner((s) => s.sleepSet);
-  const sleep = usePlanner((s) => s.sleep);
   const logros = usePlanner((s) => s.logros);
-  const pendingId = usePlanner((s) => s.lists.find((l) => l.type === "pendientes")?.id ?? "pendientes");
-  const [noBusiness, setNoBusiness] = useState(false);
-  const work = routine.filter((b) => b.quadrant === "trabajo");
-  // El emprendimiento: lo que se sume como trabajo después del trabajo principal.
-  const workAtBusiness = useRef<number | null>(null);
-  if (step.id === "emprendimiento" && workAtBusiness.current === null) workAtBusiness.current = work.length;
-  const hasWork = work.length > 0;
-  const hasBusiness = workAtBusiness.current !== null && work.length > workAtBusiness.current;
+  const pending = usePlanner((s) => s.lists.find((l) => l.type === "pendientes"));
   const todayKey = toKey(new Date());
+  const todayChecks = usePlanner((s) => s.dailyChecks[todayKey]) ?? NO_CHECKS;
   const goals = goalsFor({ dailyGoals: allGoals, goalMonths }, todayKey.slice(0, 7));
-  const todayChecksRaw = usePlanner((s) => s.dailyChecks[todayKey]);
-  const todayChecks = todayChecksRaw ?? NO_CHECKS;
+  const work = routine.filter((b) => b.quadrant === "trabajo");
   const openGoals = tasks.filter((t) => t.month >= todayKey.slice(0, 7) && !t.done).length;
-  const goalsAtStep = useRef<number | null>(null);
-  if (step.id === "metas" && goalsAtStep.current === null) goalsAtStep.current = openGoals;
-  const goalsRef = useRef(0);
-  goalsRef.current = goals.length;
   const empty = sleepSet ? emptyMinutes(routine, sleep) : 0;
-  const missing: string | null = (() => {
-    switch (step.id) {
-      case "sueno":
-        return sleepSet ? null : "Configurá a qué hora te acostás y te levantás.";
-      case "trabajo":
-        return hasWork ? null : "Sumá el horario de tu trabajo principal.";
-      case "emprendimiento":
-        return hasBusiness || noBusiness ? null : "Configuralo, o elegí «Más adelante» o «No emprendo».";
-      case "noneg":
-        return goals.length >= 3 ? null : `Sumá al menos 3 no negociables (${goals.length} de 3).`;
-      case "metas":
-        return tasks.some((t) => t.month >= todayKey.slice(0, 7) && !t.done) ? null : "Sumá al menos una meta en el panel.";
-      default:
-        return null;
-    }
-  })();
-  const bubble = useRef<HTMLDivElement>(null);
-  const [editorOpen, setEditorOpen] = useState(false);
+
+  // Se vuelve a dibujar seguido: las tarjetitas siguen a los elementos si se mueven.
+  const [, setTick] = useState(0);
   useEffect(() => {
-    const t = window.setInterval(() => setEditorOpen(!!document.querySelector("[data-guided-editor], #sleep-dialog-title")), 250);
+    const t = window.setInterval(() => setTick((n) => n + 1), 250);
     return () => window.clearInterval(t);
   }, []);
+  const modalOpen = typeof document !== "undefined" && !!document.querySelector("dialog[open]");
+
+  const finish = () => {
+    setSetupDone(true);
+    cheer("welcome");
+    onDone();
+  };
+  const next = () => {
+    if (step.id === "fin" || step.id === "atajos") return finish();
+    if (step.id !== "welcome") play("complete");
+    setI((n) => Math.min(STEPS.length - 1, n + 1));
+  };
+  const nextRef = useRef(next);
+  nextRef.current = next;
+  /** Pasa al siguiente con una pausa (para que se vea lo que pasó). */
+  const later = (ms = 1300) => window.setTimeout(() => nextRef.current(), ms);
 
   // La bienvenida suena con la intro (si el navegador todavía no deja, en el primer toque).
   const introPlayed = useRef(false);
   useEffect(() => {
     if (step.id !== "welcome") return;
-    let cancelled = false;
     const tryPlay = async () => {
       if (!introPlayed.current) introPlayed.current = await playIntro();
     };
-    const onFirst = () => {
-      if (!cancelled) void tryPlay();
-    };
-    void tryPlay().then(() => {
-      if (!introPlayed.current && !cancelled) {
-        window.addEventListener("pointerdown", onFirst, { once: true });
-        window.addEventListener("keydown", onFirst, { once: true });
-      }
-    });
-    return () => {
-      cancelled = true;
-      window.removeEventListener("pointerdown", onFirst);
-      window.removeEventListener("keydown", onFirst);
-    };
+    void tryPlay();
+    window.addEventListener("pointerdown", tryPlay, { once: true });
+    return () => window.removeEventListener("pointerdown", tryPlay);
   }, [step.id]);
 
   // En el celular, cada paso va a su pestaña.
@@ -344,700 +160,661 @@ export function Setup({
     if (phone && step.phone) onTab(step.phone);
   }, [i, phone]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const target = step.target === "list:pendientes" ? `list:${pendingId}` : step.target;
-  // El panel de cada paso, siempre abierto (si estaba comprimido u oculto).
+  const target = step.target === "list:pendientes" ? `list:${pending?.id ?? "pendientes"}` : step.target;
+  // El panel de cada paso, siempre abierto (y más grande si hace falta).
   useEffect(() => {
-    if (target) window.dispatchEvent(new CustomEvent("lb:module-expand", { detail: { id: target, grow: step.grow } }));
+    const grow = step.id === "noneg" || step.id === "hoy" ? 2.4 : step.id === "recordatorios" ? 3 : undefined;
+    if (target) window.dispatchEvent(new CustomEvent("lb:module-expand", { detail: { id: target, grow } }));
   }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Dónde está lo que se destaca (se sigue si cambia de tamaño).
+  const [rect, setRect] = useState<DOMRect | null>(null);
   useLayoutEffect(() => {
     if (!target) {
       setRect(null);
       return;
     }
-    const find = () => {
-      const el = phone ? document.querySelector("main#contenido") : document.querySelector(`[data-module="${target}"]`);
-      setRect(el ? el.getBoundingClientRect() : null);
-    };
+    const find = () => setRect((phone ? document.querySelector("main#contenido") : document.querySelector(`[data-module="${target}"]`))?.getBoundingClientRect() ?? null);
     find();
-    const t = window.setInterval(find, 400);
-    window.addEventListener("resize", find);
-    return () => {
-      window.clearInterval(t);
-      window.removeEventListener("resize", find);
-    };
+    const t = window.setInterval(find, 300);
+    return () => window.clearInterval(t);
   }, [i, phone, target]);
 
-  // Lo que se abre solo al llegar a cada paso.
-  const autoOpened = useRef<Set<string>>(new Set());
+  // ——— Bloque 1: sueño, trabajo y emprendimiento (se abren solos y siguen solos). ———
   useEffect(() => {
-    if (autoOpened.current.has(step.id)) return;
-    autoOpened.current.add(step.id);
     let t: number | undefined;
-    if (step.id === "sueno" && !sleepSet) t = window.setTimeout(onSleep, 500);
-    if (step.id === "trabajo" && !hasWork) t = window.setTimeout(() => onAddBlock(WORK), 500);
-    if (step.id === "resto" && !usePlanner.getState().routine.some((b) => /almuerzo/i.test(b.name))) t = window.setTimeout(runDemo, 1600);
-    if (step.id === "noneg") t = window.setTimeout(() => document.querySelector<HTMLInputElement>('input[aria-label^="No negociable"]:placeholder-shown')?.focus(), 600);
+    if (step.id === "sueno" && !sleepSet) t = window.setTimeout(onSleep, 150);
+    if (step.id === "trabajo" && !work.length) t = window.setTimeout(() => onAddBlock(WORK), 150);
     return () => window.clearTimeout(t);
   }, [step.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (step.id === "sueno" && sleepSet && !modalOpen) {
+      const t = later(500);
+      return () => window.clearTimeout(t);
+    }
+  }, [step.id, sleepSet, modalOpen]);  
+  useEffect(() => {
+    if (step.id === "trabajo" && work.length && !modalOpen) {
+      const t = later(500);
+      return () => window.clearTimeout(t);
+    }
+  }, [step.id, work.length, modalOpen]);  
+  const workAtBusiness = useRef<number | null>(null);
+  if (step.id === "emprendimiento" && workAtBusiness.current === null) workAtBusiness.current = work.length;
+  useEffect(() => {
+    if (step.id === "emprendimiento" && workAtBusiness.current !== null && work.length > workAtBusiness.current && !modalOpen) {
+      const t = later(500);
+      return () => window.clearTimeout(t);
+    }
+  }, [step.id, work.length, modalOpen]);  
 
-  const [demo, setDemo] = useState<{ x: number; y: number; press: boolean; sel?: { left: number; top: number; width: number; height: number }; hint?: { x: number; y: number } } | null>(null);
-  // Después del ejemplo: ¿te sirve el almuerzo a esa hora, o lo borramos?
-  const lunchAdded = useRef(false);
-  const [lunchAsk, setLunchAsk] = useState<"no" | "ask" | "kept" | "removed">("no");
-  const removeLunch = () => {
-    const st = usePlanner.getState();
-    st.setRoutine(st.routine.filter((b) => !(b.name === "Almuerzo" && b.start === 12 * 60)), st.routineSeries);
-    play("delete");
-    setDemo(null);
-    setLunchAsk("removed");
-  };
-  const runDemo = () => {
-    const cols = [...document.querySelectorAll<HTMLElement>("[data-module=semana] [data-day-col]")];
-    if (cols.length < 5) return;
-    const at = (col: HTMLElement, m: number) => {
-      const r = col.getBoundingClientRect();
-      return r.top + ((m - 5 * 60) / (24 * 60 - 5 * 60)) * r.height;
-    };
-    const mon = cols[0].getBoundingClientRect();
-    const fri = cols[4].getBoundingClientRect();
-    const y13 = at(cols[0], 12 * 60);
-    const y14 = at(cols[0], 13 * 60);
-    const b = bubble.current?.getBoundingClientRect();
-    setDemo({ x: b ? b.right - 40 : mon.left - 60, y: b ? b.bottom - 40 : y13, press: false });
+  // ——— Espacios libres: «Mostrame cómo» arrastra y suma el almuerzo; ¿te sirve?; después, completar. ———
+  type Demo = { x: number; y: number; press: boolean; sel?: Rect };
+  const [demo, setDemo] = useState<Demo | null>(null);
+  const [libres, setLibres] = useState<"ofrecer" | "demo" | "preguntar" | "completar">("ofrecer");
+  const beforeLunch = useRef<RoutineBlock[] | null>(null);
+  const lunchRect = useRef<Rect | null>(null);
+  const runLunch = () => {
+    const g = grid();
+    if (!g) return;
+    setLibres("demo");
+    const a = g.col(1);
+    const z = g.col(5);
+    const y1 = g.y(12 * 60);
+    const y2 = g.y(13 * 60);
+    lunchRect.current = { left: a.left, top: y1, width: z.right - a.left, height: y2 - y1 };
+    setDemo({ x: a.left - 60, y: y1 - 80, press: false });
     const steps: [number, () => void][] = [
-      [250, () => setDemo((d) => d && { ...d, x: mon.left + 14, y: y13 + 4 })],
-      [1250, () => setDemo((d) => d && { ...d, press: true, sel: { left: mon.left + 3, top: y13, width: 6, height: 6 } })],
-      [1500, () => setDemo((d) => d && { ...d, x: fri.right - 14, y: y14 - 4, sel: { left: mon.left + 3, top: y13, width: fri.right - mon.left - 6, height: y14 - y13 } })],
-      [2700, () => {
-        const lunch: RoutineBlock = { id: newId(), quadrant: "libre", name: "Almuerzo", days: [1, 2, 3, 4, 5], start: 12 * 60, minutes: 60 };
-        lunchAdded.current = true;
-        setLunchAsk("ask");
-        usePlanner.getState().setRoutine(carve(usePlanner.getState().routine, lunch), usePlanner.getState().routineSeries);
-        play("bubble");
-        setDemo({ x: mon.left + 14, y: y13 + 4, press: false, hint: { x: (mon.left + fri.right) / 2, y: y14 + 6 } });
-      }],
-      [3400, () => setDemo((d) => d && { ...d, x: -100 })],
+      [200, () => setDemo((d) => d && { ...d, x: a.left + 14, y: y1 + 4 })],
+      [1300, () => setDemo((d) => d && { ...d, press: true, sel: { left: a.left + 3, top: y1, width: 6, height: 6 } })],
+      [1600, () => setDemo((d) => d && { ...d, x: z.right - 14, y: y2 - 4, sel: { left: a.left + 3, top: y1, width: z.right - a.left - 6, height: y2 - y1 } })],
+      [
+        2900,
+        () => {
+          const st = usePlanner.getState();
+          beforeLunch.current = st.routine;
+          const lunch: RoutineBlock = { id: newId(), quadrant: "libre", name: "Almuerzo", days: [1, 2, 3, 4, 5], start: 12 * 60, minutes: 60 };
+          st.setRoutine(carve(st.routine, lunch), st.routineSeries);
+          play("bubble");
+          setDemo(null);
+          setLibres("preguntar");
+        },
+      ],
     ];
     for (const [ms, fn] of steps) window.setTimeout(fn, ms);
   };
-  useEffect(() => {
-    if (step.id !== "resto") setDemo(null);
-  }, [step.id]);
-  const routineAtHint = useRef<unknown>(null);
-  useEffect(() => {
-    if (!demo?.hint) return;
-    if (routineAtHint.current === null) routineAtHint.current = routine;
-    else if (routineAtHint.current !== routine) setDemo(null);
-  }, [routine, demo?.hint]);
-  useEffect(() => {
-    if (!demo?.hint) return;
-    const off = (e: PointerEvent) => (e.target as HTMLElement).closest("[data-module=semana]") && setDemo(null);
-    window.addEventListener("pointerdown", off, true);
-    return () => window.removeEventListener("pointerdown", off, true);
-  }, [demo?.hint]);
-  // El ejemplo, despacio: se escribe letra por letra, se "toca Enter" y queda en el calendario; después se
-  // pregunta si va a la rutina y qué días.
-  const [typed, setTyped] = useState<"no" | "typing" | "enter" | "saved" | "routine">("no");
-  const exampleId = useRef<string | null>(null);
-  const typeInto = (text: string) => {
-    const el = document.querySelector<HTMLTextAreaElement>("#logro-text");
-    if (!el) return;
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
-    el.focus();
-    setter.call(el, text);
-    el.dispatchEvent(new Event("input", { bubbles: true }));
+  const removeLunch = () => {
+    // Vuelve la rutina como estaba antes del almuerzo (el trabajo, entero de nuevo).
+    const st = usePlanner.getState();
+    if (beforeLunch.current) st.setRoutine(beforeLunch.current, st.routineSeries);
+    play("delete");
+    setLibres("completar");
   };
-  useEffect(() => {
-    if (step.id !== "texto" || typed !== "no") return;
-    setTyped("typing");
-    let k = 0;
-    const timers: number[] = [];
-    const tick = () => {
-      k++;
-      typeInto(EXAMPLE_TEXT.slice(0, k));
-      if (k % 3 === 0) play("click");
-      if (k < EXAMPLE_TEXT.length) timers.push(window.setTimeout(tick, 70 + Math.random() * 50));
-      else {
-        // Una pausa para leer lo que se entendió, y "Enter".
-        timers.push(window.setTimeout(() => setTyped("enter"), 1600));
-        timers.push(
-          window.setTimeout(() => {
-            const before = usePlanner.getState().logros.length;
-            document.querySelector<HTMLButtonElement>('button[aria-label="Guardar en mi diario"]')?.click();
-            window.setTimeout(() => {
-              const ls = usePlanner.getState().logros;
-              exampleId.current = ls.length > before ? ls[ls.length - 1].id : null;
-              (document.activeElement as HTMLElement | null)?.blur();
-              setTyped("saved");
-            }, 150);
-          }, 3200),
-        );
-      }
-    };
-    timers.push(window.setTimeout(tick, 1000));
-    return () => timers.forEach((x) => window.clearTimeout(x));
-  }, [step.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [remDemo, setRemDemo] = useState<"no" | "typing" | "shown" | "added">("no");
-  // Después del ejemplo, cuando sumás uno vos, el paso termina solo.
-  const remCount = usePlanner((s) => s.lists.find((l) => l.type === "pendientes")?.items.length ?? 0);
-  const remBase = useRef<number | null>(null);
-  useEffect(() => {
-    if (step.id !== "recordatorios" || remDemo !== "added") return;
-    if (remBase.current === null) {
-      // Se toma la cuenta un momento después de que se agregó el ejemplo.
-      const t0 = window.setTimeout(() => (remBase.current = usePlanner.getState().lists.find((l) => l.type === "pendientes")?.items.length ?? 0), 300);
-      return () => window.clearTimeout(t0);
-    }
-    if (remCount <= remBase.current) return;
-    const t = window.setTimeout(() => nextRef.current(), 1600);
-    return () => window.clearTimeout(t);
-  }, [step.id, remDemo, remCount]);
-  useEffect(() => {
-    if (step.id !== "recordatorios" || remDemo !== "no") return;
-    setRemDemo("typing");
-    const text = "cumple de mamá el 3 de mayo";
-    const timers: number[] = [];
-    const put = (v: string) => {
-      const el = document.querySelector<HTMLInputElement>('input[aria-label="Nuevo recordatorio"]');
-      if (!el) return;
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, v);
-      el.dispatchEvent(new Event("input", { bubbles: true }));
-    };
+  const freeSlot = (() => {
+    if (step.id !== "libres" || libres !== "completar" || typeof document === "undefined") return null;
+    const slot = firstFreeSlot(routine, sleep);
+    const g = grid();
+    if (!slot || !g) return null;
+    const c = g.col(slot.day);
+    return { left: c.left + 3, top: g.y(slot.start), width: c.width - 6, height: g.y(slot.start + 60) - g.y(slot.start) };
+  })();
+
+  // ——— La barra de texto: ejemplo de 3 horas, ¿solo esta vez, rutina o borrarlo?, ¿algo más? ———
+  const [texto, setTexto] = useState<"ofrecer" | "escribiendo" | "preguntar" | "dias" | "mas" | "agregando">("ofrecer");
+  const exampleId = useRef<string | null>(null);
+  const [routineDays, setRoutineDays] = useState<number[]>([1, 2, 3, 4, 5, 6, 0]);
+  const logrosAt = useRef(0);
+  const runExample = () => {
+    setTexto("escribiendo");
+    const el = () => document.querySelector<HTMLTextAreaElement>("#logro-text");
+    el()?.focus();
     let k = 0;
     const tick = () => {
       k++;
-      put(text.slice(0, k));
+      typeInto(el(), EXAMPLE_TEXT.slice(0, k));
       if (k % 3 === 0) play("click");
-      if (k < text.length) timers.push(window.setTimeout(tick, 75 + Math.random() * 45));
-      else {
-        timers.push(window.setTimeout(() => setRemDemo("shown"), 500));
-        timers.push(
+      if (k < EXAMPLE_TEXT.length) window.setTimeout(tick, 70 + Math.random() * 50);
+      else
+        window.setTimeout(() => {
+          const before = usePlanner.getState().logros.length;
+          document.querySelector<HTMLButtonElement>('button[aria-label="Guardar en mi diario"]')?.click();
           window.setTimeout(() => {
-            const form = document.querySelector<HTMLInputElement>('input[aria-label="Nuevo recordatorio"]')?.form;
-            form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
-            setRemDemo("added");
-          }, 4500),
-        );
-      }
+            const ls = usePlanner.getState().logros;
+            exampleId.current = ls.length > before ? ls[ls.length - 1].id : null;
+            (document.activeElement as HTMLElement | null)?.blur();
+            setTexto("preguntar");
+          }, 200);
+        }, 1800);
     };
-    timers.push(window.setTimeout(tick, 1400));
-    return () => timers.forEach((x) => window.clearTimeout(x));
-  }, [step.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [routineDays, setRoutineDays] = useState<number[] | null>(null);
+    window.setTimeout(tick, 400);
+  };
+  // Mientras se eligen los días, se ve repetido en el calendario.
   useEffect(() => {
     const l = usePlanner.getState().logros.find((x) => x.id === exampleId.current);
-    const items = routineDays && l ? [{ text: l.text, category: l.category, minutes: l.minutes || 60, date: l.date, start: l.start, repeat: routineDays }] : [];
+    const items = texto === "dias" && l ? [{ text: l.text, category: l.category, minutes: l.minutes || 60, date: l.date, start: l.start, repeat: routineDays }] : [];
     window.dispatchEvent(new CustomEvent("lb:diary-preview", { detail: items }));
-  }, [routineDays]);
-  /** Pasar el ejemplo a la rutina: deja de ser algo de una vez y queda fijo esos días. */
-  const exampleToRoutine = (days: number[]) => {
+  }, [texto, routineDays]);
+  const exampleToRoutine = () => {
     const st = usePlanner.getState();
     const l = st.logros.find((x) => x.id === exampleId.current);
-    if (l) {
-      const block: RoutineBlock = { id: newId(), quadrant: (l.category ?? "cuerpo") as QuadrantId, name: l.text, days, start: l.start ?? 19 * 60, minutes: l.minutes || 60 };
+    if (l && routineDays.length) {
+      const block: RoutineBlock = { id: newId(), quadrant: (l.category ?? "cuerpo") as QuadrantId, name: l.text, days: routineDays, start: l.start ?? 18 * 60, minutes: l.minutes || 60 };
       st.setRoutine(carve(st.routine, block), st.routineSeries);
       st.removeLogro(l.id);
       play("complete");
     }
-    setRoutineDays(null);
-    setTyped("routine");
+    setTexto("mas");
   };
+  const deleteExample = () => {
+    if (exampleId.current) usePlanner.getState().removeLogro(exampleId.current);
+    play("delete");
+    setTexto("mas");
+  };
+  useEffect(() => {
+    if (step.id === "texto" && texto === "agregando" && logros.length > logrosAt.current) {
+      const t = later(1200);
+      return () => window.clearTimeout(t);
+    }
+  }, [step.id, texto, logros.length]);  
 
-  // Qué se señala en cada momento del paso.
-  const addedGoals = step.id === "metas" ? openGoals - (goalsAtStep.current ?? openGoals) : 0;
-  const markDefs: { sel: string; text: string; main: boolean }[] = (() => {
-    if (step.id === "noneg") {
-      // Con la lista abierta: el campo que estás escribiendo (o el próximo vacío). Cerrada: el lápiz.
-      const open = typeof document !== "undefined" && !!document.querySelector('input[aria-label^="No negociable"]');
-      if (!open) return [{ sel: 'button[aria-label="Editar los no negociables de este mes"]', text: "Modificá o agregá no negociables", main: true }];
-      if (goals.length >= 3) return [{ sel: '[data-tour="noneg-listo"]', text: goals.length < 5 ? "¡Bien! Sumá hasta 5 o tocá «Listo» para terminar" : "¡Listo! Tocá «Listo» para terminar", main: true }];
-      return [{ sel: 'input[aria-label^="No negociable"]:focus, input[aria-label^="No negociable"]:placeholder-shown', text: "Escribí uno y tocá Enter (o Tab) para el siguiente", main: true }];
-    }
-    if (step.id === "metas" && addedGoals === 1) return [{ sel: step.spot!, text: "¡Bien! Sumá una más", main: true }];
-    if (step.id === "recordatorios") {
-      if (remDemo === "typing" || remDemo === "no") return [{ sel: 'input[aria-label="Nuevo recordatorio"]', text: "Mirá: lo escribo como lo diría", main: true }];
-      if (remDemo === "shown")
-        return [
-          { sel: 'select[aria-label="Tipo"]', text: "Lo reconoció solo: Cumpleaños", main: false },
-          { sel: 'input[aria-label="Fecha límite"]', text: "Fecha: 3 de mayo, se repite cada año", main: false },
-          { sel: 'select[aria-label="Avisar"]', text: "Y acá elegís cuándo te avisa", main: false },
-        ];
-    }
-    return [...(step.spot && step.spotLabel ? [{ sel: step.spot, text: step.spotLabel, main: true }] : []), ...(step.marks ?? []).map((m) => ({ ...m, main: false }))];
-  })();
-  const markKey = JSON.stringify(markDefs);
-  // Las flechitas: dónde está cada cosa (la principal, en amarillo; las demás, oscuras). Se siguen si se mueven.
-  type Mark = { rect: DOMRect; text: string; main: boolean };
-  const [marks, setMarks] = useState<Mark[]>([]);
-  useEffect(() => {
-    const list = markDefs;
-    if (!list.length) {
-      setMarks([]);
-      return;
-    }
-    let scrolled = false;
-    const find = () => {
-      const box = target ? document.querySelector(`[data-module="${target}"]`)?.getBoundingClientRect() : null;
-      const found: Mark[] = [];
-      for (const m of list) {
-        const el = document.querySelector(m.sel);
-        if (el && m.main && !scrolled) {
-          el.scrollIntoView({ block: "center", inline: "nearest" });
-          scrolled = true;
-        }
-        const r = el?.getBoundingClientRect();
-        const inside = !box || (r && r.top >= box.top - 4 && r.bottom <= box.bottom + 4);
-        if (r && r.width > 0 && inside) found.push({ rect: r, text: m.text, main: m.main });
-      }
-      setMarks(found);
-    };
-    find();
-    const t = window.setInterval(find, 300);
-    return () => window.clearInterval(t);
-  }, [step.id, target, markKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (step.id !== "hoy" || !goals.length || !goals.every((g) => todayChecks.includes(g.id))) return;
-    const t = window.setTimeout(() => nextRef.current(), 1600);
-    return () => window.clearTimeout(t);
-  }, [step.id, todayChecks.length]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (step.id !== "metas" || openGoals - (goalsAtStep.current ?? 0) < 2) return;
-    const t = window.setTimeout(() => nextRef.current(), 1600);
-    return () => window.clearTimeout(t);
-  }, [step.id, openGoals]);
-  // Sueño, trabajo y emprendimiento siguen solos al completarse (con una pausa para que se entienda).
-  const AUTO = ["sueno", "trabajo", "emprendimiento"];
-  const advanced = useRef<string | null>(null);
-  useEffect(() => {
-    if (!AUTO.includes(step.id) || missing || advanced.current === step.id || noBusiness) return;
-    advanced.current = step.id;
-    const t = window.setTimeout(() => nextRef.current(), 1500);
-    return () => window.clearTimeout(t);
-  }, [step.id, missing]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ——— No negociables: con 3 o más, «Listo» del panel sigue; los de hoy, al completarlos. ———
   useEffect(() => {
     const done = () => {
-      if (STEPS[iRef.current]?.id === "noneg" && goalsRef.current >= 3) nextRef.current();
+      const st = usePlanner.getState();
+      if (stepRef.current === "noneg" && goalsFor({ dailyGoals: st.dailyGoals, goalMonths: st.goalMonths }, toKey(new Date()).slice(0, 7)).length >= 3) nextRef.current();
     };
     window.addEventListener("lb:noneg-listo", done);
     return () => window.removeEventListener("lb:noneg-listo", done);
   }, []);
-
-  const next = () => {
-    if (step.id === "texto" && routineDays?.length) exampleToRoutine(routineDays);
-    if (step.id === "noneg") {
-      (document.activeElement as HTMLElement | null)?.blur();
-      window.setTimeout(() => window.dispatchEvent(new Event("lb:noneg-done")), 0);
+  useEffect(() => {
+    if (step.id !== "noneg") return;
+    const t = window.setTimeout(() => document.querySelector<HTMLInputElement>('input[aria-label^="No negociable"]:placeholder-shown')?.focus(), 500);
+    return () => window.clearTimeout(t);
+  }, [step.id]);
+  useEffect(() => {
+    if (step.id === "hoy" && goals.length && goals.every((g) => todayChecks.includes(g.id))) {
+      const t = later(1600);
+      return () => window.clearTimeout(t);
     }
-    if (step.id === "tour") {
-      setSetupDone(true);
-      cheer("welcome");
-      onDone();
-      return;
+  }, [step.id, todayChecks.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ver los resultados: primero el lápiz y, un momento después, ampliar; al cerrar el ampliado, sigue.
+  const [verPhase, setVerPhase] = useState<"lapiz" | "ampliar" | "abierto">("lapiz");
+  useEffect(() => {
+    if (step.id !== "noneg-ver") return;
+    const t = window.setTimeout(() => setVerPhase("ampliar"), 2600);
+    return () => window.clearTimeout(t);
+  }, [step.id]);
+  const historyOpen = typeof document !== "undefined" && !!document.querySelector("#goals-history-title");
+  useEffect(() => {
+    if (step.id !== "noneg-ver") return;
+    if (historyOpen && verPhase !== "abierto") setVerPhase("abierto");
+    if (!historyOpen && verPhase === "abierto") later(400);
+  }, [step.id, historyOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ——— Metas: con dos, sigue. ———
+  const goalsAt = useRef<number | null>(null);
+  if (step.id === "metas" && goalsAt.current === null) goalsAt.current = openGoals;
+  const addedGoals = step.id === "metas" ? openGoals - (goalsAt.current ?? openGoals) : 0;
+  useEffect(() => {
+    if (step.id === "metas" && addedGoals >= 2) {
+      const t = later(1400);
+      return () => window.clearTimeout(t);
     }
-    if (step.id !== "welcome") play("complete");
-    else if (!isZenPlaying()) void startZen().then(() => setZen(isZenPlaying()));
-    setLeaving(true);
-    window.setTimeout(() => {
-      setLeaving(false);
-      setI((n) => n + 1);
-    }, step.target ? 420 : 200);
+  }, [step.id, addedGoals]);  
+
+  // ——— Recordatorios: «Hacé un ejemplo por mí»; cuando sumás uno vos, sigue. ———
+  const [rem, setRem] = useState<"ofrecer" | "escribiendo" | "probar">("ofrecer");
+  const remCount = pending?.items.length ?? 0;
+  const remAt = useRef<number | null>(null);
+  if (step.id === "recordatorios" && remAt.current === null) remAt.current = remCount;
+  const runReminder = () => {
+    setRem("escribiendo");
+    const el = () => document.querySelector<HTMLInputElement>('input[aria-label="Nuevo recordatorio"]');
+    let k = 0;
+    const tick = () => {
+      k++;
+      typeInto(el(), REMINDER_TEXT.slice(0, k));
+      if (k % 3 === 0) play("click");
+      if (k < REMINDER_TEXT.length) window.setTimeout(tick, 75 + Math.random() * 45);
+      else
+        window.setTimeout(() => {
+          el()?.form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+          window.setTimeout(() => {
+            remAt.current = usePlanner.getState().lists.find((l) => l.type === "pendientes")?.items.length ?? 0;
+            setRem("probar");
+          }, 200);
+        }, 3000);
+    };
+    window.setTimeout(tick, 300);
   };
-  const nextRef = useRef(next);
-  nextRef.current = next;
-
-  // El análisis del balde: lo que falta para vos esta semana.
-  const week = weekMinutes(routine, logros, sleep);
-  const lacking = ACTIVE_PARTS.filter((p) => week[p] === 0);
-
-  const pad = 8;
-  const hole = rect && { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
-  const center = !target || !hole;
-  // El resto de la pantalla: bien oscuro y borroso, para que solo se vea el panel con el que trabajamos.
-  const shade = "pointer-events-auto absolute bg-[color-mix(in_oklab,var(--color-ink)_72%,transparent)] backdrop-blur-[3px]";
-  const dots = (
-    <span className="flex gap-1" aria-hidden>
-      {STEPS.slice(1).map((st, k) => (
-        <span key={st.id} className={cn("h-1.5 rounded-full transition-all duration-300", k + 1 === i ? "w-4 bg-ink" : k + 1 < i ? "w-1.5 bg-ink/50" : "w-1.5 bg-ink/15")} />
-      ))}
-    </span>
-  );
-  const barPlace = (): React.CSSProperties => {
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const w = Math.min(560, vw - 24);
-    const h = bubble.current?.offsetHeight ?? 120;
-    if (!hole || phone) return { top: 12, left: (vw - w) / 2, width: w };
-    const left = Math.min(Math.max(12, hole.left), vw - w - 12);
-    if (hole.top - h - 14 >= 8) return { top: hole.top - h - 14, left, width: w };
-    if (hole.top + hole.height + h + 14 <= vh - 8) return { top: hole.top + hole.height + 14, left, width: w };
-    // Al costado, centrada en lo alto (del lado con más lugar).
-    const spaceL = hole.left - 24;
-    const spaceR = vw - (hole.left + hole.width) - 24;
-    const sw = Math.min(420, Math.max(spaceL, spaceR));
-    if (sw >= 280) {
-      const top = Math.min(Math.max(12, hole.top + hole.height / 2 - h / 2), vh - h - 12);
-      return spaceL >= spaceR ? { top, left: hole.left - sw - 12, width: sw } : { top, left: hole.left + hole.width + 12, width: sw };
+  useEffect(() => {
+    if (step.id === "recordatorios" && rem !== "escribiendo" && remAt.current !== null && remCount > remAt.current) {
+      const t = later(1400);
+      return () => window.clearTimeout(t);
     }
-    return { top: 12, left: (vw - w) / 2, width: w };
-  };
-  const nextLabel = step.id === "welcome" ? "Empezar" : step.id === "rutina" ? "Vamos" : step.id === "tour" ? "Ir a mi LifeBucket" : "Siguiente";
-  const missingNote = missing && (
-    <p role="status" className="flex items-center gap-2 rounded-xl bg-[color-mix(in_oklab,#d99a00_12%,transparent)] px-3 py-1.5 text-[12.5px] leading-snug text-[#8a6200]">
-      <span aria-hidden>👉</span>
-      {missing}
-    </p>
-  );
-  // Las etiquetas con flechita, al costado de cada elemento (del lado donde haya lugar).
-  const label = (m: Mark, k: number) => {
-    const vw = window.innerWidth;
-    const right = m.rect.left < 250 || (m.rect.right + 250 < vw && m.rect.left < vw / 2);
-    const y = m.rect.top + m.rect.height / 2;
-    return (
-      <div key={k} aria-hidden className="pointer-events-none fixed z-[6]" style={{ top: m.rect.top - 4, left: m.rect.left - 4, width: m.rect.width + 8, height: m.rect.height + 8 }}>
-        <span className={cn("absolute inset-0 rounded-xl ring-[3px]", m.main ? "animate-pulse ring-[#d99a00]" : "ring-white/80")} />
-        <span
-          className={cn(
-            "fixed flex max-w-[230px] -translate-y-1/2 items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12.5px] leading-snug font-semibold shadow-[var(--shadow-popover)]",
-            m.main ? "bg-[#d99a00] text-white" : "bg-ink text-surface",
-            right ? "animate-[nudge-l_0.9s_ease-in-out_infinite]" : "animate-[nudge-r_0.9s_ease-in-out_infinite] flex-row-reverse text-right",
-          )}
-          style={right ? { top: y, left: m.rect.right + 12 } : { top: y, right: vw - m.rect.left + 12 }}
-        >
-          <span className="text-[16px] leading-none">{right ? "←" : "→"}</span>
-          {m.text}
-        </span>
-      </div>
-    );
-  };
+  }, [step.id, remCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return (
-    <div className="pointer-events-none fixed inset-0 z-[80]" aria-live="polite">
-      {step.id === "welcome" ? (
-        // La bienvenida, a pantalla completa: todavía no se ve la app.
-        <div className="pointer-events-auto absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,#fdf6e3_0%,#f3eefc_45%,#e8eef9_100%)]" />
-      ) : center ? (
-        <div className={cn(shade, "inset-0")} />
-      ) : (
-        <>
-          <div className={cn(shade, "inset-x-0 top-0")} style={{ height: Math.max(0, hole.top) }} />
-          <div className={cn(shade, "inset-x-0 bottom-0")} style={{ top: hole.top + hole.height }} />
-          <div className={cn(shade, "left-0")} style={{ top: hole.top, height: hole.height, width: Math.max(0, hole.left) }} />
-          <div className={cn(shade, "right-0")} style={{ top: hole.top, height: hole.height, left: hole.left + hole.width }} />
-          <div aria-hidden className="pointer-events-none absolute rounded-[22px] ring-[3px] ring-white shadow-[0_0_0_6px_rgba(255,255,255,0.18)] transition-all duration-300" style={hole} />
-        </>
-      )}
+  // ——— El balde: base a la vista; sin espacios por completar, ese paso se saltea; objetivos al abrirse y cerrarse. ———
+  useEffect(() => {
+    if (step.id === "balde-base") document.querySelector('[data-tour="balde-lista"]')?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    if (step.id === "balde-libres") {
+      const el = document.querySelector('[data-tour="balde-libres"]');
+      if (!el) nextRef.current();
+      else el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+  }, [step.id]);
+  const idealOpen = typeof document !== "undefined" && !!document.querySelector("#ideal-title");
+  const idealWasOpen = useRef(false);
+  useEffect(() => {
+    if (step.id !== "balde-ajustar") return;
+    if (idealOpen) idealWasOpen.current = true;
+    else if (idealWasOpen.current) later(400);
+  }, [step.id, idealOpen]);  
+  // El final: un sonido de logro y unos destellos.
+  useEffect(() => {
+    if (step.id === "fin") play("fanfare");
+  }, [step.id]);
+  const [atajo, setAtajo] = useState(0);
 
-      {demo && (
-        <>
-          {demo.sel && <div aria-hidden className="pointer-events-none fixed z-[6] rounded-[5px] border-2 border-dashed border-ink/60 bg-ink/10 transition-all duration-[1100ms] ease-out" style={demo.sel} />}
-          <div aria-hidden className="pointer-events-none fixed z-[7] transition-[left,top] duration-[1000ms] ease-[cubic-bezier(0.65,0,0.35,1)]" style={{ left: demo.x, top: demo.y }}>
-            <svg width="26" height="26" viewBox="0 0 24 24" className={cn("drop-shadow-md transition-transform duration-150", demo.press && "scale-90")}>
-              <path d="M4 2l15 9-6.5 1.6L9.6 19z" fill="#111" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
-            </svg>
-          </div>
-          {demo.hint && (
-            <div className="animate-fade-up pointer-events-none fixed z-[7] -translate-x-1/2" style={{ left: demo.hint.x, top: demo.hint.y }}>
-              <span className="mx-auto block w-fit animate-bounce text-center text-[20px] leading-none text-[#d99a00]">↑</span>
-              <span className="block rounded-xl bg-[#d99a00] px-3 py-1.5 text-center text-[12.5px] leading-snug font-semibold text-white shadow-[var(--shadow-popover)]">
-                Almuerzo de 12 a 13, en el medio de tu trabajo.
-                <br />
-                Podés moverlo o estirarlo.
-              </span>
-            </div>
-          )}
-        </>
-      )}
-      {!editorOpen && !center && marks.map(label)}
-
-      {center ? (
-        // Bienvenida, intro y cierre: una tarjeta al centro.
-        <div className="absolute inset-0 grid place-items-center overflow-y-auto p-4">
-          <div ref={bubble} key={step.id} role="dialog" aria-labelledby="setup-title" className="pointer-events-auto animate-fade-up relative z-10 flex max-h-[calc(100dvh-24px)] w-full max-w-[540px] flex-col gap-3 overflow-y-auto rounded-3xl bg-surface p-7 shadow-[var(--shadow-popover)] sm:p-8">
-            {step.id === "welcome" ? (
-              <span className="animate-fade-up mb-1 flex items-center gap-2">
-                <BrandMark size={34} />
-                <span className="text-[15px] font-semibold tracking-[0.18em]">LIFEBUCKET</span>
-              </span>
-            ) : (
-              <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.16em] text-ink-faint uppercase">
-                <Sparkles aria-hidden className="size-3.5" />
-                {step.kicker}
-              </p>
-            )}
-            <h2 id="setup-title" className="text-[26px] leading-tight font-semibold tracking-tight">
-              {step.title}
-            </h2>
-            {step.lines ? (
-              <div className="flex flex-col gap-2.5">
-                {step.lines.map((l, k) => (
-                  <p key={k} style={{ animationDelay: `${200 + k * 450}ms` }} className={cn("animate-fade-up text-[17px] leading-snug text-ink/85", k === step.lines!.length - 1 && step.id === "welcome" && "font-medium text-ink")}>
-                    {l}
-                  </p>
-                ))}
-              </div>
-            ) : (
-              step.body && <p className="text-[15.5px] leading-relaxed text-ink/80">{step.body}</p>
-            )}
-            {step.id === "tour" && (
-              <ul className="grid gap-2 sm:grid-cols-2">
-                {TOUR.map((x) => (
-                  <li key={x.title} className="flex gap-2.5 rounded-2xl bg-surface-sunken/70 p-3">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface text-ink shadow-sm">
-                      <x.icon aria-hidden className="size-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <b className="block text-[13px] font-semibold">{x.title}</b>
-                      <span className="text-[12px] leading-snug text-ink-muted">{x.text}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <div className="mt-1 flex items-center justify-between gap-2">
-              {step.id === "welcome" ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (zen) stopZen();
-                    else void startZen();
-                    setZen(!zen);
-                  }}
-                  data-zen-toggle
-                  aria-pressed={zen}
-                  aria-label={zen ? "Apagar la música" : "Prender la música"}
-                  title={zen ? "Apagar la música" : "Prender la música"}
-                  className="pressable grid size-10 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink"
-                >
-                  {zen ? <Volume2 aria-hidden className="size-5" /> : <VolumeX aria-hidden className="size-5" />}
-                </button>
-              ) : (
-                dots
-              )}
-              <button type="button" onClick={next} className="pressable inline-flex h-11 items-center gap-1.5 rounded-full bg-ink px-6 text-[14px] font-semibold text-surface hover:bg-ink/90">
-                {nextLabel}
-                <ArrowRight aria-hidden className="size-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : (
-        // En los módulos: una barra chica arriba con el paso, qué hacer y los botones. Lo demás lo dicen las flechitas.
-        <div
-          ref={bubble}
-          key={step.id}
-          role="dialog"
-          aria-labelledby="setup-title"
-          style={barPlace()}
-          className={cn(
-            "pointer-events-auto animate-fade-up fixed z-10 flex max-h-[46dvh] flex-col gap-2 overflow-y-auto rounded-2xl bg-surface p-3.5 shadow-[var(--shadow-popover)] transition-[top,left] duration-300",
-            (editorOpen || (AUTO.includes(step.id) && !missing)) && "hidden",
-            leaving && "opacity-0 transition-opacity duration-300",
-          )}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-[10.5px] font-semibold tracking-[0.14em] text-ink-faint uppercase">
-              <Sparkles aria-hidden className="size-3.5" />
-              {step.kicker}
-            </p>
-            {dots}
-          </div>
-          <div className="flex items-start gap-3">
-            <h2 id="setup-title" className="min-w-0 flex-1 text-[15.5px] leading-snug font-semibold">
-              {step.title}
-            </h2>
-            <span className="flex shrink-0 items-center gap-1.5">
-              {step.skip && (
-                <button type="button" onClick={next} className="pressable h-9 rounded-full px-3.5 text-[12.5px] font-semibold text-ink-muted ring-1 ring-line hover:bg-surface-sunken hover:text-ink">
-                  Saltear
-                </button>
-              )}
-              {!step.noNext && (
-                <button
-                  type="button"
-                  onClick={next}
-                  disabled={!!missing}
-                  title={missing ?? undefined}
-                  className="pressable inline-flex h-9 items-center gap-1 rounded-full bg-ink px-4 text-[13px] font-semibold text-surface hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-35"
-                >
-                  {nextLabel}
-                  <ArrowRight aria-hidden className="size-3.5" />
-                </button>
-              )}
-            </span>
-          </div>
-          {step.action && (
-            <div className="flex flex-col gap-2">
-              {(() => {
-                const cfg =
-                  step.action === "sleep"
-                    ? { icon: Moon, label: sleepSet ? "Cambiar mi horario de sueño" : "Abrir el horario de sueño", done: sleepSet, onClick: onSleep }
-                    : step.action === "work"
-                      ? { icon: Briefcase, label: hasWork ? "Sumar otro horario de trabajo" : "Cargar mi trabajo", done: hasWork, onClick: () => onAddBlock(WORK) }
-                      : { icon: Rocket, label: hasBusiness ? "Sumar otro horario" : "Cargar mi emprendimiento", done: hasBusiness, onClick: () => onAddBlock(BUSINESS) };
-                return (
-                  <button
-                    type="button"
-                    onClick={cfg.onClick}
-                    className={cn(
-                      "pressable flex h-12 items-center gap-3 rounded-2xl px-4 text-left text-[14px] font-semibold",
-                      cfg.done ? "border border-[color-mix(in_oklab,var(--color-success)_45%,transparent)] bg-[color-mix(in_oklab,var(--color-success)_8%,transparent)]" : "bg-ink text-surface hover:bg-ink/90",
-                    )}
-                  >
-                    <cfg.icon aria-hidden className="size-5" />
-                    <span className="flex-1">{cfg.label}</span>
-                    {cfg.done && <Check aria-hidden strokeWidth={3} className="size-4 text-success" />}
-                  </button>
-                );
-              })()}
-              {step.action === "business" && !hasBusiness && (
-                <div className="grid grid-cols-2 gap-1.5">
-                  {["Más adelante", "No emprendo"].map((l) => (
-                    <button
-                      key={l}
-                      type="button"
-                      onClick={() => {
-                        setNoBusiness(true);
-                        window.setTimeout(next, 150);
-                      }}
-                      className={cn(
-                        "pressable h-11 rounded-2xl border px-3 text-[13px] font-semibold",
-                        l === "No emprendo" ? "border-danger/40 text-danger hover:bg-danger/10" : "border-line text-ink-muted hover:bg-surface-sunken hover:text-ink",
-                      )}
-                    >
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {step.id === "resto" && lunchAsk === "no" && (
-            <p className="flex gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[13.5px] leading-snug">
-              <span aria-hidden>💡</span>
-              <span>
-                Por ejemplo, <b className="font-semibold">voy a agregar el almuerzo de 12 a 13</b>, en el medio de tu trabajo. Mirá…
-              </span>
-            </p>
-          )}
-          {step.id === "resto" && lunchAsk === "ask" && (
-            <div className="flex flex-col gap-2 rounded-xl border border-ink/15 p-3">
-              <p className="text-[13.5px] font-semibold">¿Te sirve el almuerzo de 12 a 13?</p>
-              <div className="flex flex-wrap gap-1.5">
-                <button type="button" onClick={() => setLunchAsk("kept")} className="pressable h-9 rounded-full bg-ink px-4 text-[12.5px] font-semibold text-surface">
-                  Sí, dejalo
-                </button>
-                <button type="button" onClick={removeLunch} className="pressable h-9 rounded-full px-4 text-[12.5px] font-semibold text-danger ring-1 ring-danger/40 hover:bg-danger/10">
-                  No, borralo
-                </button>
-              </div>
-              <p className="text-[11.5px] text-ink-muted">Si es otro horario, arrastralo o estiralo en el calendario.</p>
-            </div>
-          )}
-          {step.id === "resto" && (lunchAsk === "kept" || lunchAsk === "removed") && (
-            <p className="flex gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[13px] leading-snug">
-              <span aria-hidden>👉</span>
-              <span>Ahora sumá lo demás que hacés: arrastrá con el mouse sobre los espacios en blanco del calendario (desde la hora que empieza hasta la que termina) y ponele nombre.</span>
-            </p>
-          )}
-          {step.id === "resto" && sleepSet && (
-            <p className={cn("rounded-xl px-3 py-2 text-[12.5px] leading-snug", empty ? "bg-[color-mix(in_oklab,#d99a00_12%,transparent)] text-[#8a6200]" : "bg-[color-mix(in_oklab,var(--color-success)_12%,transparent)] text-[color-mix(in_oklab,var(--color-success)_75%,var(--color-ink))]")}>
-              {empty ? `Te quedan ${Math.round(empty / 60)} h sin asignar en la semana.` : "✓ ¡Semana completa! Cada hora tiene su lugar."}
-            </p>
-          )}
-          {step.id === "texto" && typed === "enter" && (
-            <p className="flex items-center gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[12.5px] font-medium">
-              <kbd className="rounded-md border border-line bg-surface px-1.5 py-0.5 text-[11px] font-semibold shadow-sm">Enter ⏎</kbd>
-              Y se agrega a tu calendario…
-            </p>
-          )}
-          {step.id === "texto" && typed === "saved" && (
-            <div className="flex flex-col gap-2 rounded-xl border border-ink/15 p-3">
-              <p className="text-[12.5px] text-[color-mix(in_oklab,var(--color-success)_75%,var(--color-ink))]">✓ Quedó mañana de 19 a 20 en tu calendario.</p>
-              <p className="text-[13px] font-semibold">¿Es algo de una vez o parte de tu rutina?</p>
-              <div role="radiogroup" aria-label="Tipo de evento" className="grid grid-cols-2 gap-1.5">
-                <button type="button" role="radio" aria-checked={!routineDays} onClick={() => setRoutineDays(null)} className={cn("pressable h-9 rounded-full text-[12.5px] font-semibold", !routineDays ? "bg-ink text-surface" : "ring-1 ring-line hover:bg-surface-sunken")}>
-                  Solo esta vez
-                </button>
-                <button type="button" role="radio" aria-checked={!!routineDays} onClick={() => setRoutineDays([1, 2, 3, 4, 5, 6, 0])} className={cn("pressable h-9 rounded-full text-[12.5px] font-semibold", routineDays ? "bg-ink text-surface" : "ring-1 ring-line hover:bg-surface-sunken")}>
-                  Hacerlo rutina
-                </button>
-              </div>
-              {routineDays && (
-                <>
-                  <p className="text-[12px] text-ink-muted">En verde, los días que van (lo ves en el calendario). Tocá para sacar los que no. Si algún día es en otro horario, después lo cambiás en el calendario.</p>
-                  <div role="group" aria-label="Días de la rutina" className="flex gap-1">
-                    {[1, 2, 3, 4, 5, 6, 0].map((dd) => {
-                      const on = routineDays.includes(dd);
+  // ——— Qué tarjetitas se ven en cada paso. ———
+  const marks: Mark[] = (() => {
+    if (typeof document === "undefined") return [];
+    const head = '[data-module="semana"] header';
+    switch (step.id) {
+      case "sueno":
+        return modalOpen || sleepSet ? [] : [{ sel: head, text: "Configurá a qué hora te acostás y te levantás", actions: [{ label: "Abrir", onClick: onSleep, kind: "primary" }] }];
+      case "trabajo":
+        return modalOpen || work.length ? [] : [{ sel: head, text: "Cargá el horario de tu trabajo principal", actions: [{ label: "Cargar mi trabajo", onClick: () => onAddBlock(WORK), kind: "primary" }] }];
+      case "emprendimiento":
+        return modalOpen
+          ? []
+          : [
+              {
+                sel: head,
+                text: "¿Tenés un emprendimiento?",
+                actions: [
+                  { label: "Cargar mi emprendimiento", onClick: () => onAddBlock(BUSINESS), kind: "primary" },
+                  { label: "Más adelante", onClick: next },
+                  { label: "No emprendo", onClick: next, kind: "danger" },
+                ],
+              },
+            ];
+      case "libres":
+        if (libres === "ofrecer")
+          return [{ sel: head, text: "Agregá tus espacios libres. Por ejemplo, el almuerzo de 12 a 13, en el medio de tu trabajo.", actions: [{ label: "Mostrame cómo", onClick: runLunch, kind: "primary" }, { label: "Saltear", onClick: next }] }];
+        if (libres === "preguntar" && lunchRect.current)
+          return [
+            {
+              rect: lunchRect.current,
+              text: "¿Te sirve el almuerzo de 12 a 13? Si es otro horario, arrastralo o estiralo.",
+              actions: [
+                { label: "Sí, dejalo", onClick: () => setLibres("completar"), kind: "primary" },
+                { label: "No, borralo", onClick: removeLunch, kind: "danger" },
+              ],
+            },
+          ];
+        if (libres === "completar")
+          return [
+            {
+              ...(freeSlot ? { rect: freeSlot } : { sel: head }),
+              text: freeSlot ? "Completá tus espacios libres: arrastrá sobre un espacio en blanco como este y ponele nombre" : `Te quedan ${Math.round(empty / 60)} h sin completar en tu semana`,
+              actions: [{ label: "Listo, sigamos", onClick: next, kind: "primary" }, { label: "Lo completo después", onClick: next }],
+            },
+          ];
+        return [];
+      case "texto":
+        if (texto === "ofrecer")
+          return [{ sel: "#logro-text", text: "Escribí acá lo que quieras agregar, sin arrastrar en el calendario: algo de tu rutina o algo que hiciste fuera de ella", actions: [{ label: "Mostrame un ejemplo", onClick: runExample, kind: "primary" }, { label: "Seguir", onClick: next }] }];
+        if (texto === "escribiendo") return [{ sel: "#logro-text", text: "Lo escribo como lo contarías: lo entiende solo" }];
+        if (texto === "preguntar" || texto === "dias") {
+          const ev = exampleId.current ? `[data-extra="${exampleId.current}"]` : "#logro-text";
+          return [
+            {
+              sel: ev,
+              text: texto === "dias" ? "¿Qué días? En verde, los que van" : "Acá está: mañana de 18 a 21. ¿Es algo de una vez o parte de tu rutina?",
+              extra:
+                texto === "dias" ? (
+                  <div className="mt-1.5 flex gap-1">
+                    {[1, 2, 3, 4, 5, 6, 0].map((d) => {
+                      const on = routineDays.includes(d);
                       return (
                         <button
-                          key={dd}
+                          key={d}
                           type="button"
                           aria-pressed={on}
-                          aria-label={`Rutina: ${DAY_NAMES[dd]}`}
-                          onClick={() => setRoutineDays(on ? routineDays.filter((x) => x !== dd) : [...routineDays, dd])}
-                          className={cn("pressable grid size-8 place-items-center rounded-full text-[12px] font-semibold", on ? "bg-success text-white" : "bg-surface-sunken text-ink-muted hover:text-ink")}
+                          aria-label={`Rutina: ${DAY_NAMES[d]}`}
+                          onClick={() => setRoutineDays(on ? routineDays.filter((x) => x !== d) : [...routineDays, d])}
+                          className={cn("pressable grid size-7 place-items-center rounded-full text-[11.5px] font-semibold", on ? "bg-success text-white" : "bg-white/25 text-white")}
                         >
-                          {"DLMMJVS"[dd]}
+                          {"DLMMJVS"[d]}
                         </button>
                       );
                     })}
                   </div>
-                </>
-              )}
-            </div>
-          )}
-          {/* El balde: el análisis y lo que falta. */}
-          {step.id === "balde" && (
-            <div className="flex flex-col gap-1.5">
-              {lacking.length ? (
-                <>
-                  <p className="text-[13px] leading-snug text-ink/85">
-                    Veo que no agregaste nada en <b className="font-semibold">{lacking.map((p) => LABEL[p]).join(", ")}</b>. ¿Querés agregar alguno?
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {lacking.map((p) => (
-                      <button
-                        key={p}
-                        type="button"
-                        style={partStyle(p)}
-                        onClick={() => onAddBlock({ ...EXAMPLE[p], kicker: "Tu balde", title: `Sumá algo de ${LABEL[p]} a tu semana`, subtitle: "Ajustá el ejemplo a lo que hacés de verdad: nombre, días y horario." })}
-                        className="pressable inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--q)] bg-[var(--q-soft)] px-3 text-[12.5px] font-semibold"
-                      >
-                        <QuadrantIcon id={p as QuadrantId} className="size-3.5 text-[var(--q)]" />
-                        <Plus aria-hidden className="size-3.5" />
-                        {p === "alma" ? "Hobbies" : QUADRANT_BY_ID[p as QuadrantId]?.name ?? LABEL[p]}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="text-[13px] text-ink/85">¡Tenés un poco de todo lo que te hace bien! Ahora, a sostenerlo.</p>
-              )}
-            </div>
-          )}
+                ) : undefined,
+              actions:
+                texto === "dias"
+                  ? [
+                      { label: "Sumar a mi rutina", onClick: exampleToRoutine, kind: "primary" },
+                      { label: "Volver", onClick: () => setTexto("preguntar") },
+                    ]
+                  : [
+                      { label: "Solo esta vez", onClick: () => setTexto("mas"), kind: "primary" },
+                      { label: "Hacerlo rutina", onClick: () => setTexto("dias") },
+                      { label: "Borrar el ejemplo", onClick: deleteExample, kind: "danger" },
+                    ],
+            },
+          ];
+        }
+        if (texto === "mas")
+          return [
+            {
+              sel: "#logro-text",
+              text: "¿Te olvidaste algo o querés agregar algo más a tu rutina?",
+              actions: [
+                {
+                  label: "Sí, agregar",
+                  onClick: () => {
+                    logrosAt.current = usePlanner.getState().logros.length;
+                    setTexto("agregando");
+                    document.querySelector<HTMLTextAreaElement>("#logro-text")?.focus();
+                  },
+                  kind: "primary",
+                },
+                { label: "No", onClick: next },
+                { label: "Lo hago después", onClick: next },
+              ],
+            },
+          ];
+        return [{ sel: "#logro-text", text: "Escribilo acá y tocá Enter", actions: [{ label: "Seguir", onClick: next }] }];
+      case "noneg": {
+        const open = !!document.querySelector('input[aria-label^="No negociable"]');
+        if (!open) return [{ sel: 'button[aria-label="Editar los no negociables de este mes"]', text: "Modificá o agregá no negociables" }];
+        if (goals.length >= 3) return [{ sel: '[data-tour="noneg-listo"]', text: "¡Bien! Ahora sumá un par más o tocá acá" }];
+        return [{ sel: 'input[aria-label^="No negociable"]:focus, input[aria-label^="No negociable"]:placeholder-shown', text: "Escribí acá uno o más no negociables: los hábitos que te cuesta sostener (Enter para el siguiente)" }];
+      }
+      case "hoy":
+        return [{ sel: "[data-today]", text: "Tocá cada casilla o arrastrá para completar los de hoy", actions: [{ label: "Seguir", onClick: next }] }];
+      case "noneg-ver":
+        if (historyOpen) return [];
+        return verPhase === "lapiz"
+          ? [{ sel: 'button[aria-label="Editar los no negociables de este mes"]', text: "Con el lápiz editás tus no negociables cuando quieras" }]
+          : [
+              { sel: 'button[aria-label="Editar los no negociables de este mes"]', text: "Editar", dark: true },
+              { sel: 'button[aria-label="Ver cómo te fue mes a mes"]', text: "Tocá para ampliar y ver todos tus resultados", actions: [{ label: "Saltear", onClick: next }] },
+            ];
+      case "metas": {
+        const input = 'input[aria-label^="Nueva meta para"]';
+        const sel = document.querySelector(input) ? input : 'button[aria-label^="Sumar una meta a"]';
+        if (addedGoals === 1) return [{ sel, text: "¡Bien! ¿Querés sumar una más?", actions: [{ label: "No, sigamos", onClick: next }] }];
+        return [{ sel, text: sel === input ? "Escribí una meta importante y tocá Enter para sumarla" : "Tocá para sumar una meta importante del año" }];
+      }
+      case "recordatorios":
+        if (rem === "ofrecer")
+          return [
+            {
+              sel: 'input[aria-label="Nuevo recordatorio"]',
+              text: "Escribí algo chiquito que quieras acordarte (no una meta): «comprar pilas el viernes», «cumple de Juan el 3»",
+              actions: [
+                { label: "Hacé un ejemplo por mí", onClick: runReminder, kind: "primary" },
+                { label: "Saltear", onClick: next },
+              ],
+            },
+          ];
+        if (rem === "escribiendo") return [{ sel: 'input[aria-label="Nuevo recordatorio"]', text: "Mirá: reconoce solo el tipo (cumpleaños), la fecha y que se repite cada año" }];
+        return [{ sel: 'input[aria-label="Nuevo recordatorio"]', text: "¡Listo! Ahora probá agregar otro más", actions: [{ label: "Saltear", onClick: next }] }];
+      case "balde-vos":
+        return [{ sel: '[data-tour="balde-vos"]', text: "Esto es lo que es para vos: deporte, mente y espíritu, hobbies, aprender y los tuyos. Cada fila: tu objetivo, lo que llenaste y qué parte del balde ocupa.", actions: [{ label: "Siguiente ✓", onClick: next, kind: "primary" }] }];
+      case "balde-base":
+        return [{ sel: '[data-tour="balde-lista"]', text: "Y esta es la base de tu vida: sueño, trabajo y tareas cotidianas, cada una con su %, ordenadas de mayor a menor.", actions: [{ label: "Siguiente ✓", onClick: next, kind: "primary" }] }];
+      case "balde-libres":
+        return [
+          {
+            sel: '[data-tour="balde-libres"]',
+            text: `Tenés ${Math.round(empty / 60)} h de espacios sin completar en tu semana: no cuentan en tu balde`,
+            actions: [
+              {
+                label: "Lo completo ahora",
+                onClick: () => {
+                  document.querySelector<HTMLElement>('[data-tour="balde-libres"]')?.click();
+                  next();
+                },
+                kind: "primary",
+              },
+              { label: "Lo completo después", onClick: next },
+            ],
+          },
+        ];
+      case "balde-ajustar":
+        if (idealOpen)
+          return [
+            { sel: '[aria-labelledby="ideal-title"] li', text: "Con − y + cambiás las horas por semana de cada cosa: deporte, mente y espíritu, hobbies…" },
+            { sel: '[aria-labelledby="ideal-title"] button[aria-label="Cerrar"]', text: "Cerrá para terminar", dark: true },
+          ];
+        return [
+          { sel: '[data-tour="ajustar-vos"]', text: "Tocá para ajustar tus objetivos de cada semana", actions: [{ label: "Saltear", onClick: next }] },
+          { sel: '[data-tour="ajustar-base"]', text: "Y acá, tu sueño, tu trabajo y tus tareas cotidianas", dark: true },
+        ];
+      case "atajos": {
+        const a = ATAJOS[atajo];
+        if (!a) return [];
+        const last = atajo === ATAJOS.length - 1;
+        return [{ sel: a.sel, text: a.text, dark: true, actions: [{ label: last ? "Terminar" : "Siguiente", onClick: () => (last ? finish() : setAtajo(atajo + 1)), kind: "primary" }] }];
+      }
+      default:
+        return [];
+    }
+  })();
 
-          {step.id === "tour" && (
-            <ul className="grid gap-2 sm:grid-cols-2">
-              {TOUR.map((x) => (
-                <li key={x.title} className="flex gap-2.5 rounded-2xl bg-surface-sunken/70 p-3">
-                  <span className="grid size-8 shrink-0 place-items-center rounded-full bg-surface text-ink shadow-sm">
-                    <x.icon aria-hidden className="size-4" />
-                  </span>
-                  <span className="min-w-0">
-                    <b className="block text-[13px] font-semibold">{x.title}</b>
-                    <span className="text-[12px] leading-snug text-ink-muted">{x.text}</span>
-                  </span>
-                </li>
+  // ——— Dibujo. ———
+  const pad = 8;
+  const hole = rect && target ? { top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 } : null;
+  const shade = "pointer-events-auto absolute bg-[color-mix(in_oklab,var(--color-ink)_72%,transparent)] backdrop-blur-[3px]";
+  const resolve = (m: Mark): Rect | null => {
+    if (m.rect) return m.rect;
+    const r = m.sel ? document.querySelector(m.sel)?.getBoundingClientRect() : null;
+    return r && r.width > 0 ? r : null;
+  };
+  const chip = (m: Mark, k: number) => {
+    const r = resolve(m);
+    if (!r) return null;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const w = 280;
+    const side = r.left + r.width + w + 24 < vw ? "right" : r.left - w - 24 > 0 ? "left" : "below";
+    const cy = Math.min(Math.max(80, r.top + r.height / 2), vh - 100);
+    const style: React.CSSProperties =
+      side === "right"
+        ? { top: cy, left: r.left + r.width + 14, transform: "translateY(-50%)" }
+        : side === "left"
+          ? { top: cy, right: vw - r.left + 14, transform: "translateY(-50%)" }
+          : { top: Math.min(r.top + r.height + 12, vh - 170), left: Math.min(Math.max(12, r.left), vw - w - 12) };
+    return (
+      <div key={k}>
+        <span aria-hidden className={cn("fixed rounded-xl ring-[3px]", m.dark ? "ring-ink/80" : "animate-pulse ring-[#d99a00]")} style={{ top: r.top - 4, left: r.left - 4, width: r.width + 8, height: r.height + 8 }} />
+        <div
+          role="note"
+          className={cn("fixed flex w-max max-w-[280px] flex-col gap-1.5 rounded-2xl px-3 py-2.5 text-[13px] leading-snug font-semibold shadow-[var(--shadow-popover)]", m.dark ? "bg-ink text-surface" : "bg-[#d99a00] text-white", m.actions && "pointer-events-auto")}
+          style={style}
+        >
+          <span className="flex items-start gap-1.5">
+            {side !== "below" && <span className="text-[15px] leading-none">{side === "right" ? "←" : "→"}</span>}
+            <span>{m.text}</span>
+          </span>
+          {m.extra}
+          {m.actions && (
+            <span className="mt-0.5 flex flex-wrap gap-1.5">
+              {m.actions.map((a) => (
+                <button
+                  key={a.label}
+                  type="button"
+                  onClick={a.onClick}
+                  className={cn(
+                    "pressable h-8 rounded-full px-3 text-[12.5px] font-semibold",
+                    a.kind === "primary" ? (m.dark ? "bg-surface text-ink" : "bg-white text-[#8a6200]") : a.kind === "danger" ? "bg-[#b42318] text-white" : "bg-white/20 text-white hover:bg-white/30",
+                  )}
+                >
+                  {a.label}
+                </button>
               ))}
-            </ul>
+            </span>
           )}
-
-          {missingNote}
         </div>
-      )}
+      </div>
+    );
+  };
+
+  const centerCard = (body: ReactNode, cta: string, onCta: () => void, secondary?: { label: string; onClick: () => void }) => (
+    <div className="absolute inset-0 grid place-items-center overflow-y-auto p-4">
+      <div role="dialog" aria-labelledby="setup-title" className="pointer-events-auto animate-fade-up relative flex w-full max-w-[560px] flex-col gap-3 rounded-3xl bg-surface p-7 shadow-[var(--shadow-popover)] sm:p-8">
+        {body}
+        <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+          {secondary && (
+            <button type="button" onClick={secondary.onClick} className="pressable h-11 rounded-full px-5 text-[14px] font-semibold text-ink-muted ring-1 ring-line hover:bg-surface-sunken hover:text-ink">
+              {secondary.label}
+            </button>
+          )}
+          <button type="button" onClick={onCta} className="pressable inline-flex h-11 items-center gap-1.5 rounded-full bg-ink px-6 text-[14px] font-semibold text-surface hover:bg-ink/90">
+            {cta}
+            <ArrowRight aria-hidden className="size-4" />
+          </button>
+        </div>
+      </div>
     </div>
+  );
+  const kicker = (t: string) => (
+    <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.16em] text-ink-faint uppercase">
+      <Sparkles aria-hidden className="size-3.5" />
+      {t}
+    </p>
+  );
+
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-0 z-[80]" aria-live="polite">
+        {step.id === "welcome" ? (
+          <div className="pointer-events-auto absolute inset-0 bg-[radial-gradient(120%_90%_at_50%_0%,#fdf6e3_0%,#f3eefc_45%,#e8eef9_100%)]" />
+        ) : step.center ? (
+          <div className={cn(shade, "inset-0")} />
+        ) : hole ? (
+          <>
+            <div className={cn(shade, "inset-x-0 top-0")} style={{ height: Math.max(0, hole.top) }} />
+            <div className={cn(shade, "inset-x-0 bottom-0")} style={{ top: hole.top + hole.height }} />
+            <div className={cn(shade, "left-0")} style={{ top: hole.top, height: hole.height, width: Math.max(0, hole.left) }} />
+            <div className={cn(shade, "right-0")} style={{ top: hole.top, height: hole.height, left: hole.left + hole.width }} />
+            <div aria-hidden className="pointer-events-none absolute rounded-[22px] ring-[3px] ring-white shadow-[0_0_0_6px_rgba(255,255,255,0.18)]" style={hole} />
+          </>
+        ) : null}
+
+        {demo && (
+          <>
+            {demo.sel && <div aria-hidden className="fixed rounded-[5px] border-2 border-dashed border-ink/60 bg-ink/10 transition-all duration-[1100ms] ease-out" style={demo.sel} />}
+            <div aria-hidden className="fixed z-[2] transition-[left,top] duration-[1000ms] ease-[cubic-bezier(0.65,0,0.35,1)]" style={{ left: demo.x, top: demo.y }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" className={cn("drop-shadow-md transition-transform duration-150", demo.press && "scale-90")}>
+                <path d="M4 2l15 9-6.5 1.6L9.6 19z" fill="#111" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </>
+        )}
+
+        {step.id === "welcome" &&
+          centerCard(
+            <>
+              <span className="animate-fade-up mb-1 flex items-center gap-2">
+                <BrandMark size={34} />
+                <span className="text-[15px] font-semibold tracking-[0.18em]">LIFEBUCKET</span>
+              </span>
+              <h2 id="setup-title" className="text-[26px] leading-tight font-semibold tracking-tight">
+                ¿Sentís que se te va la vida y todo es trabajo y dormir?
+              </h2>
+              {["¿Te gustaría ver cómo va tu vida…", "…y cómo va a ser si seguís por el camino que vas?", "Creé LifeBucket para mí y para vos.", "Sin volvernos obsesivos: día a día y sin estresarnos, saber qué estamos haciendo para ser más felices."].map((l, k) => (
+                <p key={k} style={{ animationDelay: `${200 + k * 450}ms` }} className={cn("animate-fade-up text-[17px] leading-snug text-ink/85", k === 3 && "font-medium text-ink")}>
+                  {l}
+                </p>
+              ))}
+              <CountryPick />
+            </>,
+            "Empezar",
+            next,
+          )}
+        {step.id === "rutina" &&
+          centerCard(
+            <>
+              {kicker("Bloque 1 · Tu rutina semanal")}
+              <h2 id="setup-title" className="text-[26px] leading-tight font-semibold tracking-tight">
+                Primero, vamos a configurar tu rutina semanal
+              </h2>
+              <p className="text-[16px] leading-snug text-ink/85">Es importante que completes todos los espacios, incluyendo tus tiempos libres o lo que dedicás a tareas cotidianas.</p>
+            </>,
+            "Vamos",
+            next,
+          )}
+        {step.id === "balde-intro" &&
+          centerCard(
+            <>
+              {kicker("Tu LifeBucket")}
+              <h2 id="setup-title" className="text-[26px] leading-tight font-semibold tracking-tight">
+                Ahora vamos a ver cómo queda el balde de tu vida
+              </h2>
+              <p className="text-[16px] leading-snug text-ink/85">Cuánto de tu semana es la base (sueño, trabajo y tareas) y cuánto es para vos.</p>
+            </>,
+            "Ver el balde de mi vida",
+            next,
+          )}
+        {step.id === "fin" && (
+          <>
+            {/* Unos destellos, minimalistas. */}
+            <div aria-hidden className="absolute top-1/2 left-1/2">
+              {Array.from({ length: 18 }, (_, k) => {
+                const ang = (k / 18) * Math.PI * 2;
+                const dist = 200 + (k % 3) * 40;
+                return (
+                  <span
+                    key={k}
+                    className="absolute size-2 animate-[spark_1.2s_ease-out_forwards] rounded-full"
+                    style={{ "--dx": `${Math.cos(ang) * dist}px`, "--dy": `${Math.sin(ang) * dist}px`, background: ["#2e9e63", "#8a5cf0", "#e3a008", "#e5508a", "#2563eb"][k % 5], animationDelay: `${(k % 4) * 60}ms` } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
+            {centerCard(
+              <>
+                {kicker("¡Listo!")}
+                <h2 id="setup-title" className="text-[28px] leading-tight font-semibold tracking-tight">
+                  ¡Ya terminamos! 🎉
+                </h2>
+                <p className="text-[16px] leading-snug text-ink/85">Tu LifeBucket ya está armado. ¿Querés ver unos atajos que te van a servir?</p>
+              </>,
+              "Ver guía de atajos",
+              () => setI(STEPS.findIndex((s) => s.id === "atajos")),
+              { label: "Terminar y seguir completando", onClick: finish },
+            )}
+          </>
+        )}
+      </div>
+      {/* Las tarjetitas van encima de todo (también de los editores que no son ventanas). */}
+      <div className="pointer-events-none fixed inset-0 z-[200]">{marks.map(chip)}</div>
+    </>
+  );
+}
+
+/** En la bienvenida: ¿en qué país vivís? (para los feriados y fechas patrias). Arranca con el del navegador. */
+function CountryPick() {
+  const country = usePlanner((s) => s.country);
+  const setCountry = usePlanner((s) => s.setCountry);
+  useEffect(() => {
+    const region = (navigator.language.split("-")[1] ?? "").toUpperCase();
+    if (region && COUNTRIES.some((c) => c.id === region)) usePlanner.getState().setCountry(region);
+  }, []);
+  return (
+    <label style={{ animationDelay: "2200ms" }} className="animate-fade-up mt-2 flex items-center gap-2.5 text-[14.5px] text-ink/85">
+      ¿En qué país vivís?
+      <select value={country} onChange={(e) => setCountry(e.target.value)} className="h-9 rounded-full border border-line bg-surface px-3 text-[14px] font-medium text-ink focus:border-ink focus:outline-none">
+        {COUNTRIES.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.flag} {c.name}
+          </option>
+        ))}
+      </select>
+      <span className="text-[12px] text-ink-muted">Para tus feriados</span>
+    </label>
   );
 }

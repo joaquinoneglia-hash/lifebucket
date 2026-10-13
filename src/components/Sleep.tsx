@@ -47,10 +47,50 @@ export function SleepEditor({ value, onChange }: { value: SleepSettings; onChang
       </div>
     );
   };
+  // Personalizado: cada día con su horario (a qué hora te levantás ese día y te acostás esa noche).
+  const per = value.perDay;
+  const DAYS: [number, string][] = [[1, "Lunes"], [2, "Martes"], [3, "Miércoles"], [4, "Jueves"], [5, "Viernes"], [6, "Sábado"], [0, "Domingo"]];
+  const togglePer = () => {
+    if (per) {
+      const { perDay: _drop, ...rest } = value;
+      void _drop;
+      onChange(rest);
+      return;
+    }
+    const init: Partial<Record<number, SleepWindow>> = {};
+    for (const [d] of DAYS) init[d] = { wake: d === 0 || d === 6 ? value.weekend.wake : value.weekday.wake, bed: d === 5 || d === 6 ? value.weekend.bed : value.weekday.bed };
+    onChange({ ...value, perDay: init });
+  };
   return (
     <div className="flex flex-col gap-2">
-      {row("weekday", "Lunes a viernes", "Te acostás de domingo a jueves y te levantás de lunes a viernes.")}
-      {row("weekend", "Fin de semana", "Te acostás viernes y sábado y te levantás sábado y domingo.")}
+      {per ? (
+        <div className="flex flex-col gap-1 rounded-lg bg-surface-sunken/70 p-3">
+          <div className="grid grid-cols-[84px_1fr_1fr] gap-2 text-[11px] text-ink-muted">
+            <span />
+            <span>Me levanto</span>
+            <span>Me acuesto</span>
+          </div>
+          {DAYS.map(([d, name]) => {
+            const w = per[d] ?? value.weekday;
+            const set = (patch: Partial<SleepWindow>) => onChange({ ...value, perDay: { ...per, [d]: { ...w, ...patch } } });
+            return (
+              <div key={d} className="grid grid-cols-[84px_1fr_1fr] items-center gap-2">
+                <span className="text-[12.5px] font-semibold">{name}</span>
+                <Select label={`Hora de levantarte el ${name}`} value={String(w.wake)} onChange={(v) => set({ wake: Number(v) })} options={WAKE_OPTIONS.map((m) => ({ value: String(m), label: formatTime(m) }))} />
+                <Select label={`Hora de acostarte el ${name}`} value={String(w.bed)} onChange={(v) => set({ bed: Number(v) })} options={BED_OPTIONS.map((m) => ({ value: String(m), label: formatTime(m) }))} />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <>
+          {row("weekday", "Lunes a viernes", "Te acostás de domingo a jueves y te levantás de lunes a viernes.")}
+          {row("weekend", "Fin de semana", "Te acostás viernes y sábado y te levantás sábado y domingo.")}
+        </>
+      )}
+      <button type="button" onClick={togglePer} className="pressable self-start rounded-full px-3 py-1.5 text-[12.5px] font-semibold text-ink-muted ring-1 ring-line hover:bg-surface-sunken hover:text-ink">
+        {per ? "Volver a semana y finde" : "Personalizar por día"}
+      </button>
     </div>
   );
 }

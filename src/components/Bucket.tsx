@@ -1,96 +1,124 @@
 "use client";
 
-import { ArrowRight, Moon, SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { ChevronDown, Moon, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { fromKey, toKey } from "@/lib/dates";
+import { toKey } from "@/lib/dates";
+import { cheer } from "@/lib/motivation";
+import { play } from "@/lib/sfx";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
-import { QUADRANT_BY_ID } from "@/lib/quadrants";
 import { usePlanner } from "@/lib/store";
 import { emptyMinutes, firstFreeSlot } from "@/lib/routine";
-import { ACTIVE_PARTS, bucketTotal, monthMinutes, partColor, weekMinutes, type Part } from "@/lib/week-shares";
+import { ACTIVE_PARTS, monthMinutes, partColor, thisMonday, weekMinutes } from "@/lib/week-shares";
 import { ModuleControls } from "./Modules";
 import { QuadrantIcon } from "./QuadrantIcon";
 import { GoalsBoard } from "./GoalsBoard";
-import { RecapBook } from "./RecapBook";
 import { Segmented, Sheet } from "./ui";
 
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-const fmtDay = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long" });
 const h = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-AR")} h`;
-const label = (p: Part) => (p === "alma" ? "Hobbies" : p === "sueno" ? "Sueño" : QUADRANT_BY_ID[p as keyof typeof QUADRANT_BY_ID].name);
 
 /**
- * Tu Balde: un balde que se llena por capas con tu tiempo (tu rutina semanal más lo que anotaste en tu
- * diario), de la semana o del mes. Abajo la base (Sueño, Trabajo, Libre); arriba, con color, lo que te hace
- * bien. Al lado, el detalle de mayor a menor y una sugerencia.
+ * Tu Balde: tu semana (o tu mes) en partes, todas sobre el 100%: Sueño, Trabajo, Tareas cotidianas, el
+ * tiempo para vos (un grupo que se abre para ver deporte, mente, hobbies…) y los espacios sin completar. Se
+ * ordenan de mayor a menor; cuando lo tuyo sube un puesto, se festeja. El aviso compara lo tuyo con el
+ * trabajo: menos de la mitad es grave; cerca, vas bien; si lo supera, ¡logro!
  */
-export function BucketCard({ className, showReport = true }: { className?: string; showReport?: boolean }) {
+export function BucketCard({ className }: { className?: string; showReport?: boolean }) {
   const routine = usePlanner((s) => s.routine);
   const logros = usePlanner((s) => s.logros);
   const sleep = usePlanner((s) => s.sleep);
-  const startedAt = usePlanner((s) => s.startedAt);
+  const sleepSet = usePlanner((s) => s.sleepSet);
   const [range, setRange] = useState<"semana" | "mes">("mes");
-  const [report, setReport] = useState(false);
-  const desktop = useMediaQuery("(min-width: 1024px)");
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(OPEN_KEY) !== "0";
+    } catch {
+      return true;
+    }
+  });
+  const toggleOpen = () => {
+    setOpen(!open);
+    try {
+      localStorage.setItem(OPEN_KEY, open ? "0" : "1");
+    } catch {}
+  };
 
   const month = new Date().toISOString().slice(0, 7);
   // El mes entero: tu semana llevada a todos los días del mes (así el objetivo semanal se ve en el mes).
   const lastDay = toKey(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
   const monthly = monthMinutes(routine, logros, sleep, month, "", lastDay);
   const { minutes } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep) } : monthly;
-  const total = bucketTotal(minutes);
-  const partial = false && startedAt;
-  const pct = (m: number) => Math.round((m / total) * 100);
-  const mine = ACTIVE_PARTS.reduce((acc, p) => acc + minutes[p], 0);
-  const byHours = (list: Part[]) => [...list].sort((a, b) => minutes[b] - minutes[a]);
-  const BASE = byHours(["trabajo", "libre", "sueno"]);
-  const base = minutes.trabajo + minutes.libre + minutes.sueno;
-  const MINE = byHours(ACTIVE_PARTS);
-  const missing = MINE.filter((p) => minutes[p] === 0);
-  // Lo que todavía no completaste en tu semana: no entra en el 100% (no es base ni es para vos).
-  const sleepSet = usePlanner((s) => s.sleepSet);
   const emptyWeek = sleepSet ? emptyMinutes(routine, sleep) : 0;
   const empty = range === "semana" ? emptyWeek : emptyWeek * (monthly.days / 7);
+  const mine = ACTIVE_PARTS.reduce((acc, p) => acc + minutes[p], 0);
+  // Todo sobre el 100%: lo cargado más los espacios sin completar.
+  const total = Math.max(1, minutes.sueno + minutes.trabajo + minutes.libre + mine + empty);
+  const pct = (m: number) => Math.round((m / total) * 100);
+
+  // Las filas, de mayor a menor (los espacios sin completar, siempre al final).
+  type RowId = "sueno" | "trabajo" | "libre" | "vos";
+  const rows = (["sueno", "trabajo", "libre", "vos"] as RowId[]).map((id) => ({ id, m: id === "vos" ? mine : minutes[id] })).sort((a, b) => b.m - a.m);
+  const vosRank = rows.findIndex((r) => r.id === "vos");
+  // Cuando lo tuyo sube un puesto: sonido y aviso (no al abrir la app).
+  const lastRank = useRef<number | null>(null);
+  useEffect(() => {
+    if (lastRank.current !== null && vosRank < lastRank.current) {
+      const passed = rows[vosRank + 1];
+      cheer("allChecks", `¡Tu tiempo para vos superó a ${passed ? ROW_LABEL[passed.id].toLowerCase() : "otra parte"}! 🎉`);
+    }
+    lastRank.current = vosRank;
+  }, [vosRank]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // El aviso: lo tuyo comparado con el trabajo.
+  const ratio = minutes.trabajo ? mine / minutes.trabajo : mine > 0 ? 2 : 0;
+  const level = minutes.trabajo === 0 && mine === 0 ? null : ratio >= 1 ? "logro" : ratio >= 0.5 ? "cerca" : "grave";
+  const LEVEL = {
+    grave: { text: `Tu tiempo para vos no llega ni a la mitad de tu trabajo (${Math.round(ratio * 100)}%). Sumá algo para vos.`, cls: "bg-[color-mix(in_oklab,var(--color-danger)_10%,transparent)] text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]" },
+    cerca: { text: `Estás cerquita de un buen balance entre lo tuyo y el trabajo: lo tuyo es el ${Math.round(ratio * 100)}% de tu trabajo.`, cls: "bg-[color-mix(in_oklab,#d99a00_14%,transparent)] text-[#8a6200]" },
+    logro: { text: "¡Lograste el balance! Tu tiempo para vos ya supera a tu trabajo.", cls: "bg-[color-mix(in_oklab,var(--color-success)_13%,transparent)] text-[color-mix(in_oklab,var(--color-success)_75%,var(--color-ink))]" },
+  } as const;
+  // El logro se festeja una vez por semana (o por mes), con papelitos.
+  const [party, setParty] = useState(false);
+  useEffect(() => {
+    if (level !== "logro") return;
+    const key = `lb:balde-logro:${range === "semana" ? thisMonday() : month}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, "1");
+    } catch {}
+    setParty(true);
+    play("fanfare");
+    const t = window.setTimeout(() => setParty(false), 4500);
+    return () => window.clearTimeout(t);
+  }, [level, range]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const completar = () => {
     const slot = firstFreeSlot(routine, sleep);
     document.querySelector<HTMLElement>('[data-module="semana"]')?.scrollIntoView({ block: "nearest" });
     window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "libre", days: [slot?.day ?? 1], start: slot?.start ?? 8 * 60, minutes: 60 } }));
   };
-  // Qué tan lleno de base está el balde: desbordado, muy cargado o ajustado (si hay poco para vos).
-  const basePct = pct(base);
-  const level = mine === 0 || basePct >= 95 ? "desbordado" : basePct >= 88 ? "cargado" : basePct >= 80 ? "ajustado" : null;
-  const overflow = level !== null;
-  const LEVEL = {
-    desbordado: { title: "Tu balde está desbordado:", text: `la base (sueño, trabajo y tareas) ocupa el ${basePct}%. Sumá algo para vos.`, tone: "danger" },
-    cargado: { title: "Tu balde está muy cargado:", text: `la base ocupa el ${basePct}% y te queda poco para vos.`, tone: "warn" },
-    ajustado: { title: "Tu balde está ajustado:", text: `la base ocupa el ${basePct}%. Un rato más para vos y queda parejo.`, tone: "soft" },
-  } as const;
-  const tip = missing.length
-    ? `A tu balde le falta ${label(missing[0])}. ¿Le hacés un lugar esta semana?`
-    : pct(mine) >= 20
-      ? "Buen equilibrio: seguí cuidando tu espacio."
-      : "Sumá un rato para vos: aunque sea media hora al día se nota.";
 
-  const row = (p: Part) => (
-    <li key={p} className={cn("flex items-center gap-2 text-[12px] leading-[18px] tabular-nums", minutes[p] === 0 && "opacity-45")}>
-      <span className="grid size-[18px] shrink-0 place-items-center rounded-full text-white" style={{ background: partColor(p) }}>
-        {p === "sueno" ? <Moon aria-hidden className="size-3" /> : <QuadrantIcon id={p as never} className="size-3" />}
+  const baseRow = (id: "sueno" | "trabajo" | "libre") => (
+    <li key={id} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] tabular-nums", minutes[id] === 0 && "opacity-45")}>
+      <span className="grid size-[20px] shrink-0 place-items-center rounded-full text-white" style={{ background: ROW_COLOR[id] }}>
+        {id === "sueno" ? <Moon aria-hidden className="size-3" /> : <QuadrantIcon id={id} className="size-3" />}
       </span>
-      <span className="min-w-0 flex-1 truncate leading-tight">{label(p)}</span>
-      <span className="text-ink-muted">{h(minutes[p])}</span>
-      <span className="w-8 text-right font-semibold">{pct(minutes[p])}%</span>
+      <span className="min-w-0 flex-1 truncate font-medium">{ROW_LABEL[id]}</span>
+      <span className="text-ink-muted">{h(minutes[id])}</span>
+      <span className="w-10 text-right font-semibold">{pct(minutes[id])}%</span>
     </li>
   );
 
   return (
-    <section data-tour="bucket" aria-labelledby="bucket-title" className={cn("card flex min-h-0 flex-col gap-2.5 overflow-hidden px-4 pt-3 pb-3", className)}>
+    <section data-tour="bucket" aria-labelledby="bucket-title" className={cn("card relative flex min-h-0 flex-col gap-2.5 overflow-hidden px-4 pt-3 pb-3", className)}>
       <header className="flex items-center justify-between gap-2">
         <h2 id="bucket-title" className="type-title">
           Tu Balde
         </h2>
         <div className="flex items-center gap-1">
+          <BaseAdjust />
           <Segmented
             label="Período"
             value={range}
@@ -105,85 +133,96 @@ export function BucketCard({ className, showReport = true }: { className?: strin
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 items-center gap-4">
-        {/* Dos grupos bien separados: lo que es para vos (con color) y la base (Trabajo, Tareas cotidianas, Sueño). */}
-        <div className="flex max-h-full min-w-0 flex-1 flex-col gap-2 overflow-y-auto">
-          {/* Tiempo para vos: el tablero de logros hacia tu balde ideal. */}
-          <div data-tour="balde-vos" className="rounded-xl bg-[color-mix(in_oklab,var(--color-success)_7%,transparent)] px-2.5 py-2 ring-1 ring-[color-mix(in_oklab,var(--color-success)_25%,transparent)]">
-            <GoalsBoard minutes={minutes} weeks={range === "semana" ? 1 : monthly.days / 7} />
-          </div>
-          <ul data-tour="balde-base" className="flex flex-col gap-[3px] rounded-xl bg-surface-sunken/70 px-2.5 py-2">
-            <GroupTotal label="La base" value={h(base)} pct={pct(base)} muted action={<BaseAdjust />} />
-            {BASE.map(row)}
-          </ul>
-          {empty > 0 && (
+      <ul data-tour="balde-lista" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+        {rows.map((r) =>
+          r.id === "vos" ? (
+            <li key="vos" data-tour="balde-vos" className="rounded-xl bg-[color-mix(in_oklab,var(--color-success)_8%,transparent)] ring-1 ring-[color-mix(in_oklab,var(--color-success)_28%,transparent)]">
+              <button type="button" onClick={toggleOpen} aria-expanded={open} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] tabular-nums">
+                <span className="grid size-[20px] shrink-0 place-items-center rounded-full bg-success text-white">
+                  <ChevronDown aria-hidden className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
+                </span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">Tiempo para vos</span>
+                <span className="text-ink-muted">{h(mine)}</span>
+                <span className="w-10 text-right font-bold text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">{pct(mine)}%</span>
+              </button>
+              {open && (
+                <div className="px-2.5 pb-2">
+                  <GoalsBoard minutes={minutes} weeks={range === "semana" ? 1 : monthly.days / 7} total={total} />
+                </div>
+              )}
+            </li>
+          ) : (
+            baseRow(r.id)
+          ),
+        )}
+        {empty > 0 && (
+          <li>
             <button
               type="button"
+              data-tour="balde-libres"
               onClick={completar}
-              title="Ir a tu rutina a completarlo"
-              className="pressable flex items-center gap-2 rounded-xl border border-dashed border-[#d99a00]/60 bg-[color-mix(in_oklab,#d99a00_8%,transparent)] px-2.5 py-2 text-left text-[12px] tabular-nums hover:bg-[color-mix(in_oklab,#d99a00_14%,transparent)]"
+              title="Completarlos en tu rutina"
+              className="pressable flex w-full items-center gap-2 rounded-lg border border-dashed border-ink/25 px-2.5 py-1.5 text-left text-[12.5px] tabular-nums hover:bg-surface-sunken"
             >
-              <span className="grid size-[18px] shrink-0 place-items-center rounded-full border-2 border-dashed border-[#d99a00]" />
+              <span className="size-[20px] shrink-0 rounded-full border-2 border-dashed border-ink/35" />
               <span className="min-w-0 flex-1 leading-tight">
-                <b className="font-semibold">Espacios sin completar</b>
-                <span className="block text-[10.5px] text-ink-muted">No cuentan en el 100%. Tocá para completarlos.</span>
+                <span className="font-medium">Espacios libres sin completar</span>
+                <span className="block text-[10.5px] text-ink-muted">Tocá para completarlos en tu rutina</span>
               </span>
               <span className="text-ink-muted">{h(empty)}</span>
-              <span className="text-[11.5px] font-semibold text-[#8a6200]">Completar →</span>
+              <span className="w-10 text-right font-semibold">{pct(empty)}%</span>
+            </button>
+          </li>
+        )}
+      </ul>
+
+      {level && (
+        <div role="status" className={cn("flex items-center gap-2.5 rounded-xl px-3 py-2", LEVEL[level].cls)}>
+          <p className="min-w-0 flex-1 text-[12.5px] leading-snug font-medium">{LEVEL[level].text}</p>
+          {level !== "logro" && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "cuerpo", days: [2, 4], start: 1140, minutes: 60 } }))}
+              className="pressable h-8 shrink-0 rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90"
+            >
+              Sumar algo para vos
             </button>
           )}
         </div>
-      </div>
-
-      {level && (
-        <div
-          role="alert"
-          className={cn(
-            "flex items-center gap-2.5 rounded-xl px-3 py-2",
-            LEVEL[level].tone === "danger" ? "bg-[color-mix(in_oklab,var(--color-danger)_9%,transparent)] text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]" : LEVEL[level].tone === "warn" ? "bg-[color-mix(in_oklab,#d99a00_13%,transparent)] text-[#8a6200]" : "bg-surface-sunken text-ink",
-          )}
-        >
-          <p className="min-w-0 flex-1 text-[12.5px] leading-snug">
-            <b className="font-semibold">{LEVEL[level].title}</b> {LEVEL[level].text}
-          </p>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "cuerpo", days: [2, 4], start: 1140, minutes: 60 } }))}
-            className="pressable h-8 shrink-0 rounded-full bg-ink px-3 text-[12px] font-semibold text-surface hover:bg-ink/90"
-          >
-            Sumar algo para vos
-          </button>
-        </div>
       )}
-      <div className={cn("flex items-center justify-between gap-2 border-t border-line pt-2.5", overflow && "hidden")}>
-        <p className="min-w-0 text-[12px] leading-snug text-ink-muted" title={partial ? `Desde que empezaste: ${fmtDay.format(fromKey(monthly.start))}` : undefined}>
-          {tip}
-        </p>
-        {showReport && (
-          <button type="button" onClick={() => setReport(true)} className="pressable -mr-1 inline-flex shrink-0 items-center gap-1 rounded-md px-1 text-[12.5px] font-medium text-ink-muted hover:text-ink">
-            Resumen
-            <ArrowRight aria-hidden className="size-3.5" />
-          </button>
-        )}
-      </div>
 
-      {report && <RecapBook range={range} isMobile={!desktop} onClose={() => setReport(false)} />}
+      {party &&
+        createPortal(
+          <div role="status" className="pointer-events-none fixed inset-0 z-[150] grid place-items-center">
+            <div aria-hidden className="absolute top-1/2 left-1/2">
+              {Array.from({ length: 30 }, (_, k) => {
+                const ang = (k / 30) * Math.PI * 2;
+                const dist = 160 + (k % 4) * 45;
+                return (
+                  <span
+                    key={k}
+                    className="absolute h-3 w-1.5 animate-[spark_1.6s_ease-out_forwards] rounded-[2px]"
+                    style={{ "--dx": `${Math.cos(ang) * dist}px`, "--dy": `${Math.sin(ang) * dist}px`, background: ["#2e9e63", "#8a5cf0", "#e3a008", "#e5508a", "#2563eb"][k % 5], animationDelay: `${(k % 5) * 70}ms` } as React.CSSProperties}
+                  />
+                );
+              })}
+            </div>
+            <div className="animate-fade-up rounded-3xl bg-surface px-7 py-5 text-center shadow-[var(--shadow-popover)]">
+              <p className="text-[30px]">🎉</p>
+              <p className="mt-1 text-[18px] font-semibold">¡Lograste el balance!</p>
+              <p className="mt-1 text-[13.5px] text-ink-muted">Tu tiempo para vos supera a tu trabajo. Ese es el objetivo.</p>
+            </div>
+          </div>,
+          document.body,
+        )}
     </section>
   );
 }
 
-
-/** El total de un grupo (Para vos, Libre y sueño): sus horas y su %. */
-function GroupTotal({ label, value, pct, muted, action }: { label: string; value: string; pct: number; muted?: boolean; action?: React.ReactNode }) {
-  return (
-    <li className={cn("mb-0.5 flex items-center gap-2 border-b pb-1 text-[11.5px] font-semibold tracking-wide uppercase tabular-nums", muted ? "border-line text-ink-muted" : "border-[color-mix(in_oklab,var(--color-success)_25%,transparent)] text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]")}>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {action}
-      <span className="font-medium text-ink-muted normal-case">{value}</span>
-      <span className="w-8 text-right">{pct}%</span>
-    </li>
-  );
-}
+const OPEN_KEY = "lb:balde-vos-abierto";
+const ROW_LABEL = { sueno: "Sueño", trabajo: "Trabajo", libre: "Tareas cotidianas", vos: "Tiempo para vos" } as const;
+// Sueño en azul, trabajo en negro, tareas cotidianas en gris.
+const ROW_COLOR = { sueno: "#3b6fe0", trabajo: "#1f2329", libre: "#8a919c" } as const;
 
 /** Ajustar la base desde el balde: abre una pantalla con el sueño, el trabajo y las tareas cotidianas para tocar cada uno. */
 function BaseAdjust() {

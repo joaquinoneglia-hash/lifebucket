@@ -13,6 +13,8 @@ export interface SleepSettings {
   weekend: SleepWindow;
   /** Cambios para un día puntual: a qué hora te levantás ese día y te acostás esa noche. */
   overrides?: Record<DateKey, SleepWindow>;
+  /** Horario personalizado por día de la semana (0 = domingo): a qué hora te levantás ese día y te acostás esa noche. */
+  perDay?: Partial<Record<number, SleepWindow>>;
 }
 
 export const DEFAULT_SLEEP: SleepSettings = {
@@ -31,6 +33,8 @@ export function awakeWindow(date: DateKey, s: SleepSettings): { wake: number; be
   const custom = s.overrides?.[date];
   if (custom) return { wake: custom.wake, bed: Math.max(custom.bed, custom.wake + 60) };
   const dow = fromKey(date).getDay();
+  const mine = s.perDay?.[dow];
+  if (mine) return { wake: mine.wake, bed: Math.max(mine.bed, mine.wake + 60) };
   const wake = dow === 0 || dow === 6 ? s.weekend.wake : s.weekday.wake;
   const bed = dow === 5 || dow === 6 ? s.weekend.bed : s.weekday.bed;
   return { wake, bed: Math.max(bed, wake + 60) };
@@ -38,7 +42,7 @@ export function awakeWindow(date: DateKey, s: SleepSettings): { wake: number; be
 
 /** Rango de la grilla: de la hora más temprana en que te levantás a la más tarde en que te acostás. */
 export function gridRange(s: SleepSettings, days: DateKey[] = []): { start: number; end: number } {
-  const custom = days.map((d) => s.overrides?.[d]).filter((w): w is SleepWindow => !!w);
+  const custom = [...days.map((d) => s.overrides?.[d]), ...Object.values(s.perDay ?? {})].filter((w): w is SleepWindow => !!w);
   const wakes = [s.weekday.wake, s.weekend.wake, ...custom.map((w) => w.wake)];
   const beds = [s.weekday.bed, s.weekend.bed, ...custom.map((w) => w.bed)];
   const start = Math.max(0, Math.floor(Math.min(...wakes) / 60) * 60);
