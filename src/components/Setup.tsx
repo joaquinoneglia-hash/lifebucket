@@ -59,6 +59,7 @@ const ATAJOS: { sel: string; text: string }[] = [
   { sel: 'button[aria-label="Deshacer el último cambio"]', text: "Deshacer el último cambio" },
   { sel: 'button[aria-label^="Colores"]', text: "Colores: prendido, a color; apagado, blanco y negro" },
   { sel: 'button[aria-label$="los sonidos"]', text: "Prender o apagar los sonidos" },
+  { sel: '[data-tour="alertas"]', text: "Alertas: cuándo te aviso (no negociables, tu rutina y cómo venís)" },
 ];
 
 type Rect = { top: number; left: number; width: number; height: number };

@@ -36,6 +36,7 @@ import type { DiaryItem } from "@/lib/diary";
 import { DiaryBox, DiaryComposer, Story } from "./Diary";
 import { BitacoraButton } from "./Mood";
 import { RemindersChip } from "./Pending";
+import { AlertsButton, AlertsRunner } from "./Alerts";
 import { ProgressButton } from "./Progress";
 import { UndoButton } from "./UndoButton";
 import { isTestMode } from "@/lib/test-mode";
@@ -306,6 +307,14 @@ export function SimpleApp() {
     } catch {}
     return "semana";
   });
+  useEffect(() => {
+    const on = (e: Event) => {
+      const t = (e as CustomEvent<Section>).detail;
+      if (TABS.some((x) => x.id === t)) setTab(t);
+    };
+    window.addEventListener("lb:go-tab", on);
+    return () => window.removeEventListener("lb:go-tab", on);
+  }, []);
   const goTab = (t: Section) => {
     if (t === tab) return;
     play("click");
@@ -754,6 +763,7 @@ export function SimpleApp() {
               <UndoButton />
               <PaletteSwitch />
               {soundButton}
+              <AlertsButton />
               <UserMenu />
             </div>
           </div>
@@ -778,6 +788,7 @@ export function SimpleApp() {
               <UndoButton className="size-8" />
               <PaletteSwitch compact />
               {soundButton}
+              <AlertsButton compact />
               <UserMenu />
             </div>
           </div>
@@ -1044,6 +1055,7 @@ export function SimpleApp() {
       {/* En Logros y Metas hay campos para escribir abajo: ahí el asistente no aparece (taparía el botón de sumar). */}
       {/* El asistente con IA (botón flotante) queda apagado por ahora. */}
       <CheerToast />
+      <AlertsRunner />
       {showSetup && (
         <Setup
           phone={phone}

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { DEFAULT_ALERTS, type AlertSettings } from "./alerts-config";
 import { persist } from "zustand/middleware";
 import { addDays, fromKey, toKey, type DateKey } from "./dates";
 import { DEFAULT_TARGETS, type QuadrantId, type QuadrantRecord } from "./quadrants";
@@ -378,6 +379,9 @@ export interface PlannerState {
   /** País donde vivís (código ISO): define los feriados y fechas patrias. */
   country: string;
   setCountry: (country: string) => void;
+  /** Alertas: cuándo te recuerda la app completar tus cosas (no son los recordatorios). */
+  alerts: AlertSettings;
+  setAlerts: (patch: Partial<AlertSettings>) => void;
   /** Objetivos diarios (la base son 5; se pueden sumar más). */
   dailyGoals: DailyGoal[];
   /** Qué objetivos diarios se cumplieron cada día: fecha → ids. */
@@ -536,6 +540,8 @@ export const usePlanner = create<PlannerState>()(
       setStartedAt: (startedAt) => set({ startedAt }),
       country: "AR",
       setCountry: (country) => set({ country }),
+      alerts: DEFAULT_ALERTS,
+      setAlerts: (patch) => set((s) => ({ alerts: { ...DEFAULT_ALERTS, ...s.alerts, ...patch } })),
       dailyGoals: [],
       dailyChecks: {},
       routineHistory: [],

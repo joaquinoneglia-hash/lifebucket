@@ -338,3 +338,13 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - **Guía, ejemplo de la barra de texto:** después de mostrar «mañana de 18 a 21», un solo botón «Entendido» que borra el ejemplo solo (se explica que tocándolo se puede borrar o hacer rutina). Después: «¿Querés agregar algo más a tu rutina? Escribilo acá y tocá Enter», con el campo listo para escribir y «No, no quiero agregar nada»; si sumás algo, sigue sola.
 - **Durante la guía** no se muestran la nota flotante del balde ni sus festejos (se cruzaban con las tarjetas).
 - **Alertas configurables (ruedita ⚙️) y avisos con la app cerrada:** quedan para más adelante; falta decidir si van por Chrome (notificaciones del navegador) o por la app de celular.
+
+## 2026-10-13 — Alertas (primera parte)
+
+- **Ruedita ⚙️ arriba a la derecha → «Alertas»** (no son los recordatorios): cuándo te recuerda la app completar tus cosas. Se guarda en el store (`alerts`, sincronizado); los valores por defecto viven en `src/lib/alerts-config.ts` para no armar un ciclo con el store.
+  - No negociables: a la mañana al abrir la app (5 a 12) y a la noche desde una hora (21:00 por defecto) si faltan los de hoy.
+  - Rutina semanal: reconfirmarla el domingo (o lunes/sábado) a una hora (20:00): «Repetir la misma semana» o «Modificarla». Como la rutina ya vale de acá en adelante, repetir es confirmar.
+  - Cómo venís (avisos ocultos): desde el miércoles, cómo viene el balde contra tu ideal y qué es lo que más falta (con «Sumar un rato»); desde el 20, si no cumpliste ninguna meta del mes, un mensaje de ánimo con «Pasarlas al mes siguiente».
+- **Por ahora avisan con la app abierta**: una tarjeta arriba a la derecha, una por vez, al abrir y cada minuto; cada aviso se muestra una sola vez (lo visto queda en este navegador). Los avisos con la app cerrada (Chrome o app de celular) quedan para más adelante.
+- **Si no se configuraron**, desde el día siguiente a la guía la ruedita titila con «Configurá cuándo te aviso» hasta que guardes. La ruedita se suma a los atajos de la guía.
+- **Pendiente (segunda parte):** recomendaciones de cada módulo antes de fin de mes y el informe del mes anterior con gráficos y texto.
