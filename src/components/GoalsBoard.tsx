@@ -7,7 +7,7 @@ import { cn } from "@/lib/format";
 import { cheer } from "@/lib/motivation";
 import { QUADRANT_BY_ID } from "@/lib/quadrants";
 import { usePlanner } from "@/lib/store";
-import { partColor, thisMonday, type Part } from "@/lib/week-shares";
+import { bucketTotal, partColor, thisMonday, type Part } from "@/lib/week-shares";
 import { QuadrantIcon } from "./QuadrantIcon";
 
 const h = (m: number) => `${(Math.round((m / 60) * 10) / 10).toLocaleString("es-AR")} h`;
@@ -80,7 +80,9 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
   }, [order, prog.pct]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Cada categoría: horas objetivo, horas llenadas y qué parte del tiempo para vos representa.
-  const share = (m: number) => (prog.total ? Math.round((m / prog.total) * 100) : 0);
+  // Cada porcentaje es sobre todo el balde (la base más lo que es para vos), igual que en «La base».
+  const all = bucketTotal(minutes);
+  const share = (m: number) => Math.round((m / all) * 100);
   const grid = "grid grid-cols-[14px_minmax(0,1fr)_52px_52px_44px] items-center gap-x-2";
   return (
     <div className="flex flex-col gap-1">
@@ -95,7 +97,7 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
         </span>
         <span className="text-right">Objetivo</span>
         <span className="text-right">Llenado</span>
-        <span className="text-right">%</span>
+        <span className="text-right text-[11.5px] font-semibold tracking-normal text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">{share(prog.total)}%</span>
       </div>
       <ol className="flex flex-col gap-1" aria-label="Tiempo para vos por categoría">
         {rows.map((r) => (
@@ -135,7 +137,7 @@ export function GoalsBoard({ minutes, weeks = 1 }: { minutes: Record<Part, numbe
           {prog.pct >= 100 && "✓ "}
           {h(prog.total)}
         </span>
-        <span className="text-right text-[11.5px]">{prog.total ? "100%" : "0%"}</span>
+        <span className="text-right text-[11.5px]">{share(prog.total)}%</span>
       </div>
       {edit && <IdealEditor onClose={() => setEdit(false)} />}
     </div>
