@@ -310,6 +310,21 @@ export function Setup({
     play("delete");
     setTexto("mas");
   };
+  // «¿Algo más?»: el campo queda listo para escribir; cuando se suma algo (al diario o a la rutina), sigue.
+  const routineAt = useRef(0);
+  useEffect(() => {
+    if (step.id !== "texto" || texto !== "mas") return;
+    logrosAt.current = usePlanner.getState().logros.length;
+    routineAt.current = usePlanner.getState().routine.length;
+    const t = window.setTimeout(() => document.querySelector<HTMLTextAreaElement>("#logro-text")?.focus(), 300);
+    return () => window.clearTimeout(t);
+  }, [step.id, texto]);
+  useEffect(() => {
+    if (step.id === "texto" && texto === "mas" && (logros.length > logrosAt.current || routine.length > routineAt.current)) {
+      const t = later(1200);
+      return () => window.clearTimeout(t);
+    }
+  }, [step.id, texto, logros.length, routine.length]);
   useEffect(() => {
     if (step.id === "texto" && texto === "agregando" && logros.length > logrosAt.current) {
       const t = later(1200);
@@ -481,7 +496,7 @@ export function Setup({
           return [
             {
               sel: ev,
-              text: texto === "dias" ? "¿Qué días? En verde, los que van" : "Acá está: mañana de 18 a 21. ¿Es algo de una vez o parte de tu rutina?",
+              text: texto === "dias" ? "¿Qué días? En verde, los que van" : "Acá está: mañana de 18 a 21. Así se suma algo puntual; tocándolo después podés borrarlo o hacerlo rutina. Era un ejemplo: lo borro al seguir.",
               extra:
                 texto === "dias" ? (
                   <div className="mt-1.5 flex gap-1">
@@ -508,11 +523,7 @@ export function Setup({
                       { label: "Sumar a mi rutina", onClick: exampleToRoutine, kind: "primary" },
                       { label: "Volver", onClick: () => setTexto("preguntar") },
                     ]
-                  : [
-                      { label: "Solo esta vez", onClick: () => setTexto("mas"), kind: "primary" },
-                      { label: "Hacerlo rutina", onClick: () => setTexto("dias") },
-                      { label: "Borrar el ejemplo", onClick: deleteExample, kind: "danger" },
-                    ],
+                  : [{ label: "Entendido", onClick: deleteExample, kind: "primary" }],
             },
           ];
         }
@@ -520,20 +531,8 @@ export function Setup({
           return [
             {
               sel: "#logro-text",
-              text: "¿Te olvidaste algo o querés agregar algo más a tu rutina?",
-              actions: [
-                {
-                  label: "Sí, agregar",
-                  onClick: () => {
-                    logrosAt.current = usePlanner.getState().logros.length;
-                    setTexto("agregando");
-                    document.querySelector<HTMLTextAreaElement>("#logro-text")?.focus();
-                  },
-                  kind: "primary",
-                },
-                { label: "No", onClick: next },
-                { label: "Lo hago después", onClick: next },
-              ],
+              text: "¿Querés agregar algo más a tu rutina? Escribilo acá y tocá Enter",
+              actions: [{ label: "No, no quiero agregar nada", onClick: next }],
             },
           ];
         return [{ sel: "#logro-text", text: "Escribilo acá y tocá Enter", actions: [{ label: "Seguir", onClick: next }] }];

@@ -30,6 +30,8 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
   const logros = usePlanner((s) => s.logros);
   const sleep = usePlanner((s) => s.sleep);
   const sleepSet = usePlanner((s) => s.sleepSet);
+  // Durante la guía no se muestran la nota ni los festejos del balde (se cruzan con las tarjetas).
+  const setupDone = usePlanner((s) => s.setupDone);
   // El mes cuenta desde el día que configuraste la app.
   const startedAt = usePlanner((s) => s.startedAt);
   const [range, setRange] = useState<"semana" | "mes">("mes");
@@ -75,17 +77,17 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
   useEffect(() => {
     const prev = lastMine.current;
     lastMine.current = { m: mine, range };
-    if (!prev || prev.range !== range || mine <= prev.m + 1) return;
+    if (!prev || prev.range !== range || mine <= prev.m + 1 || !setupDone) return;
     const added = range === "semana" ? Math.round((mine - prev.m) / 30) / 2 : 0;
     const t = window.setTimeout(() => {
       if (Date.now() - lastCheerAt() > 400) cheer("mine", added >= 0.5 ? `+${String(added).replace(".", ",")} h de «Tiempo para mí» por semana. ¡Eso! 💪` : undefined, '[data-module="bucket"]');
     }, 60);
     return () => window.clearTimeout(t);
-  }, [mine, range]);
+  }, [mine, range]); // eslint-disable-line react-hooks/exhaustive-deps
   // Cuando lo tuyo sube un puesto: sonido y aviso (no al abrir la app).
   const lastRank = useRef<number | null>(null);
   useEffect(() => {
-    if (lastRank.current !== null && vosRank < lastRank.current) {
+    if (lastRank.current !== null && vosRank < lastRank.current && setupDone) {
       const passed = rows[vosRank + 1];
       cheer("allChecks", `¡Tu «Tiempo para mí» superó a ${passed ? ROW_LABEL[passed.id].toLowerCase() : "otra parte"}! 🎉`, '[data-module="bucket"]');
     }
@@ -142,7 +144,7 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
   const workRow = useRef<HTMLLIElement>(null);
   const [notePos, setNotePos] = useState<React.CSSProperties | null>(null);
   useEffect(() => {
-    if (!level || noteHidden) return setNotePos(null);
+    if (!level || noteHidden || !setupDone) return setNotePos(null);
     const place = () => {
       const row = workRow.current?.getBoundingClientRect();
       const card = workRow.current?.closest("section")?.getBoundingClientRect();
@@ -158,7 +160,7 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
       window.clearInterval(t);
       window.removeEventListener("resize", place);
     };
-  }, [level, noteHidden]);
+  }, [level, noteHidden, setupDone]);
 
   const baseRow = (id: "sueno" | "trabajo" | "libre" | "nada") => (
     <li key={id} ref={id === "trabajo" ? workRow : undefined} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] tabular-nums", part[id] === 0 && "opacity-45")}>

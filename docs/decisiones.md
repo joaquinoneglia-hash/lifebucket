@@ -335,3 +335,6 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - **Fueguito:** si el trabajo es 50 % más (o más) que el «Tiempo para mí», al lado de su % titila un 🔥.
 - **La nota del balde** («no llega ni a la mitad…») sale de abajo del balde y flota al lado del trabajo. Se puede ocultar (queda un 💬 para volver a verla) pero no borrar; vuelve a mostrarse al día siguiente.
 - **Celular:** en pantallas angostas se ve solo el logo (sin la palabra) para que entren los íconos.
+- **Guía, ejemplo de la barra de texto:** después de mostrar «mañana de 18 a 21», un solo botón «Entendido» que borra el ejemplo solo (se explica que tocándolo se puede borrar o hacer rutina). Después: «¿Querés agregar algo más a tu rutina? Escribilo acá y tocá Enter», con el campo listo para escribir y «No, no quiero agregar nada»; si sumás algo, sigue sola.
+- **Durante la guía** no se muestran la nota flotante del balde ni sus festejos (se cruzaban con las tarjetas).
+- **Alertas configurables (ruedita ⚙️) y avisos con la app cerrada:** quedan para más adelante; falta decidir si van por Chrome (notificaciones del navegador) o por la app de celular.
