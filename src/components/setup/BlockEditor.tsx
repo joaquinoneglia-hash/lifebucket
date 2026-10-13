@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { SUGGESTED_ACTIVITIES } from "@/lib/activities";
 import { guessQuadrant } from "@/lib/categorize";
@@ -29,6 +29,8 @@ const TIMES = Array.from({ length: 39 }, (_, i) => 5 * 60 + i * 30);
 const PICKABLE = QUADRANTS.filter((q) => q.id !== "libre");
 
 /** Sumar o cambiar un bloque de tu semana tipo: qué es, qué días, a qué hora y cuánto dura. */
+const FOR_YOU: QuadrantId[] = ["cuerpo", "interior", "alma", "mente", "vinculos"];
+
 export function BlockEditor({
   block,
   day,
@@ -64,10 +66,12 @@ export function BlockEditor({
   const pickable = draft?.lock ? QUADRANTS.filter((q) => q.id === draft.quadrant) : quadrants ? QUADRANTS.filter((q) => quadrants.includes(q.id) || q.id === block?.quadrant) : PICKABLE;
   const [quadrant, setQuadrant] = useState<QuadrantId>(block?.quadrant ?? draft?.quadrant ?? pickable[0]?.id ?? "cuerpo");
   const [name, setName] = useState(block?.name ?? draft?.name ?? "");
+  // «No hago nada»: un rato libre (se guarda como tareas cotidianas, marcado aparte).
+  const [nada, setNada] = useState(!!block?.nada);
   // La categoría se elige sola según lo que escribís, hasta que la elijas vos a mano.
   const routine = usePlanner((s) => s.routine);
   const [manual, setManual] = useState(!!block || !!draft);
-  const [suggested, setSuggested] = useState<QuadrantId | null>(null);
+  const [, setSuggested] = useState<QuadrantId | null>(null);
   const write = (text: string) => {
     setName(text);
     if (manual) return;
@@ -112,10 +116,10 @@ export function BlockEditor({
               const k = `${t.from}-${t.minutes}`;
               groups.set(k, [...(groups.get(k) ?? []), d]);
             }
-            onSave([...groups].map(([k, ds]) => ({ id: newId(), quadrant, name: name.trim(), days: ds, start: Number(k.split("-")[0]), minutes: Number(k.split("-")[1]) })));
+            onSave([...groups].map(([k, ds]) => ({ id: newId(), quadrant, ...(nada ? { nada: true } : {}), name: name.trim(), days: ds, start: Number(k.split("-")[0]), minutes: Number(k.split("-")[1]) })));
             return;
           }
-          onSave({ id: block?.id ?? newId(), quadrant, name: name.trim(), days, start: from, minutes });
+          onSave({ id: block?.id ?? newId(), quadrant, ...(nada ? { nada: true } : {}), name: name.trim(), days, start: from, minutes });
         }}
         className="flex flex-col gap-4 p-5 sm:p-6"
       >
@@ -167,32 +171,62 @@ export function BlockEditor({
         </div>
 
         <div className={cn("flex flex-col gap-1.5", draft?.lock && "hidden")}>
-          <span className="flex items-center gap-1.5 text-[12px] text-ink-muted">
-            Categoría
-            {suggested && !manual && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-surface-sunken px-2 py-0.5 text-[11px] font-medium text-ink">
-                <Sparkles aria-hidden className="size-3" />
-                Sugerida
-              </span>
-            )}
-          </span>
-          {/* Dos grupos: la base (lo estructural, en tonos oscuros) y el tiempo para vos (con color). */}
+          {/* Arriba, lo de todos los días (Trabajo, Tareas cotidianas, No hago nada); abajo, el tiempo para vos. */}
           <div role="radiogroup" aria-label="Parte de tu vida" className="flex flex-col gap-2">
-            {[
-              { title: "La base", ids: ["trabajo", "libre"] as QuadrantId[] },
-              { title: "Tiempo para vos", ids: ["cuerpo", "interior", "alma", "mente", "vinculos"] as QuadrantId[] },
-            ].map((g) => {
-              const list = pickable.filter((q) => g.ids.includes(q.id));
-              if (!list.length) return null;
-              const base = g.title === "La base";
-              return (
-                <div key={g.title} className={cn("flex flex-col gap-1.5 rounded-xl p-2", base ? "bg-surface-sunken" : "bg-[color-mix(in_oklab,var(--color-success)_6%,transparent)]")}>
-                  <span className="text-[10.5px] font-semibold tracking-wide text-ink-muted uppercase">
-                    {g.title}
-                    {base && <span className="font-normal tracking-normal normal-case"> · el sueño se configura con la luna</span>}
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {list.map((q) => (
+            <div className="flex flex-wrap gap-1">
+              {pickable
+                .filter((q) => q.id === "trabajo" || q.id === "libre")
+                .map((q) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={quadrant === q.id && !nada}
+                    onClick={() => {
+                      setQuadrant(q.id);
+                      setNada(false);
+                      setManual(true);
+                    }}
+                    style={partStyle(q.id)}
+                    className={cn(
+                      "pressable inline-flex h-7 items-center gap-1 rounded-full border pr-2.5 pl-0.5 text-[12px] font-medium transition-colors",
+                      quadrant === q.id && !nada ? "border-[var(--q)] bg-[var(--q)] text-white" : "border-line bg-surface hover:bg-surface-sunken",
+                    )}
+                  >
+                    <span className="grid size-5.5 place-items-center rounded-full bg-[var(--q)] text-white">
+                      <QuadrantIcon id={q.id} className="size-3" />
+                    </span>
+                    {q.name}
+                  </button>
+                ))}
+              {!draft?.lock && (
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={nada}
+                  onClick={() => {
+                    setQuadrant("libre");
+                    setNada(true);
+                    setManual(true);
+                    if (!name.trim()) setName("No hago nada");
+                  }}
+                  className={cn(
+                    "pressable inline-flex h-7 items-center gap-1 rounded-full border pr-2.5 pl-0.5 text-[12px] font-medium transition-colors",
+                    nada ? "border-ink/40 bg-ink/10" : "border-dashed border-ink/30 bg-surface hover:bg-surface-sunken",
+                  )}
+                >
+                  <span className="grid size-5.5 place-items-center rounded-full border border-dashed border-ink/40 text-[11px]">💤</span>
+                  No hago nada
+                </button>
+              )}
+            </div>
+            {pickable.some((q) => FOR_YOU.includes(q.id)) && (
+              <div className="flex flex-col gap-1 rounded-xl p-1.5" style={{ background: "linear-gradient(120deg, color-mix(in oklab, #96bef5 16%, var(--color-surface)), color-mix(in oklab, #c4b0f5 16%, var(--color-surface)) 40%, color-mix(in oklab, #faaacd 16%, var(--color-surface)) 75%, color-mix(in oklab, #ffc8aa 18%, var(--color-surface)))" }}>
+                <span className="px-1 text-[10.5px] font-semibold tracking-wide text-ink-muted uppercase">Tiempo para vos</span>
+                <div className="flex flex-wrap gap-1">
+                  {pickable
+                    .filter((q) => FOR_YOU.includes(q.id))
+                    .map((q) => (
                       <button
                         key={q.id}
                         type="button"
@@ -200,33 +234,35 @@ export function BlockEditor({
                         aria-checked={quadrant === q.id}
                         onClick={() => {
                           setQuadrant(q.id);
+                          setNada(false);
                           setManual(true);
                         }}
                         style={partStyle(q.id)}
                         className={cn(
-                          "pressable inline-flex h-8 items-center gap-1.5 rounded-full border pr-3 pl-1 text-[12.5px] font-medium transition-colors",
-                          base
-                            ? quadrant === q.id
-                              ? "border-[var(--q)] bg-[var(--q)] text-white"
-                              : "border-line bg-surface hover:bg-surface-sunken"
-                            : quadrant === q.id
-                              ? "border-[var(--q)] bg-[var(--q-soft)]"
-                              : "border-line bg-surface hover:bg-surface-sunken",
+                          "pressable inline-flex h-7 items-center gap-1 rounded-full border pr-2.5 pl-0.5 text-[12px] font-medium transition-colors",
+                          quadrant === q.id ? "border-[var(--q)] bg-[var(--q-soft)]" : "border-line bg-surface hover:bg-surface-sunken",
                         )}
                       >
-                        <span className={cn("grid size-6 place-items-center rounded-full", base ? "bg-[var(--q)] text-white" : "bg-[var(--q-soft)] text-[var(--q)]")}>
+                        <span className="grid size-5.5 place-items-center rounded-full bg-[var(--q-soft)] text-[var(--q)]">
                           <QuadrantIcon id={q.id} className="size-3" />
                         </span>
                         {q.name}
                       </button>
                     ))}
-                  </div>
                 </div>
-              );
-            })}
+              </div>
+            )}
           </div>
           <p className="text-[11.5px] leading-snug text-ink-muted">
-            <b className="font-semibold text-ink">{QUADRANT_BY_ID[quadrant].name}:</b> {QUADRANT_HINT[quadrant].charAt(0).toLowerCase() + QUADRANT_HINT[quadrant].slice(1)}
+            {nada ? (
+              <>
+                <b className="font-semibold text-ink">No hago nada:</b> un rato libre, sin nada que hacer. También es parte de tu semana.
+              </>
+            ) : (
+              <>
+                <b className="font-semibold text-ink">{QUADRANT_BY_ID[quadrant].name}:</b> {QUADRANT_HINT[quadrant].charAt(0).toLowerCase() + QUADRANT_HINT[quadrant].slice(1)}
+              </>
+            )}
           </p>
         </div>
 
@@ -272,7 +308,6 @@ export function BlockEditor({
               );
             })}
           </div>
-          <p className="text-[11px] leading-snug text-ink-faint">En verde, los días que van. Si algún día es en otro horario, después lo cambiás tocándolo en el calendario.</p>
         </div>
 
         {perDay && !block ? (

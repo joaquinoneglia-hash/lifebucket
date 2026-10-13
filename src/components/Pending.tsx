@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { addDays, fromKey, toKey, type DateKey } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
@@ -488,7 +489,8 @@ function PendingList({ list, wide }: { list: UserList; wide?: boolean }) {
                       Feriado
                     </span>
                   )}
-                  <HideHoliday list={list} name={h.name} date={h.date} />
+                  <span className="shrink-0 text-[10px] font-medium text-ink-muted tabular-nums">{daysLeft(h.date, t)}</span>
+                  <HideHoliday list={list} name={h.orig} date={h.date} />
                 </li>
               ))}
             </ul>
@@ -511,10 +513,14 @@ function PendingList({ list, wide }: { list: UserList; wide?: boolean }) {
 function PostponeButtons({
   item,
   act,
+  full,
 }: {
   item: ListItem;
   act: ReturnType<typeof usePendingActions>;
+  /** En el aviso: también elegir otra fecha y eliminarlo. */
+  full?: boolean;
 }) {
+  const [picking, setPicking] = useState(false);
   const b =
     "pressable h-6 rounded-full bg-surface-sunken px-2 text-[10px] font-semibold text-ink-muted hover:text-ink";
   return (
@@ -539,8 +545,34 @@ function PostponeButtons({
         Mañana
       </button>
       <button type="button" onClick={() => act.postpone(item, 7)} className={b}>
-        En una semana
+        {full ? "Próxima semana" : "En una semana"}
       </button>
+      {full && (
+        <>
+          {picking ? (
+            <input
+              type="date"
+              autoFocus
+              min={today()}
+              aria-label="Elegir otra fecha"
+              onChange={(e) => {
+                if (!e.target.value) return;
+                act.patch(item.id, { due: e.target.value as DateKey });
+                play("bubble");
+              }}
+              className="h-6 rounded-full border border-line bg-surface px-1.5 text-[10px] focus:border-ink focus:outline-none"
+            />
+          ) : (
+            <button type="button" onClick={() => setPicking(true)} className={b}>
+              Elegir fecha…
+            </button>
+          )}
+          <button type="button" onClick={() => act.remove(item.id)} className={cn(b, "inline-flex items-center gap-1 text-danger hover:text-danger")}>
+            <Trash2 aria-hidden className="size-3" />
+            Eliminar
+          </button>
+        </>
+      )}
     </span>
   );
 }
@@ -1298,7 +1330,7 @@ function PendingExpanded({
                         <span className="min-w-0 flex-1 truncate">
                           {h.name}
                         </span>
-                        <HideHoliday list={list} name={h.name} date={h.date} />
+                        <HideHoliday list={list} name={h.orig} date={h.date} />
                       </span>
                     ))}
                     {tasks.slice(0, 4).map((i) => (
@@ -1353,7 +1385,7 @@ const ALERT_KEY = "lb:pending-alert";
  * En el tablero: si hay pendientes vencidos o para hoy, un aviso abajo a la izquierda (una vez por día, o
  * hasta que lo cierres) para marcarlos, pasarlos para hoy o posponerlos sin abrir nada.
  */
-export function PendingAlerts() {
+export function PendingAlerts({ compact }: { compact?: boolean }) {
   const list = usePlanner((s) => s.lists.find((l) => l.type === "pendientes"));
   const [seen, setSeen] = useState<string[] | null>(null);
   const [, tick] = useState(0);
@@ -1385,24 +1417,26 @@ export function PendingAlerts() {
     } catch {}
     setSeen(next);
   };
-  return <AlertsToast list={list} urgent={urgent} onClose={close} />;
+  return <AlertsToast list={list} urgent={urgent} onClose={close} compact={compact} />;
 }
 
 function AlertsToast({
   list,
   urgent,
   onClose,
+  compact,
 }: {
   list: UserList;
   urgent: ListItem[];
   onClose: () => void;
+  compact?: boolean;
 }) {
   const act = usePendingActions(list);
   const late = urgent.filter((i) => isOverdue(i)).length;
   return (
     <div
       role="status"
-      className="animate-fade-up fixed bottom-4 left-4 z-[70] w-[340px] max-w-[calc(100vw-32px)] rounded-2xl border border-line bg-surface p-3 shadow-[var(--shadow-popover)]"
+      className={cn("animate-fade-up z-[70] rounded-2xl border border-line bg-surface p-3 shadow-[var(--shadow-popover)]", compact ? "fixed top-14 right-3 left-3" : "absolute top-full left-0 mt-2 w-[360px]")}
     >
       <div className="flex items-start gap-2">
         <span
@@ -1447,7 +1481,7 @@ function AlertsToast({
             >
               {dueLabel(i)?.text}
             </p>
-            <PostponeButtons item={i} act={act} />
+            <PostponeButtons item={i} act={act} full />
           </li>
         ))}
       </ul>
@@ -1873,7 +1907,7 @@ function visibleHolidays(list: UserList, from: DateKey, to: DateKey) {
       (h) =>
         !hidden.includes(h.name) && !hidden.includes(`${h.name}@${h.date}`),
     )
-    .map((h) => ({ ...h, name: names[h.name] ?? h.name }));
+    .map((h) => ({ ...h, name: names[h.name] ?? h.name, orig: h.name }));
 }
 
 /** Quitar un feriado o fecha especial: solo este año o para siempre. */
@@ -1888,6 +1922,23 @@ function HideHoliday({
 }) {
   const updateList = usePlanner((s) => s.updateList);
   const [ask, setAsk] = useState(false);
+  // El menú flota por fuera de la celda (no queda cortado): va al diálogo abierto o a la página.
+  const [pos, setPos] = useState<{ host: HTMLElement; top: number; left: number } | null>(null);
+  const open = (btn: HTMLElement) => {
+    if (ask) return setAsk(false);
+    const host = (btn.closest("dialog") as HTMLElement | null) ?? document.body;
+    const r = btn.getBoundingClientRect();
+    // Si el diálogo está transformado, lo fijo se mide desde el diálogo.
+    const box = host !== document.body && getComputedStyle(host).transform !== "none" ? host.getBoundingClientRect() : { top: 0, left: 0 };
+    setPos({ host, top: r.bottom + 4 - box.top, left: Math.max(8, Math.min(r.right - 176, window.innerWidth - 184)) - box.left });
+    setAsk(true);
+  };
+  useEffect(() => {
+    if (!ask) return;
+    const close = (e: PointerEvent) => !(e.target as HTMLElement).closest("[data-hide-holiday]") && setAsk(false);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [ask]);
   const hide = (key: string) => {
     updateList(list.id, {
       hiddenHolidays: [...(list.hiddenHolidays ?? []), key],
@@ -1901,13 +1952,13 @@ function HideHoliday({
         type="button"
         aria-label={`Quitar ${name}`}
         title="Quitar"
-        onClick={() => setAsk(!ask)}
+        onClick={(e) => open(e.currentTarget)}
         className="grid size-4 place-items-center rounded text-[#0e7490]/70 opacity-0 group-hover/h:opacity-100 hover:text-danger focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
       >
         <X aria-hidden className="size-3" />
       </button>
-      {ask && (
-        <span className="animate-fade-up absolute top-full right-0 z-30 mt-1 flex w-44 flex-col rounded-xl border border-line bg-surface p-1 text-ink shadow-[var(--shadow-popover)]">
+      {ask && pos && createPortal(
+        <span data-hide-holiday style={{ top: pos.top, left: pos.left }} className="animate-fade-up fixed z-[300] flex w-44 flex-col rounded-xl border border-line bg-surface p-1 text-ink shadow-[var(--shadow-popover)]">
           <span className="px-2 pt-1 pb-1 text-[10.5px] font-semibold">
             Quitar «{name}»
           </span>
@@ -1925,7 +1976,8 @@ function HideHoliday({
           >
             Para siempre
           </button>
-        </span>
+        </span>,
+        pos.host,
       )}
     </span>
   );
@@ -1946,7 +1998,9 @@ export function RemindersChip({ compact }: { compact?: boolean }) {
   const [kind, setKind] = useState("");
   const [remind, setRemind] = useState("1440");
   const t = today();
-  const week = toKey(addDays(new Date(), 7));
+  const setupDone = usePlanner((s) => s.setupDone);
+  // Lo que viene: de mañana a 4 días.
+  const week = toKey(addDays(new Date(), 4));
   const open = list?.items.filter((i) => !i.done && i.due) ?? [];
   const now = open.filter((i) => i.due! <= t);
   const soon = open.filter((i) => i.due! > t && i.due! <= week);
@@ -2010,152 +2064,95 @@ export function RemindersChip({ compact }: { compact?: boolean }) {
     "h-7 rounded-full border border-line bg-surface px-2 text-[11px] text-ink focus:border-ink focus:outline-none";
 
   return (
-    <div className="flex items-center gap-1.5">
-      <button
-        type="button"
-        data-tour="recordatorios-chip"
-        title={summary ? `Próximos: ${summary}` : "Tus recordatorios"}
-        onClick={() => {
-          ensureList();
-          play("open");
-          setBig(true);
-        }}
-        aria-label={compact ? "Recordatorios" : undefined}
-        className={cn(
-          "pressable relative flex items-center gap-2 rounded-full whitespace-nowrap",
-          compact
-            ? "size-8 justify-center"
-            : "bg-surface/80 px-3.5 py-2 text-[13px] font-medium shadow-[var(--shadow-card)] hover:bg-surface",
-        )}
-      >
-        <Bell
-          aria-hidden
-          className={cn(
-            "size-4",
-            now.length ? "text-danger" : "text-ink-muted",
-          )}
-        />
-        {compact ? (
-          (now.length > 0 || soon.length > 0) && (
-            <span
-              className={cn(
-                "absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full px-0.5 text-[9.5px] font-bold text-white tabular-nums",
-                now.length ? "bg-danger" : "bg-[#e3a008]",
-              )}
-            >
-              {now.length || soon.length}
-            </span>
-          )
-        ) : (
-          <>
-            Recordatorios
+    <div className="relative">
+      {/* Una sola ficha: la campanita con «Recordatorios» y, pegado, el campo para sumar uno. */}
+      <div className={cn("flex items-center rounded-full", !compact && "bg-surface/80 shadow-[var(--shadow-card)] ring-1 ring-transparent focus-within:bg-surface focus-within:ring-ink/15")}>
+        <button
+          type="button"
+          data-tour="recordatorios-chip"
+          title={summary ? `Lo que viene: ${summary}` : "Tus recordatorios"}
+          onClick={() => {
+            ensureList();
+            play("open");
+            setBig(true);
+          }}
+          aria-label={compact ? "Recordatorios" : undefined}
+          className={cn("pressable relative flex items-center gap-2 rounded-full whitespace-nowrap", compact ? "size-8 justify-center" : "py-2 pr-2.5 pl-3.5 text-[13px] font-medium hover:bg-surface")}
+        >
+          <Bell aria-hidden className={cn("size-4 origin-top", now.length ? "text-danger" : "text-ink-muted", (now.length > 0 || soon.length > 0) && "motion-safe:animate-[bell-ring_2.6s_ease-in-out_infinite]")} />
+          {!compact && "Recordatorios"}
+          {/* Los numeritos: en rojo lo de hoy (o vencido), en amarillo lo de los próximos días. */}
+          <span className={cn("flex items-center gap-0.5", compact && "absolute -top-1 -right-1")}>
             {now.length > 0 && (
-              <span
-                aria-label={`${now.length} para hoy o vencidos`}
-                className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-[10.5px] font-bold text-white tabular-nums"
-              >
+              <span aria-label={`${now.length} para hoy o vencidos`} className="grid h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[9.5px] font-bold text-white tabular-nums">
                 {now.length}
               </span>
             )}
-            {soon.length > 0 && (
-              <span
-                aria-label={`${soon.length} en los próximos 7 días`}
-                className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-[#e3a008] px-1 text-[10.5px] font-bold text-white tabular-nums"
-              >
+            {soon.length > 0 && (!compact || !now.length) && (
+              <span aria-label={`${soon.length} en los próximos días`} className="grid h-4 min-w-4 place-items-center rounded-full bg-[#e3a008] px-1 text-[9.5px] font-bold text-white tabular-nums">
                 {soon.length}
               </span>
             )}
-          </>
-        )}
-      </button>
-      {!compact && (
-        <div
-          className="relative"
-          onFocus={() => setFocus(true)}
-          onBlur={(e) =>
-            !e.currentTarget.contains(e.relatedTarget as Node) &&
-            setFocus(false)
-          }
-        >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              add();
-            }}
-            className="flex items-center"
-          >
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              placeholder="Recordame…"
-              aria-label="Sumar un recordatorio rápido"
-              className="h-9 w-[150px] rounded-full border border-line bg-surface/80 pr-8 pl-3.5 text-[12.5px] shadow-[var(--shadow-card)] transition-[width] duration-200 placeholder:text-ink-faint focus:w-[230px] focus:border-ink focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={!text.trim()}
-              aria-label="Agregar recordatorio"
-              className="pressable absolute right-1 grid size-7 place-items-center rounded-full bg-ink text-surface disabled:opacity-0"
+          </span>
+        </button>
+        {!compact && (
+          <div className="relative flex items-center border-l border-line" onFocus={() => setFocus(true)} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setFocus(false)}>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                add();
+              }}
+              className="flex items-center"
             >
-              <Plus aria-hidden className="size-3.5" />
-            </button>
-          </form>
-          {focus && text.trim() && (
-            <div className="animate-fade-up absolute top-full left-0 z-[60] mt-2 w-[280px] rounded-2xl border border-line bg-surface p-2.5 shadow-[var(--shadow-popover)]">
-              <p className="mb-1.5 text-[10.5px] font-semibold tracking-wide text-ink-faint uppercase">
-                Opciones
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                <input
-                  type="date"
-                  value={due || guessDue}
-                  min={t}
-                  onChange={(e) => setDue(e.target.value)}
-                  aria-label="Fecha"
-                  className={ctl}
-                />
-                <select
-                  value={k}
-                  onChange={(e) => setKind(e.target.value)}
-                  aria-label="Tipo"
-                  className={ctl}
-                >
-                  {allKinds(custom)
-                    .filter((x) => x.id !== "feriado")
-                    .map((x) => (
-                      <option key={x.id} value={x.id}>
-                        {x.emoji} {x.name}
+              <Plus aria-hidden className="pointer-events-none absolute left-2.5 size-3.5 text-ink-faint" />
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                placeholder="Agregar un recordatorio"
+                aria-label="Agregar un recordatorio"
+                className="h-9 w-[222px] rounded-r-full bg-transparent pr-9 pl-7 text-[12.5px] placeholder:text-ink-faint focus:outline-none max-[1279px]:w-[176px]"
+              />
+              <button type="submit" disabled={!text.trim()} aria-label="Guardar recordatorio" className="pressable absolute right-1 grid size-7 place-items-center rounded-full bg-ink text-surface disabled:opacity-0">
+                <Plus aria-hidden className="size-3.5" />
+              </button>
+            </form>
+            {focus && text.trim() && (
+              <div className="animate-fade-up absolute top-full left-0 z-[60] mt-2 w-[280px] rounded-2xl border border-line bg-surface p-2.5 shadow-[var(--shadow-popover)]">
+                <p className="mb-1.5 text-[10.5px] font-semibold tracking-wide text-ink-faint uppercase">Opciones</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <input type="date" value={due || guessDue} min={t} onChange={(e) => setDue(e.target.value)} aria-label="Fecha" className={ctl} />
+                  <select value={k} onChange={(e) => setKind(e.target.value)} aria-label="Tipo" className={ctl}>
+                    {allKinds(custom)
+                      .filter((x) => x.id !== "feriado")
+                      .map((x) => (
+                        <option key={x.id} value={x.id}>
+                          {x.emoji} {x.name}
+                        </option>
+                      ))}
+                  </select>
+                  <select value={remind} onChange={(e) => setRemind(e.target.value)} aria-label="Avisar" className={ctl}>
+                    {REMIND_OPTIONS.map((o) => (
+                      <option key={o.v} value={o.v}>
+                        {o.label}
                       </option>
                     ))}
-                </select>
-                <select
-                  value={remind}
-                  onChange={(e) => setRemind(e.target.value)}
-                  aria-label="Avisar"
-                  className={ctl}
-                >
-                  {REMIND_OPTIONS.map((o) => (
-                    <option key={o.v} value={o.v}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
+                  </select>
+                </div>
+                <p className="mt-1.5 text-[10.5px] text-ink-muted">Enter para guardarlo. Te avisa también el día y la hora del evento.</p>
               </div>
-              <p className="mt-1.5 text-[10.5px] text-ink-muted">
-                Enter para guardarlo. Te avisa también el día y la hora del
-                evento.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-      {big && list && (
-        <PendingExpanded
-          list={list}
-          isMobile={!desktop}
-          onClose={() => setBig(false)}
-        />
-      )}
+            )}
+          </div>
+        )}
+      </div>
+      {/* Al abrir la app, lo que vence (o venció) aparece acá, debajo de la ficha. */}
+      {setupDone && !focus && <PendingAlerts compact={compact} />}
+      {big && list && <PendingExpanded list={list} isMobile={!desktop} onClose={() => setBig(false)} />}
     </div>
   );
+}
+
+/** Cuánto falta para una fecha: «hoy», «mañana», «faltan 5 días». */
+function daysLeft(date: DateKey, t: DateKey) {
+  const n = Math.round((fromKey(date).getTime() - fromKey(t).getTime()) / 86_400_000);
+  return n <= 0 ? "hoy" : n === 1 ? "mañana" : `faltan ${n} días`;
 }

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { addDays, fromKey, toKey, weekNumber } from "@/lib/dates";
-import { cn, formatMinutes } from "@/lib/format";
+import { cn } from "@/lib/format";
 import { cheer } from "@/lib/motivation";
 import { formatTime } from "@/lib/time";
 import { useMediaQuery } from "@/lib/hooks";
@@ -34,8 +34,8 @@ import { BucketCard } from "./Bucket";
 import { Book } from "./RecapBook";
 import type { DiaryItem } from "@/lib/diary";
 import { DiaryBox, DiaryComposer, Story } from "./Diary";
-import { MoodCard } from "./Mood";
-import { PendingAlerts, RemindersChip } from "./Pending";
+import { BitacoraButton } from "./Mood";
+import { RemindersChip } from "./Pending";
 import { ProgressButton } from "./Progress";
 import { UndoButton } from "./UndoButton";
 import { isTestMode } from "@/lib/test-mode";
@@ -170,6 +170,8 @@ export function SimpleApp() {
       kicker?: string;
       subtitle?: string;
     };
+    /** Al guardar, se borra este evento puntual del diario (pasó a la rutina). */
+    replaces?: string;
   } | null>(null);
   // Lo que se está armando en el editor, dibujado en el calendario.
   const [draftGhost, setDraftGhost] = useState<RoutineBlock | null>(null);
@@ -527,6 +529,12 @@ export function SimpleApp() {
           usePlanner.getState().removeLogro(id);
           play("pop");
         }}
+        onExtraRoutine={(id) => {
+          const x = weekExtras.find((e) => e.id === id);
+          if (!x) return;
+          const quadrant = (SIMPLE_QUADRANTS as string[]).includes(x.quadrant) ? (x.quadrant as QuadrantId) : "libre";
+          setEditing({ day: x.day, start: x.start, minutes: x.minutes, draft: { name: x.name, quadrant, days: [x.day], title: "Hacerlo rutina" }, replaces: id });
+        }}
         onSleepClick={() => setSleepOpen(true)}
         onSleepResize={(dow, edge, minutes) => {
           // Como en la configuración: levantarse es de finde el sáb y dom; acostarse, el vie y sáb.
@@ -590,21 +598,10 @@ export function SimpleApp() {
       nav={weekNav}
       actions={isCurrentWeek ? <>{clearButton}</> : null}
     >
-      {/* Siempre visible hasta que la rutina esté completa: no tiene que quedar ningún espacio vacío. */}
-      {isCurrentWeek && setupDone && sleepSet && empty > 0 && (
-        <div
-          role="status"
-          className="mb-2 flex flex-wrap items-center gap-2 rounded-xl bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-3 py-2 text-[12.5px] text-[#8a6200]"
-        >
-          <span
-            aria-hidden
-            className="size-2 animate-pulse rounded-full bg-[#d99a00]"
-          />
-          <span className="min-w-0 flex-1">
-            <b className="font-semibold">Terminá de completar tu rutina:</b> te
-            quedan {formatMinutes(empty)} sin asignar en la semana. Arrastrá
-            sobre los espacios en blanco y sumá qué hacés en ese rato.
-          </span>
+      {/* Lo que hiciste fuera de la rutina: se anota acá arriba y se guarda en tu diario. */}
+      {isCurrentWeek && !phone && (
+        <div className="mb-2 shrink-0">
+          <DiaryComposer bar />
         </div>
       )}
       {isCurrentWeek &&
@@ -665,12 +662,6 @@ export function SimpleApp() {
         </div>
       )}
       <FitHeight>{(h) => weekGrid(h, phone)}</FitHeight>
-      {/* Lo que hiciste hoy fuera de la rutina: se anota acá y se guarda en tu diario. */}
-      {isCurrentWeek && !phone && (
-        <div className="mt-2 shrink-0">
-          <DiaryComposer bar />
-        </div>
-      )}
     </Panel>
   );
   // En el celular, cada cosa en su pestaña: la rutina; Hoy (no negociables y diario); las metas; el balde y
@@ -692,7 +683,6 @@ export function SimpleApp() {
         {pendingId && (
           <ListCard id={pendingId} className="h-[460px] shrink-0" />
         )}
-        <MoodCard className="shrink-0" />
         <DiaryBox className="shrink-0" />
         <Story
           month={storyMonth}
@@ -749,8 +739,8 @@ export function SimpleApp() {
         <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 pt-4 pb-3 sm:px-6">
           <div className="flex items-center gap-2 justify-self-start">
             <ListsMenu />
-            <RemindersChip />
             <ProgressButton />
+            <RemindersChip />
           </div>
           <h1 className="flex items-center gap-2.5">
             <BrandMark size={30} />
@@ -759,6 +749,7 @@ export function SimpleApp() {
             </span>
           </h1>
           <div className="flex items-center gap-2 justify-self-end">
+            <BitacoraButton />
             <div data-tour="cuenta" className="flex items-center gap-1">
               <UndoButton />
               <PaletteSwitch />
@@ -783,6 +774,7 @@ export function SimpleApp() {
             >
               <RemindersChip compact />
               <ProgressButton compact />
+              <BitacoraButton compact />
               <UndoButton className="size-8" />
               <PaletteSwitch />
               {soundButton}
@@ -851,8 +843,6 @@ export function SimpleApp() {
               <YearGoals />
             ) : id === "diarios" ? (
               <DailyGoals fit />
-            ) : id === "diario" ? (
-              <MoodCard />
             ) : id.startsWith("list:") ? (
               <ListCard id={id.slice(5)} />
             ) : null
@@ -872,6 +862,7 @@ export function SimpleApp() {
           onClose={() => setEditing(null)}
           onSave={(bb) => {
             const prev = editing.block;
+            if (editing.replaces) usePlanner.getState().removeLogro(editing.replaces);
             setEditing(null);
             if (Array.isArray(bb)) {
               play("pop");
@@ -1053,7 +1044,6 @@ export function SimpleApp() {
       {/* En Logros y Metas hay campos para escribir abajo: ahí el asistente no aparece (taparía el botón de sumar). */}
       {/* El asistente con IA (botón flotante) queda apagado por ahora. */}
       <CheerToast />
-      {setupDone && <PendingAlerts />}
       {showSetup && (
         <Setup
           phone={phone}

@@ -30,6 +30,8 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
   const logros = usePlanner((s) => s.logros);
   const sleep = usePlanner((s) => s.sleep);
   const sleepSet = usePlanner((s) => s.sleepSet);
+  // El mes cuenta desde el día que configuraste la app.
+  const startedAt = usePlanner((s) => s.startedAt);
   const [range, setRange] = useState<"semana" | "mes">("mes");
   const [open, setOpen] = useState(() => {
     try {
@@ -48,18 +50,25 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
   const month = new Date().toISOString().slice(0, 7);
   // El mes entero: tu semana llevada a todos los días del mes (así el objetivo semanal se ve en el mes).
   const lastDay = toKey(new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0));
-  const monthly = monthMinutes(routine, logros, sleep, month, "", lastDay);
+  const monthly = monthMinutes(routine, logros, sleep, month, startedAt, lastDay);
   const { minutes } = range === "semana" ? { minutes: weekMinutes(routine, logros, sleep) } : monthly;
   const emptyWeek = sleepSet ? emptyMinutes(routine, sleep) : 0;
   const empty = range === "semana" ? emptyWeek : emptyWeek * (monthly.days / 7);
   const mine = ACTIVE_PARTS.reduce((acc, p) => acc + minutes[p], 0);
   // Todo sobre el 100%: lo cargado más los espacios sin completar.
   const total = Math.max(1, minutes.sueno + minutes.trabajo + minutes.libre + mine + empty);
+  // «No hago nada» va aparte de las tareas cotidianas (se guarda como cotidianas, marcado).
+  const nadaWeek = routine.filter((b) => b.nada).reduce((acc, b) => acc + b.minutes * b.days.length, 0);
+  const nada = Math.min(minutes.libre, range === "semana" ? nadaWeek : nadaWeek * (monthly.days / 7));
+  const part = { sueno: minutes.sueno, trabajo: minutes.trabajo, libre: minutes.libre - nada, nada };
   const pct = (m: number) => Math.round((m / total) * 100);
 
   // Las filas, de mayor a menor (los espacios sin completar, siempre al final).
-  type RowId = "sueno" | "trabajo" | "libre" | "vos";
-  const rows = (["sueno", "trabajo", "libre", "vos"] as RowId[]).map((id) => ({ id, m: id === "vos" ? mine : minutes[id] })).sort((a, b) => b.m - a.m);
+  type RowId = "sueno" | "trabajo" | "libre" | "nada" | "vos";
+  const rows = (["sueno", "trabajo", "libre", "nada", "vos"] as RowId[])
+    .filter((id) => id !== "nada" || nada > 0)
+    .map((id) => ({ id, m: id === "vos" ? mine : part[id] }))
+    .sort((a, b) => b.m - a.m);
   const vosRank = rows.findIndex((r) => r.id === "vos");
   // Cuando lo tuyo sube un puesto: sonido y aviso (no al abrir la app).
   const lastRank = useRef<number | null>(null);
@@ -100,14 +109,14 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
     window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "libre", days: [slot?.day ?? 1], start: slot?.start ?? 8 * 60, minutes: 60 } }));
   };
 
-  const baseRow = (id: "sueno" | "trabajo" | "libre") => (
-    <li key={id} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] tabular-nums", minutes[id] === 0 && "opacity-45")}>
-      <span className="grid size-[20px] shrink-0 place-items-center rounded-full text-white" style={{ background: ROW_COLOR[id] }}>
-        {id === "sueno" ? <Moon aria-hidden className="size-3" /> : <QuadrantIcon id={id} className="size-3" />}
+  const baseRow = (id: "sueno" | "trabajo" | "libre" | "nada") => (
+    <li key={id} className={cn("flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] tabular-nums", part[id] === 0 && "opacity-45")}>
+      <span className="grid size-[20px] shrink-0 place-items-center rounded-full text-[11px] text-white" style={{ background: ROW_COLOR[id] }}>
+        {id === "sueno" ? <Moon aria-hidden className="size-3" /> : id === "nada" ? "💤" : <QuadrantIcon id={id} className="size-3" />}
       </span>
       <span className="min-w-0 flex-1 truncate font-medium">{ROW_LABEL[id]}</span>
-      <span className="text-ink-muted">{h(minutes[id])}</span>
-      <span className="w-10 text-right font-semibold">{pct(minutes[id])}%</span>
+      <span className="text-ink-muted">{h(part[id])}</span>
+      <span className="w-10 text-right font-semibold">{pct(part[id])}%</span>
     </li>
   );
 
@@ -136,14 +145,14 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
       <ul data-tour="balde-lista" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         {rows.map((r) =>
           r.id === "vos" ? (
-            <li key="vos" data-tour="balde-vos" className="rounded-xl bg-[color-mix(in_oklab,var(--color-success)_8%,transparent)] ring-1 ring-[color-mix(in_oklab,var(--color-success)_28%,transparent)]">
+            <li key="vos" data-tour="balde-vos" className="rounded-xl border-[1.5px] border-transparent" style={{ background: VOS_BG }}>
               <button type="button" onClick={toggleOpen} aria-expanded={open} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[12.5px] tabular-nums">
-                <span className="grid size-[20px] shrink-0 place-items-center rounded-full bg-success text-white">
+                <span className="grid size-[20px] shrink-0 place-items-center rounded-full text-white" style={{ background: VOS_STRONG }}>
                   <ChevronDown aria-hidden className={cn("size-3.5 transition-transform", !open && "-rotate-90")} />
                 </span>
-                <span className="min-w-0 flex-1 truncate font-semibold text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">Tiempo para vos</span>
+                <span className="min-w-0 flex-1 truncate font-semibold">Tiempo para vos</span>
                 <span className="text-ink-muted">{h(mine)}</span>
-                <span className="w-10 text-right font-bold text-[color-mix(in_oklab,var(--color-success)_70%,var(--color-ink))]">{pct(mine)}%</span>
+                <span className="w-10 text-right font-bold">{pct(mine)}%</span>
               </button>
               {open && (
                 <div className="px-2.5 pb-2">
@@ -161,6 +170,11 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
               type="button"
               data-tour="balde-libres"
               onClick={completar}
+              // Al pasar el mouse, se marcan en el calendario los espacios que faltan completar.
+              onMouseEnter={() => window.dispatchEvent(new CustomEvent("lb:show-empty", { detail: true }))}
+              onMouseLeave={() => window.dispatchEvent(new CustomEvent("lb:show-empty", { detail: false }))}
+              onFocus={() => window.dispatchEvent(new CustomEvent("lb:show-empty", { detail: true }))}
+              onBlur={() => window.dispatchEvent(new CustomEvent("lb:show-empty", { detail: false }))}
               title="Completarlos en tu rutina"
               className="pressable flex w-full items-center gap-2 rounded-lg border border-dashed border-ink/25 px-2.5 py-1.5 text-left text-[12.5px] tabular-nums hover:bg-surface-sunken"
             >
@@ -220,9 +234,9 @@ export function BucketCard({ className }: { className?: string; showReport?: boo
 }
 
 const OPEN_KEY = "lb:balde-vos-abierto";
-const ROW_LABEL = { sueno: "Sueño", trabajo: "Trabajo", libre: "Tareas cotidianas", vos: "Tiempo para vos" } as const;
+const ROW_LABEL = { sueno: "Sueño", trabajo: "Trabajo", libre: "Tareas cotidianas", nada: "No hago nada", vos: "Tiempo para vos" } as const;
 // Sueño en azul, trabajo en negro, tareas cotidianas en gris.
-const ROW_COLOR = { sueno: "#3b6fe0", trabajo: "#1f2329", libre: "#8a919c" } as const;
+const ROW_COLOR = { sueno: "#3b6fe0", trabajo: "#1f2329", libre: "#8a919c", nada: "#c3c8d0" } as const;
 
 /** Ajustar la base desde el balde: abre una pantalla con el sueño, el trabajo y las tareas cotidianas para tocar cada uno. */
 function BaseAdjust() {
@@ -332,3 +346,8 @@ function BaseEditor({ isMobile, onClose }: { isMobile: boolean; onClose: () => v
     </Sheet>
   );
 }
+
+// Tiempo para vos, multicolor como el fondo de la app (el verde es de Deporte): un fondo suave y el borde con
+// el degradé.
+const VOS_STRONG = "linear-gradient(135deg, #5b8def, #9b7bf0 40%, #ec6fa5 75%, #f5a36b)";
+const VOS_BG = `linear-gradient(120deg, color-mix(in oklab, #96bef5 22%, var(--color-surface)), color-mix(in oklab, #c4b0f5 22%, var(--color-surface)) 40%, color-mix(in oklab, #faaacd 22%, var(--color-surface)) 75%, color-mix(in oklab, #ffc8aa 24%, var(--color-surface))) padding-box, ${VOS_STRONG} border-box`;

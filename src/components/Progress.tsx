@@ -40,7 +40,7 @@ export function ProgressButton({ compact }: { compact?: boolean }) {
           play("open");
           setOpen(true);
         }}
-        aria-label={compact ? "Mi Progreso" : undefined}
+        aria-label="Mi Progreso"
         className={cn(
           "pressable flex items-center gap-2 rounded-full whitespace-nowrap",
           compact
@@ -49,7 +49,7 @@ export function ProgressButton({ compact }: { compact?: boolean }) {
         )}
       >
         <TrendingUp aria-hidden className="size-4 text-ink-muted" />
-        {!compact && "Mi Progreso"}
+        {!compact && <span className="max-[1399px]:sr-only">Mi Progreso</span>}
       </button>
       {open && (
         <ProgressView isMobile={!desktop} onClose={() => setOpen(false)} />

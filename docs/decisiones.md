@@ -307,3 +307,19 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - **Configurar tipos:** cada tipo se puede editar, también los de siempre (se guardan como propios con el mismo id). «Feriados y fechas especiales» → «Ver fechas»: todas las del año, para renombrarlas, ocultarlas o volver a mostrarlas, y elegir el país.
 - **País** (en la bienvenida de la guía, arranca con el del navegador): define feriados y fechas patrias. Calculados sin conexión para Argentina, Uruguay, Chile, Paraguay, México, Colombia, Perú, España y Estados Unidos; para otros países, solo las fechas universales.
 - **Rutina semanal:** se saca «Editar tu rutina» y «Borrar» pasa a ser «Limpiar». Lo que sumás a la rutina ya vale de acá en adelante para todos los meses que vienen (las semanas pasadas quedan guardadas como estaban).
+
+## 2026-10-13 — Correcciones: avisos arriba, Bitácora, «No hago nada» e inicio desde la configuración
+
+- **Encabezado:** Mis listas · Mi Progreso · Recordatorios (con el campo «Agregar un recordatorio» pegado, como una sola ficha). A la derecha, «Bitácora». En pantallas de menos de 1400 px, Mi Progreso y Bitácora quedan solo con su ícono.
+- **Campanita:** se mueve (suena) cuando hay algo; número rojo para lo de hoy o vencido y amarillo para lo de mañana a 4 días.
+- **Aviso de recordatorios** (al abrir la app): aparece debajo de la ficha, arriba, y no abajo a la izquierda. Por cada uno: Hecho, Mañana, Próxima semana, Elegir fecha… y Eliminar.
+- **Próximas fechas:** cada una dice cuánto falta («faltan 5 días»). El menú para quitar un feriado flota por fuera de la celda del calendario (no queda cortado).
+- **Bitácora** (antes «¿Cómo te sentiste?»): deja de ser un panel del tablero. Es un botón arriba con un librito que abre tu diario: a la izquierda escribís (emociones y texto), a la derecha se va armando el cuentito de la semana o del mes.
+- **Sumar a tu semana:** sin el grupo «La base»; arriba Trabajo, Tareas cotidianas y «No hago nada»; abajo, más compacto, el tiempo para vos. Entra sin scroll.
+- **«No hago nada»:** se guarda como tareas cotidianas con una marca (`nada`), así no hay que cambiar el modelo de categorías; en el balde tiene su propia fila.
+- **Rutina semanal:** se saca el aviso amarillo «Terminá de completar tu rutina» y la barra para escribir lo que hiciste pasa arriba del calendario.
+- **Balde:** al pasar el mouse por «Espacios libres sin completar», el calendario marca con línea punteada todos los huecos de la semana.
+- **Todo cuenta desde el día que configurás la app:** al terminar la guía, `startedAt` pasa a ser ese día. No negociables muestra y calcula el mes desde ahí (los días anteriores no aparecen) y el balde del mes también cuenta desde ese día. v13: el inicio ya no sale de lo anotado en el diario (los Momentos viejos quedaban el 1° del mes), solo de tildes y cambios de rutina reales.
+- **«Tiempo para vos» multicolor** (balde y editor): degradé como el fondo de la app, en lugar de verde, porque el verde es el color de Deporte.
+- **Editor más compacto:** sin el título «Categoría»; Trabajo, Tareas cotidianas y No hago nada en una sola línea, con fichas chicas como las del tiempo para vos. Se saca la leyenda debajo de los días.
+- **Eventos puntuales en el calendario:** al tocarlos, además de borrar, «Hacerlo rutina» abre el editor con ese evento cargado para elegir días y horario; al guardarlo, el evento puntual pasa a la rutina (se borra del diario para no contarlo dos veces).

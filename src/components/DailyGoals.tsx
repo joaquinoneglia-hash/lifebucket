@@ -50,7 +50,8 @@ export function DailyGoals({ className, fit = false }: { className?: string; fit
     window.addEventListener("lb:noneg-done", done);
     return () => window.removeEventListener("lb:noneg-done", done);
   }, []);
-  const days = monthDays(month);
+  // El mes arranca el día que empezaste a usar la app: lo de antes no se muestra ni cuenta.
+  const days = monthDays(month).filter((d) => !startedAt || d >= startedAt);
   const stats = rangeStats(goals, checks, days, today, startedAt);
   // El % del mes: tildes hechas sobre todas las casillas del mes (no negociables × días), de 0 a 100.
   const boxes = goals.length * days.length;
@@ -398,7 +399,7 @@ function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () =>
   const today = toKey(new Date());
   const month = today.slice(0, 7);
   const goals = goalsFor({ dailyGoals: allGoals, goalMonths }, month);
-  const days = monthDays(month);
+  const days = monthDays(month).filter((d) => !startedAt || d >= startedAt);
   const st = monthStats(goals, checks, month, today, startedAt);
   const ticked = days.reduce((acc, d) => acc + goals.filter((g) => (checks[d] ?? []).includes(g.id)).length, 0);
   const boxes = goals.length * days.length;

@@ -130,6 +130,8 @@ export function Setup({
 
   const finish = () => {
     setSetupDone(true);
+    // Todo (no negociables, porcentajes, rutina) cuenta desde hoy, el día que configuraste la app.
+    usePlanner.getState().setStartedAt(toKey(new Date()));
     cheer("welcome");
     onDone();
   };

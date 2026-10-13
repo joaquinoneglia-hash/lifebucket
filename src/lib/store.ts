@@ -142,6 +142,8 @@ export interface RoutineBlock {
   days: number[];
   start: number;
   minutes: number;
+  /** «No hago nada»: un rato libre (cuenta aparte en el balde). */
+  nada?: boolean;
 }
 
 /** Un momento con otros ("cena con amigos"): por mes, sin hora. */
@@ -444,7 +446,7 @@ import { testKey } from "./test-mode";
 /** Dónde se guardan los datos en el navegador. Antes se llamaba "lifeplan:v1". */
 const STORAGE_KEY = "lifebucket:v1";
 /** Versión del formato de los datos (la usa también la nube). */
-export const STORE_VERSION = 12;
+export const STORE_VERSION = 13;
 const LEGACY_STORAGE_KEY = "lifeplan:v1";
 
 // Migración del nombre: si hay datos con la clave vieja y todavía no con la nueva, se copian
@@ -874,6 +876,11 @@ export function migratePlanner(persisted: unknown, version: number): PlannerStat
   if (version < 11) state = { ...state, lists: checklistToPending(state.lists ?? []), moods: state.moods ?? [] };
   // v12: Pendientes pasa a llamarse Recordatorios (con tipos: cumpleaños, pagos, salud…).
   if (version < 12) state = { ...state, lists: (state.lists ?? []).map((l) => (l.type === "pendientes" && l.title === "Pendientes" ? { ...l, title: "Recordatorios" } : l)) };
+  // v13: el inicio no sale de lo anotado en el diario (los Momentos viejos quedaban el 1° del mes).
+  if (version < 13 && state.startedAt) {
+    const real = firstDay({ ...state, logros: [] });
+    if (real > state.startedAt) state = { ...state, startedAt: real };
+  }
   return state;
 }
 
@@ -919,7 +926,6 @@ export function goalsFor(s: Pick<PlannerState, "goalMonths" | "dailyGoals">, mon
 /** El primer día con algo cargado (logros, tildes o semanas guardadas); si no hay nada, hoy. */
 export function firstDay(state: Partial<PlannerState>): DateKey {
   const dates = [
-    ...(state.logros ?? []).map((l) => l.date),
     ...Object.keys(state.dailyChecks ?? {}),
     ...(state.routineHistory ?? []).map((h) => h.date),
   ].filter(Boolean) as DateKey[];

@@ -12,7 +12,7 @@ import { usePlanner } from "@/lib/store";
  * título y se estira (el borde entre dos paneles). Si una columna queda con un solo panel, ocupa todo el alto.
  * La disposición queda guardada en este navegador.
  */
-export type BaseModule = "semana" | "bucket" | "metas" | "diarios" | "diario";
+export type BaseModule = "semana" | "bucket" | "metas" | "diarios";
 /** Un panel: uno de los fijos o una lista ("list:<id>"). */
 export type ModuleId = BaseModule | `list:${string}`;
 export type Col = "left" | "center" | "right";
@@ -21,7 +21,6 @@ export const MODULE_TITLES: Record<BaseModule, string> = {
   bucket: "Tu Balde",
   metas: "Metas anuales importantes",
   diarios: "No negociables",
-  diario: "¿Cómo te sentiste?",
 };
 const titleOf = (id: ModuleId) => (id.startsWith("list:") ? (usePlanner.getState().lists.find((l) => `list:${l.id}` === id)?.title ?? "Lista") : MODULE_TITLES[id as BaseModule]);
 /** Mostrar u ocultar un panel desde cualquier lado (el menú de Mis listas). */
@@ -29,7 +28,7 @@ export const showModule = (id: ModuleId, show: boolean) => window.dispatchEvent(
 /** Los paneles fijos que ocultaste (para mostrarlos de nuevo desde el menú). */
 export function hiddenModules(): BaseModule[] {
   try {
-    return (JSON.parse(localStorage.getItem(KEY) ?? "null")?.hidden ?? []) as BaseModule[];
+    return ((JSON.parse(localStorage.getItem(KEY) ?? "null")?.hidden ?? []) as BaseModule[]).filter((id) => id in MODULE_TITLES);
   } catch {
     return [];
   }
@@ -37,10 +36,10 @@ export function hiddenModules(): BaseModule[] {
 const COLS: Col[] = ["left", "center", "right"];
 type Prefs = { cols: Record<Col, ModuleId[]>; collapsed: ModuleId[]; weights: Partial<Record<ModuleId, number>>; hidden: BaseModule[] };
 const DEFAULT: Prefs = {
-  cols: { left: ["bucket", "metas"], center: ["semana"], right: ["diarios", "list:pendientes", "diario"] },
+  cols: { left: ["bucket", "metas"], center: ["semana"], right: ["diarios", "list:pendientes"] },
   collapsed: [],
-  hidden: ["diario"],
-  weights: { bucket: 1.25, metas: 1, semana: 3, diarios: 1.3, diario: 1, "list:pendientes": 1.6 },
+  hidden: [],
+  weights: { bucket: 1.25, metas: 1, semana: 3, diarios: 1.3, "list:pendientes": 1.6 },
 };
 const KEY = testKey("lb:board:v3");
 const ALL = Object.keys(MODULE_TITLES) as BaseModule[];

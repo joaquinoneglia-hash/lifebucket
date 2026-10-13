@@ -1,6 +1,6 @@
 "use client";
 
-import { GripVertical, Moon, Trash2 } from "lucide-react";
+import { GripVertical, Moon, Trash2, Repeat } from "lucide-react";
 import { QuadrantIcon } from "../QuadrantIcon";
 import { play, step } from "@/lib/sfx";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -9,7 +9,7 @@ import { cn, formatMinutes } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { quadrantStyle } from "@/lib/quadrants";
 import { partStyle } from "@/lib/mode";
-import { awakeFor, WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
+import { awakeFor, emptySegments, WEEK_ORDER, type RoutineBlock } from "@/lib/routine";
 import type { SleepSettings } from "@/lib/sleep";
 import { formatTime } from "@/lib/time";
 import { BlockEditor } from "./BlockEditor";
@@ -45,6 +45,7 @@ export function WeekTemplateGrid({
   extras,
   onExtraChange,
   onExtraDelete,
+  onExtraRoutine,
   previewDays,
 }: {
   /** Soltar un bloque en el tacho de abajo (aparece mientras lo arrastrás). Quien usa la grilla pregunta qué borrar. */
@@ -79,6 +80,8 @@ export function WeekTemplateGrid({
   onExtraChange?: (id: string, next: { day: number; start: number; minutes: number }) => void;
   /** Borrar algo del diario desde el calendario. */
   onExtraDelete?: (id: string) => void;
+  /** Pasar algo puntual del diario a la rutina (se eligen días y horario en el editor). */
+  onExtraRoutine?: (id: string) => void;
   /** Tocar la luna del sueño: abrir su configuración. */
   onSleepClick?: () => void;
   /** Estirar el sueño desde el calendario (a qué hora te levantás o te acostás ese día de la semana). */
@@ -99,6 +102,13 @@ export function WeekTemplateGrid({
     return () => window.clearInterval(t);
   }, [markToday]);
   const windows = WEEK_ORDER.map((d) => awakeFor(d, sleep));
+  // Desde el balde («Espacios libres sin completar»): se marcan con línea punteada los huecos de la semana.
+  const [showEmpty, setShowEmpty] = useState(false);
+  useEffect(() => {
+    const on = (e: Event) => setShowEmpty(!!(e as CustomEvent<boolean>).detail);
+    window.addEventListener("lb:show-empty", on);
+    return () => window.removeEventListener("lb:show-empty", on);
+  }, []);
   const from = range ? range[0] : Math.floor(Math.min(...windows.map((w) => w.wake)) / 60) * 60;
   const to = range ? range[1] : Math.ceil(Math.max(...windows.map((w) => w.bed)) / 60) * 60;
   const editable = !!(onChange || onCreateAt);
@@ -322,6 +332,15 @@ export function WeekTemplateGrid({
                 className="pointer-events-none absolute inset-x-0 bg-[color-mix(in_oklab,var(--color-libre-soft)_70%,transparent)]"
                 style={{ top: top(wake), height: top(bed) - top(wake) }}
               />}
+              {showEmpty &&
+                emptySegments(template, sleep, d, from, to).map(([a, b]) => (
+                  <div
+                    key={a}
+                    aria-hidden
+                    className="animate-fade-up pointer-events-none absolute inset-x-1 z-[3] rounded-md border-2 border-dashed border-[#d99a00] bg-[color-mix(in_oklab,#f5c542_16%,transparent)]"
+                    style={{ top: top(a) + 1, height: top(b) - top(a) - 2 }}
+                  />
+                ))}
               {previewDays?.includes(d) && (
                 <div aria-hidden className="pointer-events-none absolute inset-0 z-[1] animate-pulse bg-[color-mix(in_oklab,var(--color-ink)_7%,transparent)] ring-2 ring-ink/25 ring-inset" />
               )}
@@ -395,6 +414,19 @@ export function WeekTemplateGrid({
                             {formatTime(x.start)}–{formatTime(x.start + x.minutes)} · {formatMinutes(x.minutes)} · de tu diario
                           </p>
                           <p className="px-1.5 pb-1.5 text-[10.5px] leading-snug text-ink-faint">Arrastralo para moverlo; desde el borde de abajo, para estirarlo.</p>
+                          {onExtraRoutine && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setXMenu(null);
+                                onExtraRoutine(x.id);
+                              }}
+                              className="pressable flex w-full items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-[12px] font-semibold hover:bg-surface-sunken"
+                            >
+                              <Repeat aria-hidden className="size-3.5" />
+                              Hacerlo rutina
+                            </button>
+                          )}
                           {onExtraDelete && (
                             <button
                               type="button"
