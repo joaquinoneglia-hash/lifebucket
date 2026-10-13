@@ -383,17 +383,189 @@ const isCurrentMonth = (m: string) => m === toKey(new Date()).slice(0, 7);
 const LINE_COLORS = ["#2f9e64", "#2b8fd6", "#8a5cf0", "#d99a00", "#e0457b", "#0f9fa8", "#7a8794"];
 
 /**
- * Cómo te fue mes a mes con tus no negociables: el % de cumplimiento de cada mes (y el de cada no negociable)
- * en un gráfico de líneas, y un resumen corto de cada mes (días perfectos, lo más constante, lo que costó).
+ * Tus no negociables, en grande: arriba, cómo venís (cumplimiento del mes, racha, mejor racha, días perfectos,
+ * lo más constante y lo que más cuesta); abajo, el mes o la semana para tildar ahí mismo, o el año en un
+ * gráfico. Con «Editar», cambiás los de este mes.
  */
 function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () => void }) {
-  const [view, setView] = useState<"semana" | "anio">("semana");
+  const [view, setView] = useState<"mes" | "semana" | "anio">("mes");
+  const [editing, setEditing] = useState(false);
+  const allGoals = usePlanner((s) => s.dailyGoals);
+  const goalMonths = usePlanner((s) => s.goalMonths);
+  const checks = usePlanner((s) => s.dailyChecks);
+  const startedAt = usePlanner((s) => s.startedAt);
+  const toggle = usePlanner((s) => s.toggleDailyCheck);
+  const today = toKey(new Date());
+  const month = today.slice(0, 7);
+  const goals = goalsFor({ dailyGoals: allGoals, goalMonths }, month);
+  const days = monthDays(month);
+  const st = monthStats(goals, checks, month, today, startedAt);
+  const ticked = days.reduce((acc, d) => acc + goals.filter((g) => (checks[d] ?? []).includes(g.id)).length, 0);
+  const boxes = goals.length * days.length;
+  const full = (d: DateKey) => goals.length > 0 && goals.every((g) => (checks[d] ?? []).includes(g.id));
+  // Racha: días seguidos con todo cumplido (si hoy todavía no está completo, cuenta hasta ayer).
+  let streak = 0;
+  for (let d = full(today) ? new Date() : addDays(new Date(), -1); streak < 400 && full(toKey(d)); d = addDays(d, -1)) streak++;
+  // Mejor racha de los últimos 365 días.
+  let best = 0;
+  let run = 0;
+  for (let k = 365; k >= 0; k--) {
+    const d = toKey(addDays(new Date(), -k));
+    const gs = goalsFor({ dailyGoals: allGoals, goalMonths }, d.slice(0, 7));
+    run = gs.length && gs.every((g) => (checks[d] ?? []).includes(g.id)) ? run + 1 : 0;
+    best = Math.max(best, run);
+  }
+  const perfect = st.perDay.filter((d) => d.score !== null && goals.length > 0 && d.score === goals.length).length;
+  const sorted = [...st.perGoal].sort((a, b) => b.pct - a.pct);
+  const kpis = [
+    { k: "Cumplimiento del mes", v: boxes ? `${Math.round((ticked / boxes) * 100)}%` : "–", d: `${ticked} de ${boxes} casillas` },
+    { k: "Racha actual", v: `${streak} ${streak === 1 ? "día" : "días"}`, d: "seguidos con todo cumplido" },
+    { k: "Mejor racha", v: `${best} ${best === 1 ? "día" : "días"}`, d: "en el último año" },
+    { k: "Días perfectos", v: String(perfect), d: "este mes" },
+    { k: "Lo más constante", v: sorted[0] && st.days ? `${sorted[0].pct}%` : "–", d: sorted[0]?.goal.name ?? "" },
+    { k: "Lo que más cuesta", v: sorted.length > 1 && st.days ? `${sorted[sorted.length - 1].pct}%` : "–", d: sorted.length > 1 ? sorted[sorted.length - 1].goal.name : "" },
+  ];
+
+  return (
+    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="goals-history-title" width="max-w-[1000px]">
+      <div className={cn("flex flex-col", isMobile ? "h-[90dvh]" : "h-[min(800px,90dvh)]")}>
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-line py-2.5 pr-2.5 pl-5">
+          <h2 id="goals-history-title" data-autofocus tabIndex={-1} className="type-title outline-none">
+            Tus no negociables
+          </h2>
+          <div className="flex items-center gap-2">
+            <Segmented
+              label="Vista"
+              value={view}
+              onChange={setView}
+              options={[
+                { id: "mes", label: "Este mes" },
+                { id: "semana", label: "Esta semana" },
+                { id: "anio", label: "El año" },
+              ]}
+              className="text-[12.5px]"
+            />
+            <button
+              type="button"
+              onClick={() => setEditing(!editing)}
+              aria-pressed={editing}
+              className={cn("pressable inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-semibold", editing ? "bg-ink text-surface" : "ring-1 ring-line hover:bg-surface-sunken")}
+            >
+              <Pencil aria-hidden className="size-3.5" />
+              Editar
+            </button>
+            <button type="button" aria-label="Cerrar" onClick={onClose} className="pressable grid size-9 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink">
+              <X aria-hidden className="size-4" />
+            </button>
+          </div>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
+          {editing ? (
+            <div className="mx-auto max-w-[520px]">
+              <GoalEditor goals={goals} onDone={() => setEditing(false)} />
+            </div>
+          ) : (
+            <>
+              <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                {kpis.map((x) => (
+                  <li key={x.k} className="flex flex-col gap-0.5 rounded-xl bg-surface-sunken/70 px-3 py-2.5">
+                    <span className="text-[11px] text-ink-muted">{x.k}</span>
+                    <span className="text-[20px] leading-tight font-semibold tabular-nums">{x.v}</span>
+                    <span className="truncate text-[11px] text-ink-faint">{x.d}</span>
+                  </li>
+                ))}
+              </ul>
+              {!goals.length ? (
+                <p className="mt-6 text-[13px] text-ink-muted">Todavía no elegiste tus no negociables. Tocá «Editar» para sumarlos.</p>
+              ) : view === "mes" ? (
+                <MonthBig goals={goals} days={days} today={today} checks={checks} toggle={toggle} />
+              ) : view === "semana" ? (
+                <div className="mt-5">
+                  <WeekView />
+                </div>
+              ) : (
+                <YearView />
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
+/** El mes en grande, para tildar: una fila por día, con el puntaje en color. */
+function MonthBig({ goals, days, today, checks, toggle }: { goals: DailyGoal[]; days: DateKey[]; today: DateKey; checks: Record<DateKey, string[]>; toggle: (date: DateKey, id: string) => void }) {
+  return (
+    <div className="mt-5 overflow-x-auto">
+      <table className="w-full min-w-[480px] border-collapse text-[12.5px]">
+        <thead>
+          <tr className="text-[11px] text-ink-muted">
+            <th className="py-1.5 pr-2 text-left font-semibold">Día</th>
+            {goals.map((g) => (
+              <th key={g.id} className="px-1 py-1.5 text-center font-semibold">
+                {g.name}
+              </th>
+            ))}
+            <th className="py-1.5 pl-2 text-right font-semibold">Puntos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {days.map((d) => {
+            const day = fromKey(d);
+            const future = d > today;
+            const score = dayScore(goals, checks, d);
+            return (
+              <tr key={d} className={cn("border-t border-line/70", d === today && "bg-surface-sunken")}>
+                <td className={cn("py-1 pr-2 whitespace-nowrap tabular-nums", d === today ? "font-semibold" : "text-ink-muted")}>
+                  {WEEKDAYS[day.getDay()]} {day.getDate()}
+                </td>
+                {goals.map((g) => {
+                  const on = (checks[d] ?? []).includes(g.id);
+                  return (
+                    <td key={g.id} className="px-1 py-1 text-center">
+                      <button
+                        type="button"
+                        disabled={future}
+                        aria-pressed={on}
+                        aria-label={`${g.name}, ${WEEKDAYS[day.getDay()]} ${day.getDate()}: ${on ? "cumplido" : "sin cumplir"}`}
+                        onClick={() => {
+                          toggle(d, g.id);
+                          if (!on) play("pop");
+                        }}
+                        className={cn(
+                          "pressable mx-auto grid h-6 w-10 place-items-center rounded-md border transition-colors",
+                          on ? "border-success bg-success text-white" : future ? "border-line/40" : "border-ink-faint/70 hover:border-ink",
+                        )}
+                      >
+                        {on && <Check aria-hidden strokeWidth={3} className="size-3.5" />}
+                      </button>
+                    </td>
+                  );
+                })}
+                <td className="py-1 pl-2 text-right">
+                  {!future && (
+                    <span className="inline-block min-w-9 rounded-full px-1.5 text-center text-[11px] font-semibold text-white tabular-nums" style={{ background: scoreColor(score, goals.length) }}>
+                      {score}/{goals.length}
+                    </span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** El año: el % de cada mes (línea gruesa) y de cada no negociable (finas), y un resumen por mes. */
+function YearView() {
   const allGoals = usePlanner((s) => s.dailyGoals);
   const goalMonths = usePlanner((s) => s.goalMonths);
   const checks = usePlanner((s) => s.dailyChecks);
   const startedAt = usePlanner((s) => s.startedAt);
   const today = toKey(new Date());
-  // Desde el primer mes con tildes (o desde que empezaste) hasta este mes; como mucho 12.
   const first = [startedAt, ...Object.keys(checks)].filter(Boolean).sort()[0]?.slice(0, 7) ?? today.slice(0, 7);
   const months: string[] = [];
   for (let m = first; m <= today.slice(0, 7); ) {
@@ -409,7 +581,6 @@ function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () =>
     const sorted = [...st.perGoal].sort((a, b) => b.pct - a.pct);
     return { m, goals, st, perfect, best: sorted[0], worst: sorted[sorted.length - 1] };
   });
-  // Una línea por no negociable (los que existieron en alguno de estos meses).
   const ids = [...new Set(rows.flatMap((r) => r.goals.map((g) => g.id)))];
   const W = 600;
   const H = 200;
@@ -426,109 +597,78 @@ function GoalsHistory({ isMobile, onClose }: { isMobile: boolean; onClose: () =>
       .join(" ");
   const overall = rows.map((r) => (r.st.days ? r.st.pct : null));
   const name = (m: string) => ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"][Number(m.slice(5)) - 1];
-
   return (
-    <Sheet isMobile={isMobile} onClose={onClose} labelledBy="goals-history-title" width="max-w-[860px]">
-      <div className={cn("flex flex-col", isMobile ? "h-[88dvh]" : "h-[min(740px,90dvh)]")}>
-        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-line py-2.5 pr-2.5 pl-5">
-          <h2 id="goals-history-title" data-autofocus tabIndex={-1} className="type-title outline-none">
-            Tus no negociables, mes a mes
-          </h2>
-          <button type="button" aria-label="Cerrar" onClick={onClose} className="pressable grid size-9 place-items-center rounded-full text-ink-muted hover:bg-surface-sunken hover:text-ink">
-            <X aria-hidden className="size-4" />
-          </button>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-7">
-          <Segmented
-            label="Período"
-            value={view}
-            onChange={setView}
-            options={[
-              { id: "semana", label: "Esta semana" },
-              { id: "anio", label: "El año" },
-            ]}
-            className="mb-4 w-fit text-[12.5px]"
-          />
-          {view === "semana" ? (
-            <WeekView />
-          ) : (
-          <>
-          <p className="text-[13px] text-ink-muted">Cuánto cumpliste cada mes (la línea gruesa) y cada no negociable (las finas).</p>
-          <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label="Cumplimiento por mes">
-            {[0, 25, 50, 75, 100].map((v) => (
-              <g key={v}>
-                <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="var(--color-line)" strokeDasharray={v === 0 ? undefined : "3 4"} />
-                <text x={PAD.l - 6} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="var(--color-ink-faint)">
-                  {v}%
-                </text>
-              </g>
-            ))}
-            {shown.map((m, i) => (
-              <text key={m} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10.5" fill="var(--color-ink-muted)">
-                {name(m)}
-              </text>
-            ))}
-            {ids.map((id, k) => {
-              const vals = rows.map((r) => {
-                const g = r.st.perGoal.find((p) => p.goal.id === id);
-                return g && r.st.days ? g.pct : null;
-              });
-              return <path key={id} d={path(vals)} fill="none" stroke={LINE_COLORS[k % LINE_COLORS.length]} strokeOpacity="0.55" strokeWidth="1.5" strokeLinejoin="round" />;
-            })}
-            <path d={path(overall)} fill="none" stroke="var(--color-ink)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-            {overall.map((v, i) => v !== null && <circle key={i} cx={x(i)} cy={y(v)} r="4" fill="var(--color-surface)" stroke="var(--color-ink)" strokeWidth="2" />)}
-          </svg>
-          <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            <li className="flex items-center gap-1.5 text-[12px] font-semibold">
-              <span aria-hidden className="h-[3px] w-4 rounded-full bg-ink" />
-              Total
-            </li>
-            {ids.map((id, k) => (
-              <li key={id} className="flex items-center gap-1.5 text-[12px] text-ink-muted">
-                <span aria-hidden className="h-[2px] w-4 rounded-full" style={{ background: LINE_COLORS[k % LINE_COLORS.length] }} />
-                {allGoals.find((g) => g.id === id)?.name}
-              </li>
-            ))}
-          </ul>
-
-          <ol className="mt-6 grid gap-2 sm:grid-cols-2">
-            {[...rows].reverse().map((r) => (
-              <li key={r.m} className="flex flex-col gap-1.5 rounded-2xl bg-surface-sunken/70 px-4 py-3">
-                <p className="flex items-baseline justify-between">
-                  <span className="text-[14px] font-semibold">
-                    {["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][Number(r.m.slice(5)) - 1]} {r.m.slice(0, 4)}
-                  </span>
-                  <span className="text-[20px] font-semibold tabular-nums">{r.st.days ? `${r.st.pct}%` : "–"}</span>
-                </p>
-                {/* Los días del mes, en una tira de color. */}
-                <span className="flex h-2.5 gap-[2px]" aria-hidden>
-                  {r.st.perDay.map((d) => (
-                    <span
-                      key={d.date}
-                      className="flex-1 rounded-[2px]"
-                      style={{ background: d.score === null || !r.goals.length ? "var(--color-surface)" : `color-mix(in oklab, var(--color-success) ${Math.round(12 + (d.score / r.goals.length) * 80)}%, var(--color-surface))` }}
-                    />
-                  ))}
-                </span>
-                <p className="text-[12px] leading-snug text-ink-muted">
-                  {r.st.days === 0
-                    ? "Sin días para contar."
-                    : [
-                        r.perfect ? `${r.perfect} ${r.perfect === 1 ? "día perfecto" : "días perfectos"}` : "",
-                        r.best && r.best.done ? `lo más constante: ${r.best.goal.name} (${r.best.pct}%)` : "",
-                        r.worst && r.worst !== r.best && r.worst.pct < 50 ? `lo que más costó: ${r.worst.goal.name} (${r.worst.pct}%)` : "",
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") || "Seguí sumando días."}
-                </p>
-              </li>
-            ))}
-          </ol>
-          </>
-          )}
-        </div>
-      </div>
-    </Sheet>
+    <div className="mt-5">
+      <p className="text-[13px] text-ink-muted">Cuánto cumpliste cada mes (la línea gruesa) y cada no negociable (las finas).</p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-3 w-full" role="img" aria-label="Cumplimiento por mes">
+        {[0, 25, 50, 75, 100].map((v) => (
+          <g key={v}>
+            <line x1={PAD.l} x2={W - PAD.r} y1={y(v)} y2={y(v)} stroke="var(--color-line)" strokeDasharray={v === 0 ? undefined : "3 4"} />
+            <text x={PAD.l - 6} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="var(--color-ink-faint)">
+              {v}%
+            </text>
+          </g>
+        ))}
+        {shown.map((m, i) => (
+          <text key={m} x={x(i)} y={H - 8} textAnchor="middle" fontSize="10.5" fill="var(--color-ink-muted)">
+            {name(m)}
+          </text>
+        ))}
+        {ids.map((id, k) => {
+          const vals = rows.map((r) => {
+            const g = r.st.perGoal.find((p) => p.goal.id === id);
+            return g && r.st.days ? g.pct : null;
+          });
+          return <path key={id} d={path(vals)} fill="none" stroke={LINE_COLORS[k % LINE_COLORS.length]} strokeOpacity="0.55" strokeWidth="1.5" strokeLinejoin="round" />;
+        })}
+        <path d={path(overall)} fill="none" stroke="var(--color-ink)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+        {overall.map((v, i) => v !== null && <circle key={i} cx={x(i)} cy={y(v)} r="4" fill="var(--color-surface)" stroke="var(--color-ink)" strokeWidth="2" />)}
+      </svg>
+      <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        <li className="flex items-center gap-1.5 text-[12px] font-semibold">
+          <span aria-hidden className="h-[3px] w-4 rounded-full bg-ink" />
+          Total
+        </li>
+        {ids.map((id, k) => (
+          <li key={id} className="flex items-center gap-1.5 text-[12px] text-ink-muted">
+            <span aria-hidden className="h-[2px] w-4 rounded-full" style={{ background: LINE_COLORS[k % LINE_COLORS.length] }} />
+            {allGoals.find((g) => g.id === id)?.name}
+          </li>
+        ))}
+      </ul>
+      <ol className="mt-6 grid gap-2 sm:grid-cols-2">
+        {[...rows].reverse().map((r) => (
+          <li key={r.m} className="flex flex-col gap-1.5 rounded-2xl bg-surface-sunken/70 px-4 py-3">
+            <p className="flex items-baseline justify-between">
+              <span className="text-[14px] font-semibold">
+                {["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"][Number(r.m.slice(5)) - 1]} {r.m.slice(0, 4)}
+              </span>
+              <span className="text-[20px] font-semibold tabular-nums">{r.st.days ? `${r.st.pct}%` : "–"}</span>
+            </p>
+            <span className="flex h-2.5 gap-[2px]" aria-hidden>
+              {r.st.perDay.map((d) => (
+                <span
+                  key={d.date}
+                  className="flex-1 rounded-[2px]"
+                  style={{ background: d.score === null || !r.goals.length ? "var(--color-surface)" : `color-mix(in oklab, var(--color-success) ${Math.round(12 + (d.score / r.goals.length) * 80)}%, var(--color-surface))` }}
+                />
+              ))}
+            </span>
+            <p className="text-[12px] leading-snug text-ink-muted">
+              {r.st.days === 0
+                ? "Sin días para contar."
+                : [
+                    r.perfect ? `${r.perfect} ${r.perfect === 1 ? "día perfecto" : "días perfectos"}` : "",
+                    r.best && r.best.done ? `lo más constante: ${r.best.goal.name} (${r.best.pct}%)` : "",
+                    r.worst && r.worst !== r.best && r.worst.pct < 50 ? `lo que más costó: ${r.worst.goal.name} (${r.worst.pct}%)` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "Seguí sumando días."}
+            </p>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -537,6 +677,7 @@ function WeekView() {
   const allGoals = usePlanner((s) => s.dailyGoals);
   const goalMonths = usePlanner((s) => s.goalMonths);
   const checks = usePlanner((s) => s.dailyChecks);
+  const toggle = usePlanner((s) => s.toggleDailyCheck);
   const today = toKey(new Date());
   const goals = goalsFor({ dailyGoals: allGoals, goalMonths }, today.slice(0, 7));
   const monday = toKey(startOfWeek(new Date()));
@@ -577,7 +718,7 @@ function WeekView() {
                 const on = (checks[d] ?? []).includes(g.id);
                 return (
                   <td key={d} className="w-9 py-2 text-center">
-                    <span className={cn("mx-auto grid size-5 place-items-center rounded-md border", on ? "border-ink bg-ink text-surface" : d > today ? "border-line/50" : "border-line")}>{on && <Check aria-hidden strokeWidth={3} className="size-3" />}</span>
+                    <button type="button" disabled={d > today} aria-pressed={on} aria-label={`${g.name}: ${on ? "cumplido" : "sin cumplir"}`} onClick={() => toggle(d, g.id)} className={cn("pressable mx-auto grid size-6 place-items-center rounded-md border", on ? "border-success bg-success text-white" : d > today ? "border-line/50" : "border-ink-faint/70 hover:border-ink")}>{on && <Check aria-hidden strokeWidth={3} className="size-3" />}</button>
                   </td>
                 );
               })}

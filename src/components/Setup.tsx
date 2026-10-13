@@ -85,7 +85,7 @@ const STEPS: Step[] = [
     target: "semana",
     phone: "semana",
     kicker: "Bloque 1 · Rutina · 4 de 4",
-    title: "Completá tu semana: arrastrá sobre los espacios en blanco",
+    title: "Agregá tus espacios libres",
     body: "Todo lo que repetís y no es trabajar, dormir ni emprender. Mirá el ejemplo: arrastrando sumamos el ALMUERZO de 13 a 14, encima de tu trabajo. Se puede superponer: el trabajo se corta solo.",
     note: "Para sumar más, arrastrá sobre los espacios en blanco del calendario. Intentá completar todo; si no, lo dejás para después: cada semana te vamos a preguntar.",
     skip: "Saltear por ahora",
@@ -382,6 +382,16 @@ export function Setup({
   }, [step.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [demo, setDemo] = useState<{ x: number; y: number; press: boolean; sel?: { left: number; top: number; width: number; height: number }; hint?: { x: number; y: number } } | null>(null);
+  // Después del ejemplo: ¿te sirve el almuerzo a esa hora, o lo borramos?
+  const lunchAdded = useRef(false);
+  const [lunchAsk, setLunchAsk] = useState<"no" | "ask" | "kept" | "removed">("no");
+  const removeLunch = () => {
+    const st = usePlanner.getState();
+    st.setRoutine(st.routine.filter((b) => !(b.name === "Almuerzo" && b.start === 12 * 60)), st.routineSeries);
+    play("delete");
+    setDemo(null);
+    setLunchAsk("removed");
+  };
   const runDemo = () => {
     const cols = [...document.querySelectorAll<HTMLElement>("[data-module=semana] [data-day-col]")];
     if (cols.length < 5) return;
@@ -391,8 +401,8 @@ export function Setup({
     };
     const mon = cols[0].getBoundingClientRect();
     const fri = cols[4].getBoundingClientRect();
-    const y13 = at(cols[0], 13 * 60);
-    const y14 = at(cols[0], 14 * 60);
+    const y13 = at(cols[0], 12 * 60);
+    const y14 = at(cols[0], 13 * 60);
     const b = bubble.current?.getBoundingClientRect();
     setDemo({ x: b ? b.right - 40 : mon.left - 60, y: b ? b.bottom - 40 : y13, press: false });
     const steps: [number, () => void][] = [
@@ -400,7 +410,9 @@ export function Setup({
       [1250, () => setDemo((d) => d && { ...d, press: true, sel: { left: mon.left + 3, top: y13, width: 6, height: 6 } })],
       [1500, () => setDemo((d) => d && { ...d, x: fri.right - 14, y: y14 - 4, sel: { left: mon.left + 3, top: y13, width: fri.right - mon.left - 6, height: y14 - y13 } })],
       [2700, () => {
-        const lunch: RoutineBlock = { id: newId(), quadrant: "libre", name: "Almuerzo", days: [1, 2, 3, 4, 5], start: 13 * 60, minutes: 60 };
+        const lunch: RoutineBlock = { id: newId(), quadrant: "libre", name: "Almuerzo", days: [1, 2, 3, 4, 5], start: 12 * 60, minutes: 60 };
+        lunchAdded.current = true;
+        setLunchAsk("ask");
         usePlanner.getState().setRoutine(carve(usePlanner.getState().routine, lunch), usePlanner.getState().routineSeries);
         play("bubble");
         setDemo({ x: mon.left + 14, y: y13 + 4, press: false, hint: { x: (mon.left + fri.right) / 2, y: y14 + 6 } });
@@ -729,9 +741,9 @@ export function Setup({
             <div className="animate-fade-up pointer-events-none fixed z-[7] -translate-x-1/2" style={{ left: demo.hint.x, top: demo.hint.y }}>
               <span className="mx-auto block w-fit animate-bounce text-center text-[20px] leading-none text-[#d99a00]">↑</span>
               <span className="block rounded-xl bg-[#d99a00] px-3 py-1.5 text-center text-[12.5px] leading-snug font-semibold text-white shadow-[var(--shadow-popover)]">
-                El almuerzo reemplazó ese rato de tu trabajo.
+                Almuerzo de 12 a 13, en el medio de tu trabajo.
                 <br />
-                ¿No es tu horario? Movelo, estiralo o tocalo para borrarlo.
+                Podés moverlo o estirarlo.
               </span>
             </div>
           )}
@@ -902,12 +914,32 @@ export function Setup({
             </div>
           )}
 
-          {step.id === "resto" && (
-            <p className="flex gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[13px] leading-snug">
+          {step.id === "resto" && lunchAsk === "no" && (
+            <p className="flex gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[13.5px] leading-snug">
               <span aria-hidden>💡</span>
               <span>
-                <b className="font-semibold">Te doy un tip:</b> si cortás para almorzar, agregá el evento en el medio de tu trabajo y reemplaza ese horario. Mirá cómo queda.
+                Por ejemplo, <b className="font-semibold">voy a agregar el almuerzo de 12 a 13</b>, en el medio de tu trabajo. Mirá…
               </span>
+            </p>
+          )}
+          {step.id === "resto" && lunchAsk === "ask" && (
+            <div className="flex flex-col gap-2 rounded-xl border border-ink/15 p-3">
+              <p className="text-[13.5px] font-semibold">¿Te sirve el almuerzo de 12 a 13?</p>
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => setLunchAsk("kept")} className="pressable h-9 rounded-full bg-ink px-4 text-[12.5px] font-semibold text-surface">
+                  Sí, dejalo
+                </button>
+                <button type="button" onClick={removeLunch} className="pressable h-9 rounded-full px-4 text-[12.5px] font-semibold text-danger ring-1 ring-danger/40 hover:bg-danger/10">
+                  No, borralo
+                </button>
+              </div>
+              <p className="text-[11.5px] text-ink-muted">Si es otro horario, arrastralo o estiralo en el calendario.</p>
+            </div>
+          )}
+          {step.id === "resto" && (lunchAsk === "kept" || lunchAsk === "removed") && (
+            <p className="flex gap-2 rounded-xl bg-surface-sunken px-3 py-2 text-[13px] leading-snug">
+              <span aria-hidden>👉</span>
+              <span>Ahora sumá lo demás que hacés: arrastrá con el mouse sobre los espacios en blanco del calendario (desde la hora que empieza hasta la que termina) y ponele nombre.</span>
             </p>
           )}
           {step.id === "resto" && sleepSet && (
@@ -935,7 +967,7 @@ export function Setup({
               </div>
               {routineDays && (
                 <>
-                  <p className="text-[12px] text-ink-muted">Lo ves en el calendario. Sacá los días que no van:</p>
+                  <p className="text-[12px] text-ink-muted">En verde, los días que van (lo ves en el calendario). Tocá para sacar los que no. Si algún día es en otro horario, después lo cambiás en el calendario.</p>
                   <div role="group" aria-label="Días de la rutina" className="flex gap-1">
                     {[1, 2, 3, 4, 5, 6, 0].map((dd) => {
                       const on = routineDays.includes(dd);
@@ -946,7 +978,7 @@ export function Setup({
                           aria-pressed={on}
                           aria-label={`Rutina: ${DAY_NAMES[dd]}`}
                           onClick={() => setRoutineDays(on ? routineDays.filter((x) => x !== dd) : [...routineDays, dd])}
-                          className={cn("pressable grid size-8 place-items-center rounded-full text-[12px] font-semibold", on ? "bg-ink text-surface" : "bg-surface-sunken text-ink-muted hover:text-ink")}
+                          className={cn("pressable grid size-8 place-items-center rounded-full text-[12px] font-semibold", on ? "bg-success text-white" : "bg-surface-sunken text-ink-muted hover:text-ink")}
                         >
                           {"DLMMJVS"[dd]}
                         </button>

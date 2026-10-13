@@ -241,12 +241,12 @@ export function WeekTemplateGrid({
       </div>
       <div className="grid" style={{ gridTemplateColumns: `${AXIS}px repeat(7, minmax(0, 1fr))` }}>
         <div className="relative" style={{ height: top(to) }} aria-hidden>
+          {/* Todas las horas, siempre (bien legibles). */}
           {Array.from({ length: (to - from) / 60 }, (_, i) => from + i * 60)
-            .filter((_, i) => row >= 14 || i % 2 === 0)
             .map((m) => (
               <span
                 key={m}
-                className={cn("absolute right-1.5 -translate-y-1/2 text-[10px] text-ink-muted tabular-nums transition-opacity", marked && "opacity-30")}
+                className={cn("absolute right-1.5 -translate-y-1/2 text-[10.5px] font-medium text-ink/75 tabular-nums transition-opacity", marked && "opacity-30")}
                 style={{ top: Math.max(6, top(m)) }}
               >
                 {formatTime(m)}

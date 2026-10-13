@@ -284,3 +284,13 @@ Registro de decisiones de producto, diseño y técnicas. Una entrada por decisi�
 - **Sueño por defecto:** lunes a viernes de 22 a 7; fin de semana de 23 a 9. **Emprendimiento por defecto:** de 17 a 19.
 - **Cierre de la guía, el balde en 3 pasos:** «Este es tu LifeBucket» (flechitas a la base y a lo que es para vos), «Tocá estos botones para editar» (las dos perillas «Ajustar») y «Veo que no agregaste nada en…» con un botón para sumar cada cosa. Recordatorios: después del ejemplo, cuando sumás uno vos, el paso termina solo. No negociables: con la lista cerrada la flechita señala el lápiz («Modificá o agregá no negociables»).
 - **Avisos:** se sacan todos los anteriores (consejos y campanita de recomendaciones, el aviso al entrar a la app y «¿Te olvidaste de agregar algo?»); se van a rehacer desde cero. Queda uno: si tu semana tiene horas sin completar, una vez por día, al costado del calendario, «Te quedan N h sin completar» con «Mostrame cómo», que muestra un cursor arrastrando y sumando «Desayuno» de 7 a 8 (o el primer hueco libre). Los avisos de tus recordatorios (vencidos, del día) siguen, porque son parte de ese módulo.
+
+## 2026-10-13 — Modo prueba, balde con espacios sin completar y más
+
+- **Modo prueba** (menú de tu cuenta): la app con datos aparte y vacíos, en este navegador y sin sincronizar con la nube; sirve para hacer la guía o probar cambios sin tocar tu cuenta. Una etiqueta violeta abajo lo avisa, con «Reiniciar» (vuelve a empezar la prueba) y «Salir» (vuelven tus datos tal cual). «Empezar de cero» y «Salir» de la cuenta, en modo prueba, solo afectan la prueba.
+- **«¿Cómo te sentiste?»** arranca oculto en la primera configuración (se muestra desde «Mis listas»).
+- **No negociables en grande:** indicadores arriba (cumplimiento del mes, racha actual, mejor racha, días perfectos, lo más constante y lo que más cuesta) y pestañas «Este mes» (para tildar día por día), «Esta semana» (también se tilda) y «El año» (gráfico y resumen por mes). «Editar» cambia los de este mes ahí mismo.
+- **Tu balde:** «Espacios sin completar» aparte (no cuentan en el 100%, que es base más para vos); tocándolo se abre el editor en el primer hueco libre de tu rutina. El aviso tiene niveles según cuánto ocupa la base: ajustado (80 %+), muy cargado (88 %+) y desbordado (95 %+ o nada para vos).
+- **Calendario:** se ven todas las horas al costado, más legibles.
+- **Días elegidos en verde** (editor y guía), con la aclaración de que si algún día es en otro horario se cambia después en el calendario.
+- **Guía, «Agregá tus espacios libres»:** «Por ejemplo, voy a agregar el almuerzo de 12 a 13»; después pregunta «¿Te sirve?» con «Sí, dejalo» o «No, borralo», y explica cómo sumar lo demás arrastrando.

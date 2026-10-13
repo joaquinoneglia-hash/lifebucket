@@ -434,6 +434,8 @@ export interface PlannerState {
   removeBlock: (id: string, scope: Scope) => void;
 }
 
+import { testKey } from "./test-mode";
+
 /** Dónde se guardan los datos en el navegador. Antes se llamaba "lifeplan:v1". */
 const STORAGE_KEY = "lifebucket:v1";
 /** Versión del formato de los datos (la usa también la nube). */
@@ -841,7 +843,8 @@ export const usePlanner = create<PlannerState>()(
         }),
     }),
     {
-      name: STORAGE_KEY,
+      // En modo prueba, los datos van aparte (y no se sincronizan).
+      name: testKey(STORAGE_KEY),
       version: STORE_VERSION,
       migrate: (persisted, version) => migratePlanner(persisted, version),
     },

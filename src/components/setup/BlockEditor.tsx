@@ -248,7 +248,8 @@ export function BlockEditor({
                   onClick={() => setDays(on ? days.filter((x) => x !== d) : [...days, d])}
                   className={cn(
                     "pressable h-9 rounded-md text-[13px] font-semibold",
-                    on ? "bg-ink text-surface" : "bg-surface-sunken text-ink-muted hover:text-ink",
+                    // Los elegidos, en verde (que se note cuáles van).
+                    on ? "bg-success text-white" : "bg-surface-sunken text-ink-muted hover:text-ink",
                   )}
                 >
                   {DAY_LETTER[d].short}
@@ -256,6 +257,7 @@ export function BlockEditor({
               );
             })}
           </div>
+          <p className="text-[11px] leading-snug text-ink-faint">En verde, los días que van. Si algún día es en otro horario, después lo cambiás tocándolo en el calendario.</p>
         </div>
 
         {draft?.guided && <p className="-mb-1 rounded-lg bg-[color-mix(in_oklab,#d99a00_13%,transparent)] px-2.5 py-1.5 text-[11.5px] leading-snug text-[#8a6200]">👉 Elegí a qué hora empieza («Desde») y a qué hora termina («Hasta»).</p>}

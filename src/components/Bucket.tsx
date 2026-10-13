@@ -8,6 +8,7 @@ import { cn } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks";
 import { QUADRANT_BY_ID } from "@/lib/quadrants";
 import { usePlanner } from "@/lib/store";
+import { emptyMinutes, firstFreeSlot } from "@/lib/routine";
 import { ACTIVE_PARTS, bucketTotal, monthMinutes, partColor, weekMinutes, type Part } from "@/lib/week-shares";
 import { ModuleControls } from "./Modules";
 import { QuadrantIcon } from "./QuadrantIcon";
@@ -48,8 +49,24 @@ export function BucketCard({ className, showReport = true }: { className?: strin
   const base = minutes.trabajo + minutes.libre + minutes.sueno;
   const MINE = byHours(ACTIVE_PARTS);
   const missing = MINE.filter((p) => minutes[p] === 0);
-  // Sin nada para vos, el balde se desborda de trabajo y sueño.
-  const overflow = mine === 0;
+  // Lo que todavía no completaste en tu semana: no entra en el 100% (no es base ni es para vos).
+  const sleepSet = usePlanner((s) => s.sleepSet);
+  const emptyWeek = sleepSet ? emptyMinutes(routine, sleep) : 0;
+  const empty = range === "semana" ? emptyWeek : emptyWeek * (monthly.days / 7);
+  const completar = () => {
+    const slot = firstFreeSlot(routine, sleep);
+    document.querySelector<HTMLElement>('[data-module="semana"]')?.scrollIntoView({ block: "nearest" });
+    window.dispatchEvent(new CustomEvent("lb:add-block", { detail: { name: "", quadrant: "libre", days: [slot?.day ?? 1], start: slot?.start ?? 8 * 60, minutes: 60 } }));
+  };
+  // Qué tan lleno de base está el balde: desbordado, muy cargado o ajustado (si hay poco para vos).
+  const basePct = pct(base);
+  const level = mine === 0 || basePct >= 95 ? "desbordado" : basePct >= 88 ? "cargado" : basePct >= 80 ? "ajustado" : null;
+  const overflow = level !== null;
+  const LEVEL = {
+    desbordado: { title: "Tu balde está desbordado:", text: `la base (sueño, trabajo y tareas) ocupa el ${basePct}%. Sumá algo para vos.`, tone: "danger" },
+    cargado: { title: "Tu balde está muy cargado:", text: `la base ocupa el ${basePct}% y te queda poco para vos.`, tone: "warn" },
+    ajustado: { title: "Tu balde está ajustado:", text: `la base ocupa el ${basePct}%. Un rato más para vos y queda parejo.`, tone: "soft" },
+  } as const;
   const tip = missing.length
     ? `A tu balde le falta ${label(missing[0])}. ¿Le hacés un lugar esta semana?`
     : pct(mine) >= 20
@@ -99,13 +116,35 @@ export function BucketCard({ className, showReport = true }: { className?: strin
             <GroupTotal label="La base" value={h(base)} pct={pct(base)} muted action={<BaseAdjust />} />
             {BASE.map(row)}
           </ul>
+          {empty > 0 && (
+            <button
+              type="button"
+              onClick={completar}
+              title="Ir a tu rutina a completarlo"
+              className="pressable flex items-center gap-2 rounded-xl border border-dashed border-[#d99a00]/60 bg-[color-mix(in_oklab,#d99a00_8%,transparent)] px-2.5 py-2 text-left text-[12px] tabular-nums hover:bg-[color-mix(in_oklab,#d99a00_14%,transparent)]"
+            >
+              <span className="grid size-[18px] shrink-0 place-items-center rounded-full border-2 border-dashed border-[#d99a00]" />
+              <span className="min-w-0 flex-1 leading-tight">
+                <b className="font-semibold">Espacios sin completar</b>
+                <span className="block text-[10.5px] text-ink-muted">No cuentan en el 100%. Tocá para completarlos.</span>
+              </span>
+              <span className="text-ink-muted">{h(empty)}</span>
+              <span className="text-[11.5px] font-semibold text-[#8a6200]">Completar →</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {overflow && (
-        <div role="alert" className="flex items-center gap-2.5 rounded-xl bg-[color-mix(in_oklab,var(--color-danger)_9%,transparent)] px-3 py-2">
-          <p className="min-w-0 flex-1 text-[12.5px] leading-snug text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]">
-            <b className="font-semibold">Tu balde está desbordado:</b> todo es trabajo y sueño. Sumá algo para vos a tu semana.
+      {level && (
+        <div
+          role="alert"
+          className={cn(
+            "flex items-center gap-2.5 rounded-xl px-3 py-2",
+            LEVEL[level].tone === "danger" ? "bg-[color-mix(in_oklab,var(--color-danger)_9%,transparent)] text-[color-mix(in_oklab,var(--color-danger)_80%,var(--color-ink))]" : LEVEL[level].tone === "warn" ? "bg-[color-mix(in_oklab,#d99a00_13%,transparent)] text-[#8a6200]" : "bg-surface-sunken text-ink",
+          )}
+        >
+          <p className="min-w-0 flex-1 text-[12.5px] leading-snug">
+            <b className="font-semibold">{LEVEL[level].title}</b> {LEVEL[level].text}
           </p>
           <button
             type="button"

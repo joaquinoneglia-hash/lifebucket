@@ -2,11 +2,12 @@
 
 import { getPalette, setPalette, type Palette } from "@/lib/palette";
 import { usePlanner } from "@/lib/store";
-import { Cloud, CloudOff, Loader2, LogOut, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { Cloud, CloudOff, FlaskConical, Loader2, LogOut, RotateCcw, Volume2, VolumeX } from "lucide-react";
 import { flushCloud, stopCloudSync, useSync } from "@/lib/cloud-sync";
 import { cn } from "@/lib/format";
 import { isMuted, play, setMuted } from "@/lib/sfx";
 import { useEffect, useRef, useState } from "react";
+import { enterTestMode, exitTestMode, isTestMode } from "@/lib/test-mode";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { authConfigured } from "@/lib/supabase/config";
 import { useUser } from "@/lib/supabase/use-user";
@@ -42,6 +43,8 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
 
   /** Borra todos los datos de la cuenta (vuelve al estado inicial, también en la nube) y cierra la sesión. */
   const startOver = async () => {
+    // En modo prueba: solo se vacían los datos de prueba (tu cuenta no se toca).
+    if (isTestMode()) return enterTestMode();
     const initial = usePlanner.getInitialState();
     usePlanner.setState(Object.fromEntries(Object.entries(initial).filter(([, v]) => typeof v !== "function")), false);
     try {
@@ -52,6 +55,7 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
   };
 
   const signOut = async () => {
+    if (isTestMode()) return exitTestMode();
     // Primero se sube lo pendiente; después se borran los datos de este navegador (quedan en la nube).
     await flushCloud();
     stopCloudSync(true);
@@ -99,7 +103,15 @@ export function UserMenu({ withSound }: { withSound?: boolean }) {
             className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
           >
             <RotateCcw aria-hidden className="size-4" />
-            Empezar de cero (borra todo)
+            {isTestMode() ? "Empezar la prueba de cero" : "Empezar de cero (borra todo)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => (isTestMode() ? exitTestMode() : enterTestMode())}
+            className="pressable flex h-9 w-full items-center gap-2 rounded-md px-2.5 text-[13px] font-medium text-ink-muted hover:bg-surface-sunken hover:text-ink"
+          >
+            <FlaskConical aria-hidden className="size-4" />
+            {isTestMode() ? "Salir del modo prueba (volver a mis datos)" : "Modo prueba (sin tocar mis datos)"}
           </button>
           {withSound && (
             <button

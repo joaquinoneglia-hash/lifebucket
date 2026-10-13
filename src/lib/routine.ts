@@ -269,3 +269,14 @@ export function emptyMinutes(routine: RoutineBlock[], sleep: SleepSettings, from
   }
   return total;
 }
+
+/** El primer hueco de una hora sin nada en la semana (entre que te levantás y te acostás), de lunes a domingo. */
+export function firstFreeSlot(routine: RoutineBlock[], sleep: SleepSettings): { day: number; start: number } | null {
+  for (const d of WEEK_ORDER) {
+    const w = awakeFor(d, sleep);
+    for (let s = Math.ceil(w.wake / 30) * 30; s + 60 <= w.bed; s += 30) {
+      if (!routine.some((b) => b.days.includes(d) && b.start < s + 60 && b.start + b.minutes > s)) return { day: d, start: s };
+    }
+  }
+  return null;
+}

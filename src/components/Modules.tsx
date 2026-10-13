@@ -1,4 +1,5 @@
 "use client";
+import { testKey } from "@/lib/test-mode";
 
 import { ChevronDown, ChevronsUpDown, ChevronUp, EyeOff } from "lucide-react";
 import { createContext, useContext, useEffect, useState, type DragEvent, type ReactNode } from "react";
@@ -38,10 +39,10 @@ type Prefs = { cols: Record<Col, ModuleId[]>; collapsed: ModuleId[]; weights: Pa
 const DEFAULT: Prefs = {
   cols: { left: ["bucket", "metas"], center: ["semana"], right: ["diarios", "list:pendientes", "diario"] },
   collapsed: [],
-  hidden: [],
+  hidden: ["diario"],
   weights: { bucket: 1.25, metas: 1, semana: 3, diarios: 1.3, diario: 1, "list:pendientes": 1.6 },
 };
-const KEY = "lb:board:v3";
+const KEY = testKey("lb:board:v3");
 const ALL = Object.keys(MODULE_TITLES) as BaseModule[];
 
 function load(): Prefs {

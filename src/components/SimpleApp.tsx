@@ -21,6 +21,8 @@ import { DiaryBox, DiaryComposer, Story } from "./Diary";
 import { MoodCard } from "./Mood";
 import { PendingAlerts } from "./Pending";
 import { UndoButton } from "./UndoButton";
+import { isTestMode } from "@/lib/test-mode";
+import { TestModeBadge } from "./TestMode";
 import { BlockEditor } from "./setup/BlockEditor";
 import { WeekTemplateGrid } from "./setup/WeekTemplateGrid";
 import { SleepDialog } from "./Sleep";
@@ -156,7 +158,7 @@ export function SimpleApp() {
   const user = useUser();
   // Los datos de la cuenta en la nube: se traen al entrar y cada cambio se guarda solo.
   useEffect(() => {
-    if (authConfigured && user && user.id !== "local") void startCloudSync(user.id);
+    if (authConfigured && user && user.id !== "local" && !isTestMode()) void startCloudSync(user.id);
   }, [user]);
   const [intro, setIntro] = useState<"none" | "welcome" | "tour">("none");
   const seenKey = user ? `lb:welcomed:${user.id}` : null;
@@ -768,6 +770,7 @@ export function SimpleApp() {
         />
       )}
       <RoutineHint armed={setupDone && intro === "none"} />
+      <TestModeBadge />
 
       {sleepOpen && (
         <SleepDialog
